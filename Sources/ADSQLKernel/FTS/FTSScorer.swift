@@ -350,33 +350,9 @@ enum FTSScorer {
             _ byToken: [[Int64: FTSPosting]], docid: Int64, columns: Int
         ) -> [UInt32] {
             var freqs = [UInt32](repeating: 0, count: columns)
-            guard let firstPositions = byToken.first?[docid]?.positions else { return freqs }
-            for column in 0..<columns where column < firstPositions.count {
-                let starts = firstPositions[column]
-                if starts.isEmpty { continue }
-                var followers: [Set<UInt32>] = []
-                var usable = true
-                for index in 1..<byToken.count {
-                    guard let positions = byToken[index][docid]?.positions, column < positions.count else {
-                        usable = false
-                        break
-                    }
-                    followers.append(Set(positions[column]))
-                }
-                guard usable else { continue }
-                for start in starts {
-                    var matched = true
-                    for (offset, set) in followers.enumerated() {
-                        // Overflow-safe: a position near UInt32.max must not trap the
-                        // checked `+`. An out-of-range expected position can't be present.
-                        let (next, overflow) = start.addingReportingOverflow(UInt32(offset + 1))
-                        if overflow || !set.contains(next) {
-                            matched = false
-                            break
-                        }
-                    }
-                    if matched { freqs[column] &+= 1 }
-                }
+            for column in 0..<columns {
+                freqs[column] = UInt32(
+                    truncatingIfNeeded: FTSMatch.phraseHitCount(byToken, docid: docid, column: column))
             }
             return freqs
         }

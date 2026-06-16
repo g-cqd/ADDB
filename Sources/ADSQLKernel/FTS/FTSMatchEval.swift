@@ -4,6 +4,41 @@
 /// field. Query phrase text is tokenized with the table's own tokenizer, so
 /// `Running` matches the indexed stem `run`. Membership only — ranking is F4.
 enum FTSMatch {
+    /// Phrase hits in one column for `docid`: the number of starting positions of
+    /// the first token where every later token sits at the next consecutive
+    /// position. `perToken[i]` maps docid → that token's posting; a missing token,
+    /// a column out of range, or no first-token positions yields 0. The position
+    /// arithmetic is overflow-safe (a position near `UInt32.max` cannot match a
+    /// non-existent successor). Shared by the membership evaluator and the scorer.
+    static func phraseHitCount(
+        _ perToken: [[Int64: FTSPosting]], docid: Int64, column: Int
+    ) -> Int {
+        guard let firstPositions = perToken.first?[docid]?.positions, column < firstPositions.count
+        else { return 0 }
+        let starts = firstPositions[column]
+        if starts.isEmpty { return 0 }
+        var followers: [Set<UInt32>] = []
+        followers.reserveCapacity(perToken.count - 1)
+        for index in 1..<perToken.count {
+            guard let positions = perToken[index][docid]?.positions, column < positions.count
+            else { return 0 }
+            followers.append(Set(positions[column]))
+        }
+        var count = 0
+        for start in starts {
+            var matched = true
+            for (offset, set) in followers.enumerated() {
+                let (next, overflow) = start.addingReportingOverflow(UInt32(offset + 1))
+                if overflow || !set.contains(next) {
+                    matched = false
+                    break
+                }
+            }
+            if matched { count += 1 }
+        }
+        return count
+    }
+
     static func evaluate(
         _ query: FTSQuery, record: Catalog.FTSRecord, resolver: some PageResolver,
         columns: Set<Int>? = nil
@@ -129,33 +164,9 @@ enum FTSMatch {
         private func phraseHit(
             _ perToken: [[Int64: FTSPosting]], docid: Int64, columns: Set<Int>
         ) -> Bool {
-            for column in columns {
-                guard let first = perToken[0][docid]?.positions, column < first.count else { continue }
-                let starts = first[column]
-                if starts.isEmpty { continue }
-                var followers: [Set<UInt32>] = []
-                var usable = true
-                for index in 1..<perToken.count {
-                    guard let positions = perToken[index][docid]?.positions, column < positions.count else {
-                        usable = false
-                        break
-                    }
-                    followers.append(Set(positions[column]))
-                }
-                guard usable else { continue }
-                for start in starts {
-                    var matched = true
-                    for (offset, set) in followers.enumerated() {
-                        // Overflow-safe: a position near UInt32.max must not trap the
-                        // checked `+`. An out-of-range expected position can't be present.
-                        let (next, overflow) = start.addingReportingOverflow(UInt32(offset + 1))
-                        if overflow || !set.contains(next) {
-                            matched = false
-                            break
-                        }
-                    }
-                    if matched { return true }
-                }
+            for column in columns
+            where FTSMatch.phraseHitCount(perToken, docid: docid, column: column) > 0 {
+                return true
             }
             return false
         }
