@@ -94,15 +94,37 @@ private enum MatchLexer {
 private struct MatchParser {
     let tokens: [MatchToken]
     var pos = 0
+    /// Recursive-descent nesting depth (parens, `col:` chains). Bounds the parser's
+    /// own call stack so `(((…)))` / `a:b:c:…` cannot overflow it during parsing.
+    /// Kept small because each level spends several frames (parseOr→…→parsePrimary),
+    /// mirroring the SQL parser's structural-nesting cap; far beyond any real search.
+    var depth = 0
+    static let maxRecursionDepth = 48
+    /// Operator nodes built so far. Bounds the `indirect enum FTSQuery` tree the
+    /// loops below assemble for long boolean runs (`a OR b OR …`, adjacency runs),
+    /// so a search string cannot build a node graph deep enough to overflow the
+    /// recursive evaluators — or the recursive ARC teardown — on a small stack. The
+    /// loops add no parser recursion, so this can be larger than the depth cap.
+    var nodeCount = 0
+    static let maxNodes = 256
 
     var current: MatchToken? { pos < tokens.count ? tokens[pos] : nil }
     var atEnd: Bool { pos >= tokens.count }
+
+    mutating func countNode() throws(DBError) {
+        nodeCount += 1
+        guard nodeCount <= Self.maxNodes else {
+            throw DBError.sqlSyntax(message: "MATCH query is too large", offset: 0)
+        }
+    }
 
     mutating func parseOr() throws(DBError) -> FTSQuery {
         var lhs = try parseAnd()
         while case .or = current {
             pos += 1
-            lhs = .or(lhs, try parseAnd())
+            let rhs = try parseAnd()
+            try countNode()
+            lhs = .or(lhs, rhs)
         }
         return lhs
     }
@@ -112,9 +134,13 @@ private struct MatchParser {
         while true {
             if case .and = current {
                 pos += 1
-                lhs = .and(lhs, try parseNot())
+                let rhs = try parseNot()
+                try countNode()
+                lhs = .and(lhs, rhs)
             } else if startsPrimary(current) {
-                lhs = .and(lhs, try parseNot())  // implicit AND between adjacent terms
+                let rhs = try parseNot()  // implicit AND between adjacent terms
+                try countNode()
+                lhs = .and(lhs, rhs)
             } else {
                 break
             }
@@ -126,12 +152,19 @@ private struct MatchParser {
         var lhs = try parsePrimary()
         while case .not = current {
             pos += 1
-            lhs = .not(lhs, try parsePrimary())
+            let rhs = try parsePrimary()
+            try countNode()
+            lhs = .not(lhs, rhs)
         }
         return lhs
     }
 
     mutating func parsePrimary() throws(DBError) -> FTSQuery {
+        depth += 1
+        defer { depth -= 1 }
+        guard depth <= Self.maxRecursionDepth else {
+            throw DBError.sqlSyntax(message: "MATCH query is nested too deeply", offset: 0)
+        }
         guard let token = current else {
             throw DBError.sqlSyntax(message: "unexpected end of MATCH query", offset: 0)
         }
@@ -159,7 +192,9 @@ private struct MatchParser {
                 throw DBError.sqlSyntax(message: "expected ':' after MATCH column filter", offset: 0)
             }
             pos += 1
-            return .column(columns: columns, try parsePrimary())
+            let inner = try parsePrimary()
+            try countNode()
+            return .column(columns: columns, inner)
         case .string(let text):
             pos += 1
             return .phrase(text: text, prefix: consumeStar())
@@ -167,7 +202,9 @@ private struct MatchParser {
             pos += 1
             if case .colon = current {
                 pos += 1
-                return .column(columns: [word], try parsePrimary())
+                let inner = try parsePrimary()
+                try countNode()
+                return .column(columns: [word], inner)
             }
             return .phrase(text: word, prefix: consumeStar())
         default:

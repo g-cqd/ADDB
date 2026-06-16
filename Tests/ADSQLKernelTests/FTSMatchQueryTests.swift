@@ -57,4 +57,33 @@ struct FTSMatchQueryTests {
         #expect(throws: DBError.self) { _ = try parse("foo AND") }  // dangling operator
         #expect(throws: DBError.self) { _ = try parse("{title body foo") }  // unterminated filter
     }
+
+    @Test func hostileNestingRejectedNotOverflow() throws {
+        // Parser recursion (parens, `col:` chains) and the operator-node tree are both
+        // bounded, so a crafted MATCH string fails with a syntax error instead of
+        // overflowing the parser, an evaluator, or the recursive `indirect enum`
+        // teardown. Each input below is well past the bound.
+        let n = 5000
+        #expect(throws: DBError.self) {  // deep parens
+            _ = try parse(String(repeating: "(", count: n) + "x" + String(repeating: ")", count: n))
+        }
+        #expect(throws: DBError.self) {  // long OR chain
+            _ = try parse(Array(repeating: "a", count: n).joined(separator: " OR "))
+        }
+        #expect(throws: DBError.self) {  // long implicit-AND run
+            _ = try parse(Array(repeating: "a", count: n).joined(separator: " "))
+        }
+        #expect(throws: DBError.self) {  // long NOT chain
+            _ = try parse(Array(repeating: "a", count: n).joined(separator: " NOT "))
+        }
+        #expect(throws: DBError.self) {  // deep column-filter chain a:a:…:x
+            _ = try parse(String(repeating: "a:", count: n) + "x")
+        }
+    }
+
+    @Test func longButBoundedQueryParses() throws {
+        // A long-but-within-bound boolean search still parses (no false rejection).
+        _ = try parse(Array(repeating: "a", count: 200).joined(separator: " OR "))
+        _ = try parse(Array(repeating: "a", count: 200).joined(separator: " "))
+    }
 }
