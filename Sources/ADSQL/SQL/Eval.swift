@@ -287,9 +287,9 @@ enum SQLEval {
             // drive an FTS scan (e.g. a projection, or on a non-FTS table).
             throw DBError.sqlRuntime("MATCH is only valid as a WHERE constraint on an FTS table")
         case .binary(.jsonExtract, let l, let r):
-            return try SQLJSON.arrow(try evaluate(l, env), try evaluate(r, env), asJSON: true)
+            return try SQLJSONOperators.arrow(try evaluate(l, env), try evaluate(r, env), asJSON: true)
         case .binary(.jsonExtractText, let l, let r):
-            return try SQLJSON.arrow(try evaluate(l, env), try evaluate(r, env), asJSON: false)
+            return try SQLJSONOperators.arrow(try evaluate(l, env), try evaluate(r, env), asJSON: false)
         case .binary(let op, let l, let r):
             return try SQLFunctions.arithmetic(
                 op, try evaluate(l, env), try evaluate(r, env))
@@ -324,7 +324,7 @@ enum SQLEval {
             guard case .text(let text) = json else {
                 throw DBError.sqlRuntime("json_each requires TEXT input")
             }
-            let values = try SQLJSON.eachValues(text)
+            let values = try SQLJSONOperators.eachValues(text)
             if values.isEmpty { return .integer(negated ? 1 : 0) }
             if lhs.isNull { return .null }
             let collation = resolveCollation(subject, nil, env)

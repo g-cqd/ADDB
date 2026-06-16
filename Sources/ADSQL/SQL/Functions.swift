@@ -332,7 +332,23 @@ enum SQLFunctions {
                 try callJSON(name, args: args, star: star, offset: offset, env)
             }
         }
+        SQLJSONOperators.register(SQLJSONCoreOperatorEvaluator())
     }
+}
+
+/// The in-core JSON-operator witness: routes `->`/`->>`/`json_each` to ``SQLJSON``.
+/// Moves to ``ADSQLJSON`` when JSON leaves the core; for now ADSQL registers it so
+/// the operators work without a separate module.
+struct SQLJSONCoreOperatorEvaluator: JSONOperatorEvaluator {
+    func arrow(_ document: Value, _ spec: Value, asJSON: Bool) throws(DBError) -> Value {
+        try SQLJSON.arrow(document, spec, asJSON: asJSON)
+    }
+    func eachValues(_ json: String) throws(DBError) -> [Value] {
+        try SQLJSON.eachValues(json)
+    }
+}
+
+extension SQLFunctions {
 
     /// The SQLite json1 scalar surface, kept in one switch the registry fans out.
     static func callJSON(

@@ -118,10 +118,18 @@ enum CompiledEval {
             return nil  // an access path, never row-evaluated
         case .binary(.jsonExtract, let l, let r):
             guard let cl = sub(l), let cr = sub(r) else { return nil }
-            return { () throws(DBError) -> Value in try SQLJSON.arrow(try cl(), try cr(), asJSON: true) }
+            // Resolve the JSON-operator witness ONCE (when enabled) so the per-row
+            // thunk carries it; fall back to the throwing accessor otherwise.
+            if let json = SQLJSONOperators.evaluator() {
+                return { () throws(DBError) -> Value in try json.arrow(try cl(), try cr(), asJSON: true) }
+            }
+            return { () throws(DBError) -> Value in try SQLJSONOperators.arrow(try cl(), try cr(), asJSON: true) }
         case .binary(.jsonExtractText, let l, let r):
             guard let cl = sub(l), let cr = sub(r) else { return nil }
-            return { () throws(DBError) -> Value in try SQLJSON.arrow(try cl(), try cr(), asJSON: false) }
+            if let json = SQLJSONOperators.evaluator() {
+                return { () throws(DBError) -> Value in try json.arrow(try cl(), try cr(), asJSON: false) }
+            }
+            return { () throws(DBError) -> Value in try SQLJSONOperators.arrow(try cl(), try cr(), asJSON: false) }
         case .binary(let op, let l, let r):  // arithmetic (NULL-propagating, REAL promote)
             guard let cl = sub(l), let cr = sub(r) else { return nil }
             return { () throws(DBError) -> Value in try SQLFunctions.arithmetic(op, try cl(), try cr()) }
