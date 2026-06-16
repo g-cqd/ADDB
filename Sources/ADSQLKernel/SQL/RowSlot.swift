@@ -106,7 +106,7 @@
         at index: Int, _ body: (UnsafeRawBufferPointer?) throws(DBError) -> R
     ) throws(DBError) -> R {
         if index == aliasIndex || index == scoreIndex { return try body(nil) }
-        let decodeAt = coveringIncludes == nil ? index : coveringSlot(index)
+        let decodeAt = coveringIncludes == nil ? index : try coveringSlot(index)
         return unsafe try RecordCodec.withText(at: decodeAt, in: span, body)
     }
 
@@ -114,7 +114,7 @@
         at index: Int, _ body: (UnsafeRawBufferPointer?) throws(DBError) -> R
     ) throws(DBError) -> R {
         if index == aliasIndex || index == scoreIndex { return try body(nil) }
-        let decodeAt = coveringIncludes == nil ? index : coveringSlot(index)
+        let decodeAt = coveringIncludes == nil ? index : try coveringSlot(index)
         return unsafe try RecordCodec.withBlob(at: decodeAt, in: span, body)
     }
 
@@ -132,7 +132,7 @@
         // The FTS `rank` slot reads the precomputed score, never the (empty) span.
         if index == scoreIndex { return .real(score) }
         // Index-only: decode the column from its slot within the covering value.
-        let decodeAt = coveringIncludes == nil ? index : coveringSlot(index)
+        let decodeAt = coveringIncludes == nil ? index : try coveringSlot(index)
         guard let start = try locate(decodeAt) else {
             switch columns[index].defaultValue {
             case .value(let value): return value
@@ -143,13 +143,13 @@
     }
 
     /// The decode position of schema column `index` within the covering value (its
-    /// position in `coveringIncludes`). Traps when the column is not covered — the
-    /// planner only enables index-only serving when every read column is the
-    /// rowid-alias (handled before this is reached) or an INCLUDE column, so a miss
-    /// is a planner bug, not bad data.
-    private func coveringSlot(_ index: Int) -> Int {
+    /// position in `coveringIncludes`). The planner only enables index-only serving
+    /// when every read column is the rowid-alias (handled before this is reached) or
+    /// an INCLUDE column, so a miss is a planner bug, not bad data — surfaced as a
+    /// runtime error rather than a crash.
+    private func coveringSlot(_ index: Int) throws(DBError) -> Int {
         guard let slot = coveringIncludes?.firstIndex(of: columns[index].name) else {
-            preconditionFailure(
+            throw DBError.sqlRuntime(
                 "column \(columns[index].name) not covered by this index-only scan")
         }
         return slot
