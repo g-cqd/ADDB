@@ -4,22 +4,27 @@ public struct Row: Equatable, Sendable {
     let names: [String]
     public let values: [Value]
 
+    /// The value of the named column, or nil if the row has no such column.
     public subscript(_ column: String) -> Value? {
         names.firstIndex(of: column).map { values[$0] }
     }
 
+    /// The named column as an `Int64`, or nil if it is absent or not an INTEGER.
     public func integer(_ column: String) -> Int64? {
         if case .integer(let v)? = self[column] { return v }
         return nil
     }
+    /// The named column as a `Double`, or nil if it is absent or not a REAL.
     public func real(_ column: String) -> Double? {
         if case .real(let v)? = self[column] { return v }
         return nil
     }
+    /// The named column as a `String`, or nil if it is absent or not TEXT.
     public func text(_ column: String) -> String? {
         if case .text(let v)? = self[column] { return v }
         return nil
     }
+    /// The named column as a byte array, or nil if it is absent or not a BLOB.
     public func blob(_ column: String) -> [UInt8]? {
         if case .blob(let v)? = self[column] { return v }
         return nil

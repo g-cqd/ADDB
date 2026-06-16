@@ -4,6 +4,10 @@
     import Glibc
 #endif
 
+/// The result of a full structural integrity check (`verifyIntegrity`): the
+/// validated generation, page and key-value counts, B-tree depth, and a per-region
+/// page breakdown (main tree, free tree, overflow, free-listed, relational/index
+/// trees).
 public struct IntegrityReport: Sendable {
     public var generation: UInt64
     public var pageCount: UInt64

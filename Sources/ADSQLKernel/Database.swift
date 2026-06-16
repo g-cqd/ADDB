@@ -1,6 +1,9 @@
 import Dispatch
 import Synchronization
 
+/// Options controlling how a ``Database`` is opened and run: durability profile,
+/// reserved mapping size, read-only / create-if-missing access, forward-scan
+/// readahead, and execution-strategy selection.
 public struct DatabaseOptions: Sendable {
     public var durability: DurabilityProfile
     /// Reserved virtual address space; the file may grow up to this size.
@@ -327,6 +330,7 @@ public struct ReadTxn: ~Copyable {
         return try result.get()
     }
 
+    /// True when `key` is present in this snapshot.
     public func contains(_ key: [UInt8]) throws(DBError) -> Bool {
         try Database.checkUserKey(key)
         var result: Result<Bool, DBError> = .success(false)

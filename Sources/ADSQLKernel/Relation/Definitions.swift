@@ -4,6 +4,9 @@ public enum DefaultValue: Equatable, Sendable {
     case datetimeNow
 }
 
+/// One column of a table: its name, declared storage-class affinity
+/// (``ColumnType``), `NOT NULL` flag, collation (applied to `TEXT` comparisons),
+/// and optional default value.
 public struct ColumnDefinition: Equatable, Sendable {
     public var name: String
     public var type: ColumnType
@@ -23,6 +26,8 @@ public struct ColumnDefinition: Equatable, Sendable {
     }
 }
 
+/// How a table's rows are keyed: by a hidden monotonic rowid, or by an `INTEGER`
+/// column that aliases that rowid (SQLite's `INTEGER PRIMARY KEY`).
 public enum PrimaryKey: Equatable, Sendable {
     /// Rows are keyed by a hidden monotonic rowid.
     case implicitRowid
@@ -35,6 +40,9 @@ public enum FKAction: UInt8, Equatable, Sendable {
     case restrict = 2
 }
 
+/// A single-column foreign key: `childColumns` in this table reference the
+/// `parentTable`'s rowid, with `onDelete` applied when a referenced parent row is
+/// removed.
 public struct ForeignKey: Equatable, Sendable {
     public var childColumns: [String]
     public var parentTable: String
@@ -47,6 +55,8 @@ public struct ForeignKey: Equatable, Sendable {
     }
 }
 
+/// A table's schema: its name, ordered ``ColumnDefinition``s, ``PrimaryKey``, and
+/// any ``ForeignKey``s. The value type that describes a table to create.
 public struct TableDefinition: Equatable, Sendable {
     public var name: String
     public var columns: [ColumnDefinition]
@@ -63,6 +73,7 @@ public struct TableDefinition: Equatable, Sendable {
         self.foreignKeys = foreignKeys
     }
 
+    /// The position of the column named `name` in ``columns``, or nil if absent.
     public func columnIndex(of name: String) -> Int? {
         columns.firstIndex { $0.name == name }
     }
@@ -136,6 +147,8 @@ public struct TableDefinition: Equatable, Sendable {
     }
 }
 
+/// A secondary index on one table: its key `columns` (in order), whether it is
+/// `unique`, and any non-key `includes` (covering) columns stored in each entry.
 public struct IndexDefinition: Equatable, Sendable {
     public var name: String
     public var table: String

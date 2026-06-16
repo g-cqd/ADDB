@@ -63,7 +63,9 @@ public struct SQLRow: Sendable {
 
 /// The outcome of a non-query execution.
 public struct RunResult: Sendable {
+    /// The number of rows inserted, updated, or deleted by the statement.
     public let changes: Int
+    /// The rowid of the most recent row inserted by the statement (0 if none).
     public let lastInsertRowid: Int64
 
     public init(changes: Int = 0, lastInsertRowid: Int64 = 0) {

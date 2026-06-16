@@ -35,6 +35,7 @@ public enum Value: Equatable, Sendable {
     }
 }
 
+/// A column's declared storage-class affinity, mirroring SQLite's four types.
 public enum ColumnType: UInt8, Equatable, Sendable {
     case integer = 1
     case real = 2
