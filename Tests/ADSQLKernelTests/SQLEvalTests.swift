@@ -2,7 +2,8 @@ import ADSQLTestSupport
 import CSQLite
 import Testing
 
-@testable import ADSQLKernel
+@testable import ADDB
+@testable import ADSQL
 
 // MARK: - Engines side by side
 

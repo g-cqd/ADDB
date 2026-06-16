@@ -125,12 +125,20 @@ let package = Package(
     dependencies: packageDependencies,
     targets: [
         .target(name: "ADCAtomics"),
+        // ADDB — the database engine: storage (COW B+tree over mmap, MVCC), the
+        // relational model + catalog, and the full-text-search subsystem. No SQL,
+        // no JSON: a self-contained, separately-releasable DB layer.
         .target(
-            name: "ADSQLKernel",
-            dependencies: ["ADCAtomics", .product(name: "ADJSONCore", package: "ADJSON")],
+            name: "ADDB",
+            dependencies: ["ADCAtomics"],
             swiftSettings: kernelSettings),
+        // ADSQL — the SQL language layer over ADDB: lexer/parser/AST, binder,
+        // planner, executor, evaluator, scalar/JSON functions, and the trigger
+        // engine. Re-exports ADDB so `import ADSQL` yields the whole surface.
         .target(
-            name: "ADSQL", dependencies: ["ADSQLKernel"], swiftSettings: strictSettings,
+            name: "ADSQL",
+            dependencies: ["ADDB", .product(name: "ADJSONCore", package: "ADJSON")],
+            swiftSettings: kernelSettings,
             plugins: isDev ? ["LintBuild"] : []),
         .executableTarget(
             name: "ADSQLTool", dependencies: ["ADSQL", "ADSQLImport"], swiftSettings: strictSettings),
@@ -138,7 +146,7 @@ let package = Package(
         // SQLite-file importer: reads a source.db via CSQLite and writes an
         // ADSQL database. Kept out of ADSQLKernel so the read-only engine never links sqlite3.
         .target(
-            name: "ADSQLImport", dependencies: ["ADSQLKernel", "CSQLite"], swiftSettings: strictSettings),
+            name: "ADSQLImport", dependencies: ["ADDB", "ADSQL", "CSQLite"], swiftSettings: strictSettings),
         // apple-docs search-pages serving: builds the §2.2 main query, binds the
         // §2.4 filter bag, and frames the §2.3 projection into the §2.5 response bytes — the Swift body
         // of apple-docs' frozen `ad_storage_search_pages` ABI. Depends on ADSQL only (NOT CSQLite), so it
@@ -153,18 +161,18 @@ let package = Package(
             swiftSettings: benchSettings),
         .target(
             name: "ADSQLTestSupport",
-            dependencies: ["ADSQLKernel"],
+            dependencies: ["ADDB"],
             path: "Tests/ADSQLTestSupport",
             swiftSettings: testSettings
         ),
         .testTarget(
             name: "ADSQLKernelTests",
-            dependencies: ["ADSQLKernel", "ADSQLTestSupport", "CSQLite"],
+            dependencies: ["ADDB", "ADSQL", "ADSQLTestSupport", "CSQLite"],
             swiftSettings: testSettings
         ),
         .testTarget(
             name: "ADSQLImportTests",
-            dependencies: ["ADSQLImport", "ADSQLSearch", "ADSQLTestSupport", "CSQLite"],
+            dependencies: ["ADDB", "ADSQL", "ADSQLImport", "ADSQLSearch", "ADSQLTestSupport", "CSQLite"],
             swiftSettings: testSettings
         ),
 

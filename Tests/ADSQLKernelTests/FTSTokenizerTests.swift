@@ -1,6 +1,7 @@
 import Testing
 
-@testable import ADSQLKernel
+@testable import ADDB
+@testable import ADSQL
 
 private func terms(_ tokenizer: any FTSTokenizer, _ text: String) throws -> [String] {
     try tokenizer.allTokens(text).map { String(decoding: $0.term, as: UTF8.self) }

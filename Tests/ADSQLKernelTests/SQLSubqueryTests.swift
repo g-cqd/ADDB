@@ -2,7 +2,8 @@ import ADSQLTestSupport
 import CSQLite
 import Testing
 
-@testable import ADSQLKernel
+@testable import ADDB
+@testable import ADSQL
 
 /// Correlated and uncorrelated scalar subqueries over roots(id, slug) and
 /// pages(id, root_id, title): root 1 has two pages, root 2 one, root 3 none.

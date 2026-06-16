@@ -1,7 +1,8 @@
 import ADSQLTestSupport
 import Testing
 
-@testable import ADSQLKernel
+@testable import ADDB
+@testable import ADSQL
 
 @Suite("Relation foreign keys")
 struct RelationFKTests {

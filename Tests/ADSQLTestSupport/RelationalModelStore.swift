@@ -1,4 +1,4 @@
-package import ADSQLKernel
+package import ADDB
 
 /// Naive relational oracle: dictionaries of rows plus recomputed index
 /// orderings, mirroring ADSQL's externally visible semantics (strict types

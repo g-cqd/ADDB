@@ -1,7 +1,8 @@
 import ADSQLTestSupport
 import Testing
 
-@testable import ADSQLKernel
+@testable import ADDB
+@testable import ADSQL
 
 private func encodeTuple(
     _ values: [Value], collations: [Collation], rowid: Int64? = nil

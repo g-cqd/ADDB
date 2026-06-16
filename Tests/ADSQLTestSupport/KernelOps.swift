@@ -1,4 +1,4 @@
-package import ADSQLKernel
+package import ADDB
 
 /// Byte-array bridges over the kernel's raw-buffer APIs, shared by suites.
 /// (Closures stay untyped or non-throwing to dodge the Swift 6.4 typed-throws

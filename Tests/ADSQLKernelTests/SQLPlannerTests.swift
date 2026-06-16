@@ -2,7 +2,8 @@ import ADSQLTestSupport
 import CSQLite
 import Testing
 
-@testable import ADSQLKernel
+@testable import ADDB
+@testable import ADSQL
 
 /// `docs(id PK, key unique, framework, score, weight, title NOCASE)` with a
 /// matching set of indexes, populated identically in ADSQL (with and without

@@ -1,4 +1,5 @@
-import ADSQLKernel
+import ADDB
+import ADSQL
 import ADSQLTestSupport
 import Foundation
 import Testing

@@ -1,6 +1,7 @@
 import Testing
 
-@testable import ADSQLKernel
+@testable import ADDB
+@testable import ADSQL
 
 @Suite("XXH64")
 struct XXH64Tests {

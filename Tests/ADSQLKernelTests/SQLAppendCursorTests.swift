@@ -2,7 +2,8 @@ import ADSQLTestSupport
 import CSQLite
 import Testing
 
-@testable import ADSQLKernel
+@testable import ADDB
+@testable import ADSQL
 
 /// `Insert.appendCursor` — the warm rightmost-leaf append fast path.
 /// Every test asserts it is byte-identical to the proven `.standard` path AND to

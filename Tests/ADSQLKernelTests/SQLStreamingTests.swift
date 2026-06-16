@@ -1,7 +1,8 @@
 import ADSQLTestSupport
 import Testing
 
-@testable import ADSQLKernel
+@testable import ADDB
+@testable import ADSQL
 
 /// — streaming `Statement.forEach`. The contract pinned here: `forEach` yields
 /// EXACTLY the same rows, in the same order, as `all` — for every query shape,

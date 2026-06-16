@@ -4,7 +4,8 @@ import Dispatch
 import Synchronization
 import Testing
 
-@testable import ADSQLKernel
+@testable import ADDB
+@testable import ADSQL
 
 // MARK: - SQLite mirror (full-query oracle)
 

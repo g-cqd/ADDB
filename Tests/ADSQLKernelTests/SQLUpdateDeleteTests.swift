@@ -2,7 +2,8 @@ import ADSQLTestSupport
 import CSQLite
 import Testing
 
-@testable import ADSQLKernel
+@testable import ADDB
+@testable import ADSQL
 
 /// `t(id PK, grp, qty, name)` created in both engines and seeded via SQL
 /// INSERT, then mutated by identical UPDATE/DELETE scripts.

@@ -2,7 +2,8 @@ import ADSQLTestSupport
 import CSQLite
 import Testing
 
-@testable import ADSQLKernel
+@testable import ADDB
+@testable import ADSQL
 
 /// `docs(id, framework, score)` for UNION/UNION ALL and json_each IN tests.
 private enum CompoundFixture {

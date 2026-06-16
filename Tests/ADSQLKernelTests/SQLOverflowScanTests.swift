@@ -1,7 +1,8 @@
 import ADSQLTestSupport
 import Testing
 
-@testable import ADSQLKernel
+@testable import ADDB
+@testable import ADSQL
 
 /// The zero-copy scan path hands inline values out as page spans but must fall
 /// back to an assembled copy for overflow values (> Format.maxInlineCellSize,

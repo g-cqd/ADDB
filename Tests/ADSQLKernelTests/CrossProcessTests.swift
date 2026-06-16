@@ -2,7 +2,8 @@ import ADSQLTestSupport
 import Foundation
 import Testing
 
-@testable import ADSQLKernel
+@testable import ADDB
+@testable import ADSQL
 
 private final class BundleMarker {}
 

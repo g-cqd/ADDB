@@ -1,7 +1,8 @@
 import ADSQLTestSupport
 import Testing
 
-@testable import ADSQLKernel
+@testable import ADDB
+@testable import ADSQL
 
 /// / — self-contained FTS index build + maintenance through the SQL write
 /// API. Inspection uses the internal read helpers (the SQL MATCH query is).

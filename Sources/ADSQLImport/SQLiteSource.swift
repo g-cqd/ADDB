@@ -1,4 +1,4 @@
-public import ADSQLKernel
+public import ADDB
 import CSQLite
 
 /// Read-only view of a source SQLite `.db` for the importer: schema introspection

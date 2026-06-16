@@ -2,7 +2,8 @@ import ADSQLTestSupport
 import CSQLite
 import Testing
 
-@testable import ADSQLKernel
+@testable import ADDB
+@testable import ADSQL
 
 /// / — the `rank` / `bm25` SQL surface + `ORDER BY rank`. The FTS5 table
 /// drives the query (outer); a JOIN on `base.id = fts.rowid` fetches the base

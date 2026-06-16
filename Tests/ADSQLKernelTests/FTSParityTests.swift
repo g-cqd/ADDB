@@ -2,7 +2,8 @@ import ADSQLTestSupport
 import CSQLite
 import Testing
 
-@testable import ADSQLKernel
+@testable import ADDB
+@testable import ADSQL
 
 /// / — the FTS *correctness gate* for closing. Proves the FOUR
 /// apple-docs FTS table shapes work end-to-end in ADSQL and match real SQLite

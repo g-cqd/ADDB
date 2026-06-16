@@ -1,6 +1,7 @@
 import Testing
 
-@testable import ADSQLKernel
+@testable import ADDB
+@testable import ADSQL
 
 /// — frame-of-reference bit-packed docid gaps. Exhaustive low-level coverage
 /// of the `ForPacking` codec (the writer in `FTSPostings.encode`, the readers in

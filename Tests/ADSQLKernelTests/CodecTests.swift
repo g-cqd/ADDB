@@ -1,6 +1,7 @@
 import Testing
 
-@testable import ADSQLKernel
+@testable import ADDB
+@testable import ADSQL
 
 @Suite("Meta codec")
 struct MetaCodecTests {

@@ -2,7 +2,8 @@ import ADSQLTestSupport
 import CSQLite
 import Testing
 
-@testable import ADSQLKernel
+@testable import ADDB
+@testable import ADSQL
 
 /// INSERT … ON CONFLICT(target) DO UPDATE, compared against SQLite by applying
 /// the same script to both and diffing the table.

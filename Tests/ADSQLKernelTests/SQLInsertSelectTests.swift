@@ -2,7 +2,8 @@ import ADSQLTestSupport
 import CSQLite
 import Testing
 
-@testable import ADSQLKernel
+@testable import ADDB
+@testable import ADSQL
 
 /// INSERT … SELECT, compared against SQLite by running the same script on both
 /// and diffing the destination table.

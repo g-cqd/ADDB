@@ -2,7 +2,8 @@ import ADSQLTestSupport
 import Dispatch
 import Testing
 
-@testable import ADSQLKernel
+@testable import ADDB
+@testable import ADSQL
 
 private let docsDef = TableDefinition(
     "docs",

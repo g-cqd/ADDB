@@ -1,7 +1,8 @@
 import ADSQLTestSupport
 import Testing
 
-@testable import ADSQLKernel
+@testable import ADDB
+@testable import ADSQL
 
 /// An indexed equality/IN whose comparison collation differs from the index column's
 /// collation (via an explicit `COLLATE`) must NOT be silently satisfied by the index

@@ -1,4 +1,5 @@
-public import ADSQLKernel
+public import ADDB
+import ADSQL
 
 extension Database {
     /// Imports a source SQLite `.db` into this (already-open, writable) ADSQL

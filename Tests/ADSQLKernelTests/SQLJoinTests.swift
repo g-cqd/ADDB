@@ -2,7 +2,8 @@ import ADSQLTestSupport
 import CSQLite
 import Testing
 
-@testable import ADSQLKernel
+@testable import ADDB
+@testable import ADSQL
 
 /// `docs(id, key, framework)` LEFT/INNER joined to `roots(id, slug, display)`
 /// on framework=slug. Frameworks include matched, unmatched ('Combine'), and

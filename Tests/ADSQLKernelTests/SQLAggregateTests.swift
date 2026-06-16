@@ -2,7 +2,8 @@ import ADSQLTestSupport
 import CSQLite
 import Testing
 
-@testable import ADSQLKernel
+@testable import ADDB
+@testable import ADSQL
 
 /// `docs(id, framework, score, weight)` with repeated frameworks, NULL
 /// frameworks/scores, and mixed int/real-summable weights — exercises

@@ -1,7 +1,8 @@
 import ADSQLTestSupport
 import Testing
 
-@testable import ADSQLKernel
+@testable import ADDB
+@testable import ADSQL
 
 // NOTE: `catch let error as DBError` (always-true cast) miscompiles in the
 // Swift 6.4 SIL ownership verifier; plain propagation and `as?` casts in

@@ -1,7 +1,8 @@
 import ADSQLTestSupport
 import Testing
 
-@testable import ADSQLKernel
+@testable import ADDB
+@testable import ADSQL
 
 /// Feasibility/regression for productionizing **denormalization via the importer**
 /// a `documents` table created WITH the six denorm columns (ADSQL has no

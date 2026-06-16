@@ -3,7 +3,8 @@ import Dispatch
 import Synchronization
 import Testing
 
-@testable import ADSQLKernel
+@testable import ADDB
+@testable import ADSQL
 
 @Suite("Group commit", .serialized)
 struct GroupCommitTests {

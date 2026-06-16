@@ -2,7 +2,8 @@ import ADSQLTestSupport
 import CSQLite
 import Testing
 
-@testable import ADSQLKernel
+@testable import ADDB
+@testable import ADSQL
 
 /// `Insert.hoisted` — the per-statement plan that hoists the
 /// owned-index roster out of the row loop (cached per (txn, tableId)) and drops

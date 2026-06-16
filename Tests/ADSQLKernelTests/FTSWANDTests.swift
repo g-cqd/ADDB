@@ -1,7 +1,8 @@
 import ADSQLTestSupport
 import Testing
 
-@testable import ADSQLKernel
+@testable import ADDB
+@testable import ADSQL
 
 /// / — block-max WAND ranked top-k. WAND is a pure optimization: a ranked
 /// `ORDER BY rank/bm25(…) LIMIT k` over an eligible query (single term, or AND/OR

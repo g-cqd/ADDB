@@ -1,7 +1,8 @@
 import ADSQLTestSupport
 import Testing
 
-@testable import ADSQLKernel
+@testable import ADDB
+@testable import ADSQL
 
 /// Applies a put through the public BTree entry point.
 private func put(_ ctx: TxnContext, _ key: [UInt8], _ value: [UInt8]) throws {

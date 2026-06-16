@@ -2,7 +2,8 @@ import ADSQLTestSupport
 import CSQLite
 import Testing
 
-@testable import ADSQLKernel
+@testable import ADDB
+@testable import ADSQL
 
 /// End-to-end acceptance: the same DDL, data, and queries run on ADSQL and on
 /// real SQLite must produce identical results. The schema and the literal

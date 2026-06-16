@@ -2,7 +2,8 @@ import ADSQLTestSupport
 import CSQLite
 import Testing
 
-@testable import ADSQLKernel
+@testable import ADDB
+@testable import ADSQL
 
 /// / — general `CREATE TRIGGER`. AFTER INSERT/UPDATE/DELETE row triggers
 /// whose body is INSERT/DELETE/UPDATE statements referencing `NEW.*`/`OLD.*`,

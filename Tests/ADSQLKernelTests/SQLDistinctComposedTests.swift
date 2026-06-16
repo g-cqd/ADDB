@@ -1,7 +1,8 @@
 import ADSQLTestSupport
 import Testing
 
-@testable import ADSQLKernel
+@testable import ADDB
+@testable import ADSQL
 
 /// Coverage: `SELECT DISTINCT` routed through the JOIN and AGGREGATE execution
 /// paths — i.e. the post-scan `deduplicate` pass (`ResultPipeline`). The

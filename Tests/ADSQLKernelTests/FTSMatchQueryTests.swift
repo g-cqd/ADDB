@@ -1,6 +1,7 @@
 import Testing
 
-@testable import ADSQLKernel
+@testable import ADDB
+@testable import ADSQL
 
 @Suite("FTS5 — F3a MATCH query grammar")
 struct FTSMatchQueryTests {

@@ -2,7 +2,8 @@ import ADSQLTestSupport
 import CSQLite
 import Testing
 
-@testable import ADSQLKernel
+@testable import ADDB
+@testable import ADSQL
 
 /// `items(id PK, key UNIQUE NOT NULL, name, qty DEFAULT 0)` created in ADSQL
 /// (relational API — SQL DDL lands in the next slice) and SQLite, so identical

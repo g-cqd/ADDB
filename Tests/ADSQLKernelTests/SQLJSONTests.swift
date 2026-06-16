@@ -1,6 +1,7 @@
 import Testing
 
-@testable import ADSQLKernel
+@testable import ADDB
+@testable import ADSQL
 
 /// Unit coverage for the ADJSON-backed SQL JSON layer (parse → tape, SQLite-dialect
 /// path walk, SQL value mapping, and the scalar functions). End-to-end use is exercised

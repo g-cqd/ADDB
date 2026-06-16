@@ -1,7 +1,8 @@
 import ADSQLTestSupport
 import Testing
 
-@testable import ADSQLKernel
+@testable import ADDB
+@testable import ADSQL
 
 /// / — boolean MATCH evaluation over the index (membership; ranking
 /// is). Driven through `WriteTxn.ftsMatch`, which parses + evaluates.

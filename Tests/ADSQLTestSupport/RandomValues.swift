@@ -1,4 +1,4 @@
-package import ADSQLKernel
+package import ADDB
 
 /// Seeded generators for typed values, shared by codec property tests and
 /// the relational model tests.

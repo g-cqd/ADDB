@@ -1,4 +1,4 @@
-@_exported import ADSQLKernel
+@_exported import ADDB
 
 /// Version and on-disk format metadata for the ADSQL package.
 public enum ADSQLInfo {

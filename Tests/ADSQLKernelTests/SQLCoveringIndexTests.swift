@@ -2,7 +2,8 @@ import ADSQLTestSupport
 import CSQLite
 import Testing
 
-@testable import ADSQLKernel
+@testable import ADDB
+@testable import ADSQL
 
 /// — COVERING / INCLUDE-index serving. A SELECT whose every still-needed
 /// base-table column lives in the chosen index's served set (the rowid-alias,
