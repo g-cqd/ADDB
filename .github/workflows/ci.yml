@@ -56,7 +56,26 @@ jobs:
       - name: Build
         run: swift build
       - name: Test (SQLite-differential suite)
-        run: swift test
+        run: swift test --enable-code-coverage
+      - name: Coverage summary
+        # Informational only (never fails the gate): a one-line line-coverage figure
+        # in the job summary. Hosted-runner numbers vary, so it is not a threshold.
+        if: always()
+        run: |
+          set +e
+          bin="$(swift build --show-bin-path)"
+          prof="$(find .build -name default.profdata | head -1)"
+          obj="$(find "$bin" -name '*.xctest' -maxdepth 2 | head -1)"
+          obj="$(find "$obj/Contents/MacOS" -type f -perm +111 2>/dev/null | head -1)"
+          if [ -n "$prof" ] && [ -n "$obj" ]; then
+            echo "## Code coverage" >> "$GITHUB_STEP_SUMMARY"
+            echo '```text' >> "$GITHUB_STEP_SUMMARY"
+            xcrun llvm-cov report "$obj" -instr-profile "$prof" \
+              -ignore-filename-regex='Tests|\.build' 2>/dev/null \
+              | tail -1 >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          true
 
   # Linux build + test lane (RFC 0010 F0 — the #1 apple-docs adoption gate). ADSQL was Darwin-only;
   # this lane is the actual Linux verification (the port is developed on macOS, which cannot build for
@@ -66,8 +85,8 @@ jobs:
   #
   # STILL ADVISORY (`continue-on-error: true`) for one reason: this lane must track the MOVING
   # `nightly-jammy` tag (see Toolchain below), so a required gate would let an unrelated bad nightly
-  # redden main. TODO(RFC 0010 F0): pin a dated nightly (or a stable >= 6.3 release) and drop
-  # `continue-on-error` to make Linux a required gate.
+  # redden main. Pending: pin a dated nightly (or a stable >= 6.3 release verified to parse the 6.3
+  # manifest) and drop `continue-on-error` to make Linux a required gate.
   #
   # Toolchain: the manifest is `swift-tools-version: 6.3` and uses `.strictMemorySafety()` (SE-0458)
   # plus the experimental `Lifetimes` feature (SE-0446/0456), so the Linux toolchain must be recent
@@ -286,3 +305,58 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deploy
         uses: actions/deploy-pages@v5
+
+  docs-build:
+    name: Build docs (PR check)
+    needs: build-test
+    # Build the DocC site (no deploy) on PRs to catch broken symbol links / missing
+    # docs before they reach main; the build+deploy job runs from `docs` on main.
+    if: github.event_name == 'pull_request'
+    runs-on: macos-26
+    env:
+      ADSQL_DEV: "1"
+    steps:
+      - uses: actions/checkout@v6
+      - name: Select latest Xcode
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
+      - name: Cache SwiftPM
+        uses: actions/cache@v5
+        with:
+          path: |
+            .build
+            ~/Library/Caches/org.swift.swiftpm
+          key: spm-${{ runner.os }}-docs-${{ hashFiles('Package.swift') }}-${{ hashFiles('Sources/**') }}
+          restore-keys: |
+            spm-${{ runner.os }}-docs-${{ hashFiles('Package.swift') }}-
+            spm-${{ runner.os }}-docs-
+      - name: Build DocC (no deploy)
+        run: |
+          swift package --allow-writing-to-directory "$PWD/_docs-check" \
+            generate-documentation --target ADSQL \
+            --disable-indexing --output-path "$PWD/_docs-check"
+
+  pr-thread-sanitizer:
+    name: Sanitize (thread, PR)
+    needs: build-test
+    # Run the thread sanitizer on PRs to catch data races in the single-writer /
+    # wait-free-reader and scan paths before merge. Curated by flavor: only TSan on
+    # PRs (the full thread+address matrix still runs on main / on demand).
+    if: github.event_name == 'pull_request'
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+      - name: Select latest Xcode
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
+      - name: Cache SwiftPM
+        uses: actions/cache@v5
+        with:
+          path: |
+            .build
+            ~/Library/Caches/org.swift.swiftpm
+          key: spm-${{ runner.os }}-san-thread-${{ hashFiles('Package.swift') }}-${{ hashFiles('Sources/**', 'Tests/**', 'Plugins/**') }}
+          restore-keys: |
+            spm-${{ runner.os }}-san-thread-${{ hashFiles('Package.swift') }}-
+            spm-${{ runner.os }}-san-thread-
+      - name: Test under thread sanitizer
+        run: swift test --sanitize=thread
