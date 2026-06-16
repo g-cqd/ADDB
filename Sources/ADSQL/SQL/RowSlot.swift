@@ -1,4 +1,4 @@
-import ADDB
+import ADDBCore
 
 /// On-demand row view over a record's bytes *in place* — the bytes are an
 /// `UnsafeRawBufferPointer` into the mapped page (or dirty page buffer), set

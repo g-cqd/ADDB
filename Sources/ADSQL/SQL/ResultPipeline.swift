@@ -1,4 +1,4 @@
-import ADDB
+import ADDBCore
 
 /// Result-assembly pipeline for `SelectExecutor` (split from
 /// Executor.swift). The per-row evaluation context (`RowContext`/`rowEnv` and the

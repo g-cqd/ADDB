@@ -1,4 +1,4 @@
-import ADDB
+import ADDBCore
 
 /// SQL write execution over a `WriteTxn`: INSERT/UPDATE/DELETE plus DDL. Each
 /// reuses the relational engine (strict typing, conflict policies, index

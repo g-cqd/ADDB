@@ -1,4 +1,4 @@
-import ADDB
+import ADDBCore
 
 /// The SQL trigger engine: parses, gates, and fires row triggers. After a
 /// base-table INSERT/UPDATE/DELETE writes a row (and its secondary-index

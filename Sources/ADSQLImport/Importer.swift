@@ -1,4 +1,4 @@
-public import ADDB
+public import ADDBCore
 import ADSQL
 
 extension Database {

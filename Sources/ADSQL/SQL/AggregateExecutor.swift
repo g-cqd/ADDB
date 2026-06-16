@@ -1,4 +1,4 @@
-import ADDB
+import ADDBCore
 
 /// Aggregate + GROUP BY execution for `SelectExecutor` (split
 /// from Executor.swift). `runAggregated` drives the grouped/ungrouped aggregate

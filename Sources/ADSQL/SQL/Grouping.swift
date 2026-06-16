@@ -1,4 +1,4 @@
-import ADDB
+import ADDBCore
 
 /// A hashable, collation-aware grouping key for GROUP BY, DISTINCT, and
 /// compound (UNION) deduplication. Canonicalization matches SQLite's grouping

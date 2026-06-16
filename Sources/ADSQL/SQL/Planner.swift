@@ -1,4 +1,4 @@
-import ADDB
+import ADDBCore
 
 /// Heuristic access-path selection for single-table SELECT. The planner
 /// extracts sargable conjuncts from a WHERE clause and picks a row source that

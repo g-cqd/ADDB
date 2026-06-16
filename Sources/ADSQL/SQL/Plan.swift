@@ -1,4 +1,4 @@
-import ADDB
+import ADDBCore
 
 /// Binding turns a parsed `SQLSelect` into a `BoundSelect`: the abstract
 /// syntax resolved against a concrete schema version. Binding is the only

@@ -1,4 +1,4 @@
-import ADDB
+import ADDBCore
 
 /// PRAGMA compatibility shim. ADSQL governs durability and mapping through
 /// `DatabaseOptions`, not through SQLite's journal/synchronous pragmas, so a

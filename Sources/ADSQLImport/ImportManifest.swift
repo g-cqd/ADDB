@@ -1,4 +1,4 @@
-import ADDB
+import ADDBCore
 
 /// Describes the FTS5 tables to reconstruct during import. SQLite's FTS5
 /// tokenize/config is not fully introspectable from the `.db` file, so the

@@ -1,4 +1,4 @@
-import ADDB
+import ADDBCore
 
 /// One clause of a ``Query``. Each component contributes itself to the lowered
 /// ``SQLSelect`` — the DSL is sugar over the same AST the parser produces, so it

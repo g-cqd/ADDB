@@ -1,4 +1,4 @@
-import ADDB
+import ADDBCore
 
 /// Access-path probe evaluation + type-boundary coercion for `SelectExecutor`
 /// Turns a WHERE's equality/range

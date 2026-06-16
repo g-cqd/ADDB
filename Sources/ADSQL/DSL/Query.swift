@@ -1,4 +1,4 @@
-import ADDB
+import ADDBCore
 
 /// Result builder that collects ``QueryComponent`` clauses, threading them in
 /// source order (the RegexBuilder shape: `buildPartialBlock` accumulates), with

@@ -1,4 +1,4 @@
-import ADDB
+import ADDBCore
 
 /// Aggregate functions: COUNT(*), COUNT(expr), SUM(expr), and the JSON aggregates
 /// json_group_array(value) / json_group_object(name, value). AVG/MIN/MAX/TOTAL/

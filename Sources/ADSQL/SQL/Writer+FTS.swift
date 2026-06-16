@@ -1,4 +1,4 @@
-import ADDB
+import ADDBCore
 
 /// FTS5 write path for `Writer`. The
 /// INSERT/UPDATE/DELETE handling for FTS5 virtual tables — the `insert`/`delete`/

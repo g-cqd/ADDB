@@ -491,7 +491,7 @@ enum FTSScenario {
 /// driven by a seeded SplitMix64 stream (no Foundation `random`/clock), so the
 /// same `id`/seed produces byte-identical rows on every run and machine. The two
 /// engines build from the SAME stream (a fresh `Generator` each), so they
-/// index identical text. (Mirrors `Tests/ADSQLTestSupport/AppleDocsCorpus.swift`;
+/// index identical text. (Mirrors `Tests/ADDBTestSupport/AppleDocsCorpus.swift`;
 /// not imported — see the brief's dependency constraint.)
 enum FTSCorpus {
     struct Document {

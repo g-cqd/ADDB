@@ -1,4 +1,4 @@
-import ADDB
+import ADDBCore
 
 /// A value usable as a scalar inside the query DSL — a column, a literal Swift
 /// value, or an already-built ``SQLExpr``. The operators below build predicates

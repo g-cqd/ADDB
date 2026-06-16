@@ -1,4 +1,4 @@
-import ADDB
+import ADDBCore
 
 /// Join execution for `SelectExecutor` (split from the
 /// 1551-line Executor.swift). The right-recursive nested-loop driver

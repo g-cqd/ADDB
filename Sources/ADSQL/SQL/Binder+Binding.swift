@@ -1,4 +1,4 @@
-import ADDB
+import ADDBCore
 
 /// Binding & plan-rewriting transforms for `Binder` (split from
 /// Binder.swift). The helpers that rewrite a bound plan's access / trailing /

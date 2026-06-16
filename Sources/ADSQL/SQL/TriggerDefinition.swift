@@ -1,4 +1,4 @@
-import ADDB
+import ADDBCore
 
 /// A parsed `CREATE TRIGGER … AFTER <event> ON <table> FOR EACH ROW [WHEN …]
 /// BEGIN <stmt>; … END`. The body is a list of INSERT/DELETE/UPDATE statements

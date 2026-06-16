@@ -1,4 +1,4 @@
-import ADDB
+import ADDBCore
 
 /// SQL tokenizer: case-insensitive keywords, 'string' literals with ''
 /// escapes, "quoted identifiers", integer/real/hex numerics, ?, $name and

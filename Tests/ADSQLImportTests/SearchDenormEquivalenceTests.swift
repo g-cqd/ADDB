@@ -1,7 +1,7 @@
+import ADDBTestSupport
 import ADSQL
 import ADSQLImport
 import ADSQLSearch
-import ADSQLTestSupport
 import CSQLite
 import Testing
 

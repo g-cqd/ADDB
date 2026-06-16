@@ -1,0 +1,378 @@
+import ADDBTestSupport
+import Testing
+
+@testable import ADDBCore
+@testable import ADSQL
+
+/// Applies a put through the public BTree entry point.
+private func put(_ ctx: TxnContext, _ key: [UInt8], _ value: [UInt8]) throws {
+    var failure: DBError?
+    key.withUnsafeBytes { k in
+        value.withUnsafeBytes { v in
+            do throws(DBError) {
+                try BTree.put(ctx: ctx, key: k, value: v)
+            } catch {
+                failure = error
+            }
+        }
+    }
+    if let failure { throw failure }
+}
+
+/// Applies a delete through the public BTree entry point; returns whether it existed.
+@discardableResult
+private func del(_ ctx: TxnContext, _ key: [UInt8]) throws -> Bool {
+    var existed = false
+    var failure: DBError?
+    key.withUnsafeBytes { k in
+        do throws(DBError) {
+            existed = try BTree.delete(ctx: ctx, key: k)
+        } catch {
+            failure = error
+        }
+    }
+    if let failure { throw failure }
+    return existed
+}
+
+private func get(_ resolver: some PageResolver, _ meta: Meta, _ key: [UInt8]) throws -> [UInt8]? {
+    var result: Result<[UInt8]?, DBError> = .success(nil)
+    key.withUnsafeBytes { k in
+        do throws(DBError) {
+            guard let ref = try BTree.get(resolver: resolver, meta: meta, key: k) else {
+                result = .success(nil)
+                return
+            }
+            result = .success(try BTree.copyValue(ref, resolver: resolver))
+        } catch {
+            result = .failure(error)
+        }
+    }
+    return try result.get()
+}
+
+/// Full scan via forEach, materializing values.
+private func scanAll(_ resolver: some PageResolver, _ meta: Meta) throws -> [(key: [UInt8], value: [UInt8])] {
+    var out: [(key: [UInt8], value: [UInt8])] = []
+    try BTree.forEach(resolver: resolver, meta: meta) { (key, ref) throws(DBError) in
+        out.append((key: [UInt8](key), value: try BTree.copyValue(ref, resolver: resolver)))
+    }
+    return out
+}
+
+@Suite("BTree model tests")
+struct BTreeModelTests {
+    @Test(arguments: [UInt64(1), 7, 42, 1234, 0xDEAD])
+    func randomPutsMatchModel(seed: UInt64) throws {
+        let kernel = MemKernel()
+        var model = ModelStore()
+        let ops = OpScript.generate(seed: seed, count: 4000, keySpace: 1500)
+
+        var ctx = kernel.begin()
+        for (i, op) in ops.enumerated() {
+            guard case .put(let key, let value) = op else { continue }
+            try put(ctx, key, value)
+            model.put(key, value)
+
+            if i % 257 == 0 {
+                kernel.commit(ctx)
+                ctx = kernel.begin()
+            }
+        }
+        kernel.commit(ctx)
+
+        // Structure is sound.
+        let report = try BTree.validate(resolver: CommittedResolver(source: kernel), meta: kernel.meta)
+        #expect(report.kvCount == UInt64(model.count))
+        #expect(report.leafCount > 1)
+
+        // Contents match the model exactly, in order.
+        let resolver = CommittedResolver(source: kernel)
+        let scanned = try scanAll(resolver, kernel.meta)
+        let expected = model.sortedPairs()
+        #expect(scanned.count == expected.count)
+        for (got, want) in zip(scanned, expected) {
+            #expect(got.key == want.key)
+            #expect(got.value == want.value)
+        }
+
+        // Point lookups for hit and miss.
+        for probe in 0..<200 {
+            let key = Array("k\(probe * 13 % 2000)".utf8)
+            #expect(try get(resolver, kernel.meta, key) == model.get(key))
+        }
+    }
+
+    /// Delete-heavy churn over a multi-level tree of LARGE (inline ~3.5 KB) values — so a
+    /// leaf holds only ~4 cells, and deleting ~80% repeatedly drives nodes under the
+    /// quarter-page `rebalanceThreshold`, exercising the **merge** rebalance path + parent
+    /// separator collapse across commits. The tree must stay structurally valid through
+    /// the churn AND remain byte-identical to the reference model, with correct hit/miss
+    /// point lookups. (The BORROW/redistribute path — `rebalancePair`'s `else` branch —
+    /// needs an underfull node adjacent to a *>¾-full* sibling; the public put/delete API
+    /// can't deterministically produce that layout, since splits leave leaves ~half-full,
+    /// so borrow is better exercised by a node-level test. Tracked as a coverage gap.)
+    @Test func deleteHeavyRebalanceMatchesModel() throws {
+        let kernel = MemKernel()
+        var model = ModelStore()
+        let valueSize = 3500  // cell ≈ key+value ≤ maxInlineCellSize (4064) ⇒ stays inline
+
+        // Build a multi-leaf, multi-level tree.
+        var ctx = kernel.begin()
+        var keys: [[UInt8]] = []
+        for i in 0..<240 {
+            let n = String(i)
+            let key = Array(("k-" + String(repeating: "0", count: 5 - n.count) + n).utf8)
+            let value = [UInt8](repeating: UInt8(i & 0xFF), count: valueSize)
+            try put(ctx, key, value)
+            model.put(key, value)
+            keys.append(key)
+            if i % 60 == 59 {
+                kernel.commit(ctx)
+                ctx = kernel.begin()
+            }
+        }
+        kernel.commit(ctx)
+        #expect(kernel.meta.treeDepth >= 2, "large values should force a multi-level tree")
+
+        // Seeded Fisher–Yates shuffle of delete order (deterministic).
+        var rng = SplitMix64(seed: 0xB0FF_5EED)
+        var order = Array(keys.indices)
+        for i in stride(from: order.count - 1, to: 0, by: -1) {
+            order.swapAt(i, Int(rng.next() % UInt64(i + 1)))
+        }
+
+        // Delete ~80%, validating + model-matching through the churn.
+        ctx = kernel.begin()
+        var deleted = 0
+        let target = (keys.count * 4) / 5
+        for (step, idx) in order.prefix(target).enumerated() {
+            #expect(try del(ctx, keys[idx]), "delete of a present key must report existed=true")
+            _ = model.delete(keys[idx])
+            deleted += 1
+            if step % 30 == 29 {
+                kernel.commit(ctx)
+                _ = try BTree.validate(resolver: CommittedResolver(source: kernel), meta: kernel.meta)
+                ctx = kernel.begin()
+            }
+        }
+        kernel.commit(ctx)
+
+        // Deleting an already-absent key is a no-op (existed=false), count unchanged.
+        ctx = kernel.begin()
+        #expect(try del(ctx, keys[order[0]]) == false)
+        kernel.commit(ctx)
+
+        // Final: structurally valid + byte-identical to the model.
+        let resolver = CommittedResolver(source: kernel)
+        let report = try BTree.validate(resolver: resolver, meta: kernel.meta)
+        #expect(report.kvCount == UInt64(model.count))
+        #expect(model.count == keys.count - deleted)
+        let scanned = try scanAll(resolver, kernel.meta)
+        let expected = model.sortedPairs()
+        #expect(scanned.map(\.key) == expected.map(\.key))
+        #expect(scanned.map(\.value) == expected.map(\.value))
+
+        // Point lookups: surviving keys hit with the right value, deleted keys miss.
+        let deletedSet = Set(order.prefix(target).map { keys[$0] })
+        for key in keys {
+            #expect(try get(resolver, kernel.meta, key) == model.get(key))
+            #expect((try get(resolver, kernel.meta, key) == nil) == deletedSet.contains(key))
+        }
+    }
+
+    /// Covers the **BORROW / redistribute** rebalance path (`rebalancePair`'s `else`
+    /// branch + `replaceSeparator`) — which uniform churn can't reach (it depletes the
+    /// siblings too). Two source-derived conditions must hold: (1) a node is "underfull"
+    /// only when `payloadBytes < usablePageSize/4`, so a single cell must be *clearly*
+    /// under a quarter page — i.e. ≥5 cells per leaf (with exactly 4, each cell ≈ ¼ page
+    /// and a 1-cell leaf never underflows); (2) the underfull node + a FULL sibling must
+    /// exceed one page so they cannot merge. Sequential inserts pack each leaf full via
+    /// the append-bias split, so leaf K holds keys [CK..CK+C-1] for the per-leaf capacity
+    /// C (calibrated from `validate`'s `leafCount`, not guessed). Emptying an INTERIOR
+    /// leaf to one cell hits the left-target borrow (move right sibling's first cell in);
+    /// emptying the LAST leaf to one cell hits the right-target borrow (no right sibling →
+    /// move the left sibling's last cell in). Both verified byte-identical to the model.
+    /// (The branch-level borrow — an internal node underflowing — needs a depth-3 tree and
+    /// remains a coverage gap.)
+    @Test func borrowRedistributeMatchesModel() throws {
+        let kernel = MemKernel()
+        var model = ModelStore()
+        let count = 60
+        let valueSize = 2800  // cell < usablePageSize/4 ⇒ ≥5 cells/leaf (1-cell leaf underflows)
+
+        func key(_ i: Int) -> [UInt8] {
+            let n = String(i)
+            return Array(("k-" + String(repeating: "0", count: 4 - n.count) + n).utf8)
+        }
+        var ctx = kernel.begin()
+        for i in 0..<count {
+            let value = [UInt8](repeating: UInt8(i & 0xFF), count: valueSize)
+            try put(ctx, key(i), value)
+            model.put(key(i), value)
+        }
+        kernel.commit(ctx)
+        #expect(kernel.meta.treeDepth >= 2, "must force a branch level")
+
+        // Calibrate the per-leaf capacity C from the (append-bias) full leaves.
+        let leaves = Int(try BTree.validate(resolver: CommittedResolver(source: kernel), meta: kernel.meta).leafCount)
+        let capacity = (count + leaves - 1) / leaves  // ceil(count / leaves)
+        #expect(capacity >= 5, "value size must yield ≥5 cells/leaf so a 1-cell leaf underflows")
+        #expect(leaves >= 4, "need an interior leaf with full neighbours plus a distinct last leaf")
+
+        // Empty interior leaf 2 ([2C..3C-1] → keep 2C) AND the last leaf
+        // ([(L-1)C..count-1] → keep (L-1)C) each down to a single cell. The interior one
+        // borrows from its right sibling (left-target); the last one, lacking a right
+        // sibling, borrows from its left sibling (right-target).
+        func emptyLeafToOneCell(firstKey base: Int) throws {
+            // Delete the run of keys sharing this leaf — [base+1.. base+capacity-1],
+            // clamped to `count` — leaving only `base`. The final delete underflows it.
+            ctx = kernel.begin()
+            for i in (base + 1)..<min(base + capacity, count) where model.get(key(i)) != nil {
+                #expect(try del(ctx, key(i)))
+                _ = model.delete(key(i))
+            }
+            kernel.commit(ctx)
+        }
+        try emptyLeafToOneCell(firstKey: 2 * capacity)  // interior → left-target borrow
+        try emptyLeafToOneCell(firstKey: (leaves - 1) * capacity)  // last → right-target borrow
+
+        let resolver = CommittedResolver(source: kernel)
+        let report = try BTree.validate(resolver: resolver, meta: kernel.meta)
+        #expect(report.kvCount == UInt64(model.count))
+        let scanned = try scanAll(resolver, kernel.meta)
+        let expected = model.sortedPairs()
+        #expect(scanned.map(\.key) == expected.map(\.key))
+        #expect(scanned.map(\.value) == expected.map(\.value))
+        #expect(try get(resolver, kernel.meta, key(2 * capacity)) == model.get(key(2 * capacity)))
+        #expect(try get(resolver, kernel.meta, key(2 * capacity + 1)) == nil)
+    }
+
+    @Test func sequentialInsertsGrowDepthAndStaySorted() throws {
+        let kernel = MemKernel()
+        var ctx = kernel.begin()
+        let count = 6000
+        for i in 0..<count {
+            let n = String(i)
+            let key = Array(("seq-" + String(repeating: "0", count: 6 - n.count) + n).utf8)
+            try put(ctx, key, Array("v\(i)".utf8))
+            if i % 500 == 0 {
+                kernel.commit(ctx)
+                ctx = kernel.begin()
+            }
+        }
+        kernel.commit(ctx)
+
+        #expect(kernel.meta.treeDepth >= 2)
+        let resolver = CommittedResolver(source: kernel)
+        let report = try BTree.validate(resolver: resolver, meta: kernel.meta)
+        #expect(report.kvCount == UInt64(count))
+        #expect(report.branchCount > 0)
+
+        let scanned = try scanAll(resolver, kernel.meta)
+        #expect(scanned.count == count)
+        #expect(scanned.first?.value == Array("v0".utf8))
+        #expect(scanned.last?.value == Array("v\(count - 1)".utf8))
+    }
+
+    @Test func fatKeysForceDeepTree() throws {
+        // Max-size keys → 4 cells per leaf, ~15 separators per branch: a few
+        // hundred inserts force depth ≥ 3 and exercise branch splits hard.
+        let kernel = MemKernel()
+        let ctx = kernel.begin()
+        var rng = SplitMix64(seed: 17)
+        var model = ModelStore()
+        for _ in 0..<1200 {
+            let n = String(rng.next() % 1_000_000)
+            var key = Array(("fat-" + String(repeating: "0", count: 6 - n.count) + n).utf8)
+            key.append(contentsOf: [UInt8](repeating: 0x2E, count: Format.maxKeySize - key.count))
+            let value = Array("v-\(n)".utf8)
+            try put(ctx, key, value)
+            model.put(key, value)
+        }
+        kernel.commit(ctx)
+
+        #expect(kernel.meta.treeDepth >= 3)
+        let resolver = CommittedResolver(source: kernel)
+        let report = try BTree.validate(resolver: resolver, meta: kernel.meta)
+        #expect(report.kvCount == UInt64(model.count))
+        let scanned = try scanAll(resolver, kernel.meta)
+        let expected = model.sortedPairs()
+        #expect(scanned.map(\.key) == expected.map(\.key))
+        #expect(scanned.map(\.value) == expected.map(\.value))
+    }
+
+    @Test func overflowValuesRoundTripAndTransition() throws {
+        let kernel = MemKernel()
+        let key = Array("big-one".utf8)
+
+        // Inline → overflow → bigger overflow → back to inline.
+        let stages: [[UInt8]] = [
+            [UInt8](repeating: 1, count: 100),
+            [UInt8](repeating: 2, count: 20_000),
+            [UInt8](repeating: 3, count: 50_000),
+            [UInt8](repeating: 4, count: 5),
+        ]
+        for stage in stages {
+            let ctx = kernel.begin()
+            try put(ctx, key, stage)
+            kernel.commit(ctx)
+            let resolver = CommittedResolver(source: kernel)
+            #expect(try get(resolver, kernel.meta, key) == stage)
+            _ = try BTree.validate(resolver: resolver, meta: kernel.meta)
+            #expect(kernel.meta.kvCount == 1)
+        }
+
+        // After all transitions no overflow page may leak into later validates
+        // (old chains were freed; MemKernel drops freed pages eagerly, so any
+        // dangling reference would throw).
+        let final = try BTree.validate(resolver: CommittedResolver(source: kernel), meta: kernel.meta)
+        #expect(final.overflowPages == 0)
+    }
+
+    @Test func updatesPreserveCount() throws {
+        let kernel = MemKernel()
+        let ctx = kernel.begin()
+        let key = Array("stable".utf8)
+        for round in 0..<50 {
+            try put(ctx, key, [UInt8](repeating: UInt8(round), count: round * 37 % 900))
+        }
+        kernel.commit(ctx)
+        #expect(kernel.meta.kvCount == 1)
+        #expect(try get(CommittedResolver(source: kernel), kernel.meta, key)?.count == 49 * 37 % 900)
+    }
+
+    @Test func keyValidation() throws {
+        let kernel = MemKernel()
+        let ctx = kernel.begin()
+        #expect(throws: DBError.keyEmpty) {
+            try put(ctx, [], [1])
+        }
+        #expect(throws: DBError.keyTooLarge(2000)) {
+            try put(ctx, [UInt8](repeating: 1, count: 2000), [1])
+        }
+    }
+
+    @Test func crossTxnCowIsolation() throws {
+        // A reader holding the old meta must see the old state after new commits.
+        let kernel = MemKernel()
+        var ctx = kernel.begin()
+        try put(ctx, Array("a".utf8), Array("old".utf8))
+        kernel.commit(ctx)
+        let oldMeta = kernel.meta
+        // Keep old pages alive (simulating a pinned reader's epoch) by copying
+        // the committed dict — MemKernel drops freed pages otherwise.
+        let pinned = MemKernel()
+        pinned.committed = kernel.committed
+        pinned.meta = oldMeta
+
+        ctx = kernel.begin()
+        try put(ctx, Array("a".utf8), Array("new".utf8))
+        try put(ctx, Array("b".utf8), Array("fresh".utf8))
+        kernel.commit(ctx)
+
+        #expect(try get(CommittedResolver(source: pinned), oldMeta, Array("a".utf8)) == Array("old".utf8))
+        #expect(try get(CommittedResolver(source: pinned), oldMeta, Array("b".utf8)) == nil)
+        #expect(try get(CommittedResolver(source: kernel), kernel.meta, Array("a".utf8)) == Array("new".utf8))
+    }
+}

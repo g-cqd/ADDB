@@ -1,4 +1,4 @@
-import ADDB
+import ADDBCore
 
 /// DDL parsing for `SQLParser`.
 /// CREATE (TABLE / INDEX / VIRTUAL TABLE / TRIGGER) and DROP: the column +

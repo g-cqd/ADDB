@@ -1,4 +1,4 @@
-import ADDB
+import ADDBCore
 
 /// The binder: turns a parsed `SQLSelect` into a `BoundSelect`/`BoundQuery`
 /// (the abstract syntax resolved against a concrete schema version), including

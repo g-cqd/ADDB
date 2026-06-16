@@ -1,9 +1,9 @@
 // swift-tools-version: 6.3
 import PackageDescription
 
-// Opt-in warnings-as-errors gate: set `ADSQL_WERROR=1` to compile every first-party target with
+// Opt-in warnings-as-errors gate: set `ADDB_WERROR=1` to compile every first-party target with
 // `-warnings-as-errors`. It is unsafe-flag-based, but folding it into `strictSettings` is still
-// dependency-safe: a consumer resolves this manifest with `ADSQL_WERROR` unset, so the array is empty
+// dependency-safe: a consumer resolves this manifest with `ADDB_WERROR` unset, so the array is empty
 // and the shipped library carries no unsafe flags (version resolution keeps working). Target-scoped
 // settings never reach ADJSON/swift-syntax/swift-collections, and the flag pulls in no extra
 // dependency, so the committed `Package.resolved` stays accurate. (Passing `-warnings-as-errors` on
@@ -18,14 +18,14 @@ import PackageDescription
 // Not yet wired into CI: warning emission is toolchain-dependent — some toolchains additionally emit
 // spurious, group-less `will never be executed` SILGen diagnostics on the typed-throws/`Never`
 // patterns (`throwErrno` etc.), which `-Wwarning` cannot selectively downgrade. CI will set
-// `ADSQL_WERROR=1` once the toolchain is pinned to a release verified warning-clean (see the CI
+// `ADDB_WERROR=1` once the toolchain is pinned to a release verified warning-clean (see the CI
 // toolchain-pinning work), so the gate is deterministic rather than a moving target.
 let werrorSettings: [SwiftSetting] =
-    Context.environment["ADSQL_WERROR"] != nil
+    Context.environment["ADDB_WERROR"] != nil
     ? [.unsafeFlags(["-warnings-as-errors", "-Wwarning", "StrictMemorySafety"])] : []
 
 // Maximum strictness, shared across every Swift target. Dependency-safe (no unsafe flags unless
-// `ADSQL_WERROR` is set, see above), so the library can still be consumed via a version-pinned
+// `ADDB_WERROR` is set, see above), so the library can still be consumed via a version-pinned
 // SwiftPM requirement. `.v6` language mode turns on complete strict-concurrency checking; the
 // upcoming features tighten existentials and import visibility. Aligned with the sibling
 // `../adjson` package.
@@ -37,12 +37,12 @@ let strictSettings: [SwiftSetting] =
         .enableUpcomingFeature("MemberImportVisibility"),
     ] + werrorSettings
 
-// Opt-in Instruments signposts: `ADSQL_SIGNPOSTS=1` defines the compile flag that activates the
+// Opt-in Instruments signposts: `ADDB_SIGNPOSTS=1` defines the compile flag that activates the
 // (otherwise no-op) signpost helpers in `Signposts.swift`. Off by default, so shipping builds compile
 // them out entirely; `os` is a system framework, never a package dependency. A `.define` is a safe
 // setting (no unsafe flags), so it never affects version-based dependency resolution.
 let signpostSettings: [SwiftSetting] =
-    Context.environment["ADSQL_SIGNPOSTS"] != nil ? [.define("ADSQL_SIGNPOSTS")] : []
+    Context.environment["ADDB_SIGNPOSTS"] != nil ? [.define("ADDB_SIGNPOSTS")] : []
 
 // The kernel's safety model, on top of `strictSettings`: SE-0458 strict memory safety (every unsafe
 // construct is explicitly `unsafe` or `@safe`-encapsulated, so any new unsafe use is compiler-flagged)
@@ -72,27 +72,27 @@ let benchSettings: [SwiftSetting] = strictSettings + timingWarningFlags
 let testSettings: [SwiftSetting] =
     strictSettings + timingWarningFlags + [.unsafeFlags(["-enable-actor-data-race-checks"])]
 
-// Dev-only tooling is gated behind `ADSQL_DEV` so packages that depend on ADSQL never resolve it.
+// Dev-only tooling is gated behind `ADDB_DEV` so packages that depend on ADSQL never resolve it.
 // The `format` / `lint` command plugins carry no external dependencies, so they are always available
 // without the flag; build-time lint enforcement (the `LintBuild` plugin) attaches to the library only
 // in dev/CI.
-let isDev = Context.environment["ADSQL_DEV"] != nil
+let isDev = Context.environment["ADDB_DEV"] != nil
 
 // ADSQL's only runtime dependency is the ADJSON package — specifically its Foundation-free,
 // swift-syntax-free `ADJSONCore` product, which backs the SQL JSON functions (tape parser +
 // SQLite-dialect path evaluator). The DocC plugin that builds the documentation site is dev/CI-only
-// (gated behind ADSQL_DEV), so packages that depend on ADSQL never resolve it.
+// (gated behind ADDB_DEV), so packages that depend on ADSQL never resolve it.
 //
 // Two sources, by environment:
 //   • Default — pinned to an exact revision (ADJSON publishes no version tags and tracks `main`):
 //     a floating branch would let an upstream change silently alter ADSQL between builds. The
 //     committed `Package.resolved` locks this revision and the transitive graph (swift-collections,
 //     swift-syntax), so dev/CI builds are reproducible and consumers resolve their own graph.
-//   • `ADSQL_LOCAL_ADJSON=1` — a local `../ADJSON` sibling checkout (path dependency), so the two
+//   • `ADDB_LOCAL_ADJSON=1` — a local `../ADJSON` sibling checkout (path dependency), so the two
 //     packages can be edited together during development. A path dependency is unpinned, so it
 //     overrides `Package.resolved`; never set this in CI or a release build.
 let adjsonDependency: Package.Dependency =
-    Context.environment["ADSQL_LOCAL_ADJSON"] != nil
+    Context.environment["ADDB_LOCAL_ADJSON"] != nil
     ? .package(path: "../ADJSON")
     : .package(
         url: "https://github.com/g-cqd/ADJSON.git",
@@ -104,7 +104,7 @@ if isDev {
 }
 
 let package = Package(
-    name: "ADSQL",
+    name: "ADDB",
     // Floor OSes match the sibling `../adjson` package: macOS one generation below the device
     // platforms (everything the engine needs — `Synchronization`'s Atomic/Mutex ship in macOS 15,
     // `Span`/`RawSpan` back-deploy further still — is available there), device platforms at the 2025
@@ -117,6 +117,7 @@ let package = Package(
         .visionOS(.v26),
     ],
     products: [
+        .library(name: "ADDB", targets: ["ADDB"]),
         .library(name: "ADSQL", targets: ["ADSQL"]),
         .library(name: "ADSQLImport", targets: ["ADSQLImport"]),
         .library(name: "ADSQLSearch", targets: ["ADSQLSearch"]),
@@ -125,28 +126,35 @@ let package = Package(
     dependencies: packageDependencies,
     targets: [
         .target(name: "ADCAtomics"),
-        // ADDB — the database engine: storage (COW B+tree over mmap, MVCC), the
-        // relational model + catalog, and the full-text-search subsystem. No SQL,
-        // no JSON: a self-contained, separately-releasable DB layer.
+        // ADDBCore — the database engine implementation: storage (COW B+tree over
+        // mmap, MVCC), the relational model + catalog, and the full-text-search
+        // index. No SQL, no JSON. Carries the broad `package` surface the SQL layer
+        // consumes; its curated `public` API is re-exported by the ADDB product.
         .target(
-            name: "ADDB",
+            name: "ADDBCore",
             dependencies: ["ADCAtomics"],
             swiftSettings: kernelSettings),
-        // ADSQL — the SQL language layer over ADDB: lexer/parser/AST, binder,
-        // planner, executor, evaluator, scalar/JSON functions, and the trigger
-        // engine. Re-exports ADDB so `import ADSQL` yields the whole surface.
+        // ADDB — the database product: a thin public façade that re-exports
+        // ADDBCore for consumers who want the engine without the SQL language.
+        .target(
+            name: "ADDB",
+            dependencies: ["ADDBCore"],
+            swiftSettings: strictSettings),
+        // ADSQL — the SQL language over ADDBCore: lexer/parser/AST, binder, planner,
+        // executor, evaluator, scalar/JSON functions, the trigger engine, and the
+        // query DSL. Re-exports the database surface so `import ADSQL` yields it all.
         .target(
             name: "ADSQL",
-            dependencies: ["ADDB", .product(name: "ADJSONCore", package: "ADJSON")],
+            dependencies: ["ADDBCore", .product(name: "ADJSONCore", package: "ADJSON")],
             swiftSettings: kernelSettings,
             plugins: isDev ? ["LintBuild"] : []),
         .executableTarget(
             name: "ADSQLTool", dependencies: ["ADSQL", "ADSQLImport"], swiftSettings: strictSettings),
         .systemLibrary(name: "CSQLite"),
         // SQLite-file importer: reads a source.db via CSQLite and writes an
-        // ADSQL database. Kept out of ADSQLKernel so the read-only engine never links sqlite3.
+        // ADSQL database. Kept out of ADDBCore so the read-only engine never links sqlite3.
         .target(
-            name: "ADSQLImport", dependencies: ["ADDB", "ADSQL", "CSQLite"], swiftSettings: strictSettings),
+            name: "ADSQLImport", dependencies: ["ADDBCore", "ADSQL", "CSQLite"], swiftSettings: strictSettings),
         // apple-docs search-pages serving: builds the §2.2 main query, binds the
         // §2.4 filter bag, and frames the §2.3 projection into the §2.5 response bytes — the Swift body
         // of apple-docs' frozen `ad_storage_search_pages` ABI. Depends on ADSQL only (NOT CSQLite), so it
@@ -160,19 +168,19 @@ let package = Package(
             name: "ADSQLBench", dependencies: ["ADSQL", "ADSQLSearch", "CSQLite"],
             swiftSettings: benchSettings),
         .target(
-            name: "ADSQLTestSupport",
-            dependencies: ["ADDB"],
-            path: "Tests/ADSQLTestSupport",
+            name: "ADDBTestSupport",
+            dependencies: ["ADDBCore"],
+            path: "Tests/ADDBTestSupport",
             swiftSettings: testSettings
         ),
         .testTarget(
-            name: "ADSQLKernelTests",
-            dependencies: ["ADDB", "ADSQL", "ADSQLTestSupport", "CSQLite"],
+            name: "ADDBTests",
+            dependencies: ["ADDBCore", "ADSQL", "ADDBTestSupport", "CSQLite"],
             swiftSettings: testSettings
         ),
         .testTarget(
             name: "ADSQLImportTests",
-            dependencies: ["ADDB", "ADSQL", "ADSQLImport", "ADSQLSearch", "ADSQLTestSupport", "CSQLite"],
+            dependencies: ["ADDBCore", "ADSQL", "ADSQLImport", "ADSQLSearch", "ADDBTestSupport", "CSQLite"],
             swiftSettings: testSettings
         ),
 

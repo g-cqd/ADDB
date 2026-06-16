@@ -1,4 +1,4 @@
-import ADDB
+import ADDBCore
 
 /// Scalar SQL functions and operators, matching SQLite's core behavior:
 /// ASCII-only LOWER/UPPER, character-based LENGTH/INSTR/SUBSTR (1-based), LIKE

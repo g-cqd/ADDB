@@ -1,4 +1,4 @@
-import ADDB
+import ADDBCore
 
 /// SELECT execution over a `PageResolver` (committed reader or write-txn
 /// overlay). The single-table pipeline is access-path source → WHERE filter →

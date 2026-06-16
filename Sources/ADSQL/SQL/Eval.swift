@@ -1,4 +1,4 @@
-import ADDB
+import ADDBCore
 
 /// SQL expression evaluation with SQLite's exact semantics: three-valued
 /// logic, cross-class comparison (INTEGER and REAL compare numerically and

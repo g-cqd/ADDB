@@ -1,4 +1,4 @@
-import ADDB
+import ADDBCore
 
 /// Recursive-descent parser for the ADSQL SQL subset (SQLite syntax).
 /// Constructs outside the subset fail with `sqlUnsupported` naming the

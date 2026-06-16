@@ -265,7 +265,7 @@ jobs:
       group: pages
       cancel-in-progress: false
     env:
-      ADSQL_DEV: "1"
+      ADDB_DEV: "1"
     steps:
       - uses: actions/checkout@v6
       - name: Select latest Xcode
@@ -314,7 +314,7 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: macos-26
     env:
-      ADSQL_DEV: "1"
+      ADDB_DEV: "1"
     steps:
       - uses: actions/checkout@v6
       - name: Select latest Xcode

@@ -1,4 +1,4 @@
-import ADDB
+import ADDBCore
 import Synchronization
 
 /// A multi-statement write transaction: every statement runs against one

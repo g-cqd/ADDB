@@ -1,4 +1,4 @@
-import ADDB
+import ADDBCore
 
 /// SQL abstract syntax. Value types, Sendable, carrying source offsets where
 /// errors can surface later (bind/run time).

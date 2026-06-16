@@ -1,4 +1,4 @@
-import ADDB
+import ADDBCore
 import ADJSONCore
 
 /// SQLite-compatible JSON support, backed by ADJSON. ADJSON owns every SQLite-dialect

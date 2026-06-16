@@ -1,4 +1,4 @@
-import ADDB
+import ADDBCore
 
 /// Bind-time expression compilation: lowers a bound `SQLExpr` to a closure tree
 /// ONCE, so a per-row evaluation skips the recursive `indirect enum` switch and

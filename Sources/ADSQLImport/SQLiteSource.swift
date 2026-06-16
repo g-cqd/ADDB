@@ -1,4 +1,4 @@
-public import ADDB
+public import ADDBCore
 import CSQLite
 
 /// Read-only view of a source SQLite `.db` for the importer: schema introspection
