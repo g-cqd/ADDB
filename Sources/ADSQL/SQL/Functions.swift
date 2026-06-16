@@ -207,6 +207,7 @@ enum SQLFunctions {
             }
         }
         registerJSONFunctions()
+        registerJSONAggregates()
         registerDateTimeFunctions()
         // COUNT/SUM reach scalar dispatch only when misused outside GROUP BY; give
         // the same diagnostic the aggregate binder would (valid use never gets here).
@@ -456,6 +457,17 @@ enum SQLFunctions {
             return try SQLJSON.patch(SQLFunctions.textify(target), with: SQLFunctions.textify(patch))
         default:
             throw DBError.sqlUnsupported("\(name)() function")
+        }
+    }
+
+    /// Registers the JSON group aggregates (json_group_array/object). Moves to
+    /// ``ADSQLJSON`` with the JSON scalars; until then ADSQL registers them.
+    static func registerJSONAggregates() {
+        SQLAggregateRegistry.register("JSON_GROUP_ARRAY", argCount: 1...1) {
+            JSONGroupArrayAccumulator()
+        }
+        SQLAggregateRegistry.register("JSON_GROUP_OBJECT", argCount: 2...2) {
+            JSONGroupObjectAccumulator()
         }
     }
 

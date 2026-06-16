@@ -1,16 +1,19 @@
 import ADDBCore
 
-/// Aggregate functions: COUNT(*), COUNT(expr), SUM(expr), and the JSON aggregates
-/// json_group_array(value) / json_group_object(name, value). AVG/MIN/MAX/TOTAL/
-/// GROUP_CONCAT and COUNT(DISTINCT) are rejected at bind with named `sqlUnsupported`
-/// errors.
+/// Aggregate functions: the core COUNT(*), COUNT(expr), SUM(expr), plus
+/// extension-registered aggregates (e.g. json_group_array/object) via `.custom`.
+/// AVG/MIN/MAX/TOTAL/GROUP_CONCAT and COUNT(DISTINCT) are rejected at bind with
+/// named `sqlUnsupported` errors.
 struct AggregateSpec: Sendable, Equatable {
     enum Kind: Sendable, Equatable {
         case countStar
         case count(SQLExpr)
         case sum(SQLExpr)
-        case jsonGroupArray(SQLExpr)
-        case jsonGroupObject(name: SQLExpr, value: SQLExpr)
+        /// An extension-registered aggregate, resolved by name through
+        /// ``SQLAggregateRegistry`` and folded by an ``AggregateAccumulator``. `args`
+        /// are the call's argument expressions (validated to the descriptor's arity
+        /// at bind time).
+        case custom(name: String, args: [SQLExpr])
     }
     let kind: Kind
 }
@@ -23,8 +26,10 @@ final class GroupAccumulators {
     private var sumIsReal: [Bool]
     private var sumInt: [Int64]
     private var sumReal: [Double]
-    /// Rendered JSON fragments per slot for json_group_array/json_group_object, in row order.
-    private var jsonParts: [[String]]
+    /// Per-slot accumulator for a `.custom` aggregate (nil for the builtin slots).
+    /// The binder only emits `.custom` for a registered name, so the descriptor —
+    /// and thus this accumulator — is present whenever the slot is `.custom`.
+    private var custom: [(any AggregateAccumulator)?]
 
     init(specs: [AggregateSpec]) {
         self.specs = specs
@@ -33,7 +38,10 @@ final class GroupAccumulators {
         self.sumIsReal = Array(repeating: false, count: specs.count)
         self.sumInt = Array(repeating: 0, count: specs.count)
         self.sumReal = Array(repeating: 0, count: specs.count)
-        self.jsonParts = Array(repeating: [], count: specs.count)
+        self.custom = specs.map { spec in
+            guard case .custom(let name, _) = spec.kind else { return nil }
+            return SQLAggregateRegistry.descriptor(for: name)?.makeAccumulator()
+        }
     }
 
     /// Folds one input row into every aggregate (arguments are evaluated against
@@ -47,15 +55,11 @@ final class GroupAccumulators {
                 if !(try SQLEval.evaluate(expr, env)).isNull { count[slot] += 1 }
             case .sum(let expr):
                 try addToSum(slot, try SQLEval.evaluate(expr, env))
-            case .jsonGroupArray(let expr):
-                jsonParts[slot].append(try SQLJSON.encodeValue(try SQLEval.evaluate(expr, env)))
-            case .jsonGroupObject(let nameExpr, let valueExpr):
-                let label = try SQLEval.evaluate(nameExpr, env)
-                guard case .text(let key) = label else {
-                    throw DBError.sqlRuntime("json_group_object() labels must be TEXT")
-                }
-                let value = try SQLEval.evaluate(valueExpr, env)
-                jsonParts[slot].append(SQLJSON.encodeKey(key) + ":" + (try SQLJSON.encodeValue(value)))
+            case .custom(_, let args):
+                var values: [Value] = []
+                values.reserveCapacity(args.count)
+                for arg in args { values.append(try SQLEval.evaluate(arg, env)) }
+                try custom[slot]!.update(values)
             }
         }
     }
@@ -67,10 +71,8 @@ final class GroupAccumulators {
         case .sum:
             guard sumNonNull[slot] else { return .null }  // empty / all-NULL SUM is NULL
             return sumIsReal[slot] ? .real(sumReal[slot]) : .integer(sumInt[slot])
-        case .jsonGroupArray:
-            return .text("[" + jsonParts[slot].joined(separator: ",") + "]")
-        case .jsonGroupObject:
-            return .text("{" + jsonParts[slot].joined(separator: ",") + "}")
+        case .custom:
+            return custom[slot]!.result()
         }
     }
 

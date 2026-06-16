@@ -258,3 +258,28 @@ enum SQLJSON {
         return [toSQL(root)]
     }
 }
+
+// MARK: - JSON group aggregates
+
+/// `json_group_array(value)` — collects each row's value as a JSON array element,
+/// rendering the array at finalization.
+final class JSONGroupArrayAccumulator: AggregateAccumulator {
+    private var parts: [String] = []
+    func update(_ args: [Value]) throws(DBError) {
+        parts.append(try SQLJSON.encodeValue(args[0]))
+    }
+    func result() -> Value { .text("[" + parts.joined(separator: ",") + "]") }
+}
+
+/// `json_group_object(name, value)` — collects each row's `name`:`value` pair as a
+/// JSON object member (labels must be TEXT), rendering the object at finalization.
+final class JSONGroupObjectAccumulator: AggregateAccumulator {
+    private var parts: [String] = []
+    func update(_ args: [Value]) throws(DBError) {
+        guard case .text(let key) = args[0] else {
+            throw DBError.sqlRuntime("json_group_object() labels must be TEXT")
+        }
+        parts.append(SQLJSON.encodeKey(key) + ":" + (try SQLJSON.encodeValue(args[1])))
+    }
+    func result() -> Value { .text("{" + parts.joined(separator: ",") + "}") }
+}
