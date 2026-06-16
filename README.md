@@ -11,9 +11,9 @@ FTS/vector indexes (M5) next, on the same on-disk format. See
 [`ROADMAP.md`](ROADMAP.md) — the single source of truth for the architecture,
 milestone status, the vs-SQLite scorecard, and the prioritized backlog.
 
-- Platform: macOS 26+, Apple Silicon first (16 KiB native pages)
-- Toolchain: pinned via `.swift-version`; Swift 6 language mode, strict concurrency
-- Dependencies: none
+- Platform: macOS 15 floor (device platforms at the 2025 generation); arm64 + x86_64
+- Toolchain: Swift 6.x — `.v6` language mode, complete strict concurrency, SE-0458 strict memory safety
+- Dependencies: one runtime dependency — ADJSONCore (ADJSON's Foundation- and swift-syntax-free JSON core)
 - Durability profiles: `.barrier` (F_BARRIERFSYNC, default), `.full`
   (F_FULLFSYNC), `.none` (bench)
 

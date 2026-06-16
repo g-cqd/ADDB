@@ -81,8 +81,8 @@ seeded op generator, simulated disk for crash injection). Tests in `ADSQLKernelT
   `Definitions` (table/column/index), `DatabaseOptions`/`ExecutionOptions`/`DurabilityProfile`,
   `IntegrityReport` + `verifyIntegrity`. The **entire storage engine is `package`** (B-tree, pager,
   cursors, codecs, catalog, txn context) — invisible to external consumers, reachable in-package.
-- No `ADSQLKernel` source file exceeds ~600 lines (the executor/parser/binder/storage layers are split
-  into concern-scoped files).
+- `ADSQLKernel` source is split into concern-scoped files; the few largest (the binder, the
+  evaluator, and the join/select executors) run ~600–730 lines, the rest well under.
 
 ---
 
@@ -95,7 +95,7 @@ seeded op generator, simulated disk for crash injection). Tests in `ADSQLKernelT
 | **M4 / M4.5 — SQL front end** | ✅ done | The full SQL pipeline + completeness (PRAGMA, BETWEEN, INSERT…SELECT, upsert, correlated scalar subqueries, transactions). Differential-tested vs CSQLite. |
 | **M4.6–M4.8 — Scan/query perf** | ✅ done | Zero-copy row decode, bounded top-N, residual-conjunct elimination, ordered rowid fetch, lazy `RowView` scans, `DISTINCT` O(n²)→O(n), index-nested-loop join, slot-bound columns. Strict memory safety enabled module-wide. |
 | **M5 — FTS + bm25/bm25f** | ✅ mostly done | FTS5 virtual tables, `MATCH`, `bm25`/`bm25f`, unicode61/porter/trigram, block-max WAND, trigger sync. **ADSQL beats SQLite FTS5 on ranked top-k.** Small F6 tail remains (see backlog B). |
-| **Health + perf program (R1–R7)** | ✅ done | General 2-table merge join + `.auto` cost model (**JOIN now ~2.1× faster than SQLite**); hoisted insert + a `sample`-profiled, evidence-based closure of the INSERT gap as inherent; compiled-evaluator default flip; god-file splits (no file > ~600 lines); `public`→`package` storage encapsulation (external surface −35%); seven-criteria `StrategyBench`; FTS bench breadth. |
+| **Health + perf program (R1–R7)** | ✅ done | General 2-table merge join + `.auto` cost model (**JOIN now ~2.1× faster than SQLite**); hoisted insert + a `sample`-profiled, evidence-based closure of the INSERT gap as inherent; compiled-evaluator default flip; god-file splits into concern-scoped files (largest ~730 lines); `public`→`package` storage encapsulation (external surface −35%); seven-criteria `StrategyBench`; FTS bench breadth. |
 | **M6 — Hardening** | ⏳ future | Expanded fuzz / crash-injection; ops polish. *(The SQLite-file importer moved up — it is now **F1 of M8**.)* |
 | **M7 — Query DSL & metaprogramming** | ⏳ deferred below M8 | Type-safe, injection-safe query DSL + a scoped `swift-syntax` macro tier. |
 | **M8 — apple-docs read-engine swap** | ⏳ **active — top priority** | Become the engine *inside* apple-docs' `libAppleDocsCore` (Bun + `bun:ffi`, frozen `ad_storage_*` C ABI), replacing dlopen'd libsqlite3 — `/search` ceilings at ~32 req/s on memory-bandwidth contention. **Adoption gate (apple-docs RFC 0001):** ✅ F1 importer · ✅ F2 FTS byte-parity · ✅ main-query surface parity (`AppleDocsMainQueryTests`) · ✅ **F0 Linux x64/arm64** (builds + full `swift test` suite green on x64+arm64) · **INT** — ✅ Swift side (`ADSQLSearch.searchPagesFramed`, §2.5 byte-parity-proven); remaining is the cross-repo `@_cdecl` shim + `Storage` wiring in apple-docs. **Then read-path perf:** ✅ F6 denorm → ✅ **F4 covering** → ✅ **F5 streaming** (`Statement.forEach`, bounded-memory row-at-a-time, SQLite's `step` model) → P1/P2 boundary collapse (A1–A7). **✅ Perf VALIDATED on the real 4 GB corpus (2026-06-15): ADSQL(F6-denorm) beats SQLite ~2.2× at 8-way (210 vs 96 req/s); SQLite ceilings, ADSQL scales 6.4× — the swap premise is CONFIRMED (§6).** See **[RFC 0010](docs/rfcs/0010-apple-docs-integration.md)**. |

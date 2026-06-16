@@ -2,7 +2,7 @@
 
 A pure-Swift, SQLite-compatible embedded SQL database for Swift 6 — a crash-safe
 storage engine with a SQLite-grammar query layer and FTS5-style full-text search, in
-one zero-dependency package.
+a focused package with a single runtime dependency.
 
 ## Overview
 
@@ -47,7 +47,9 @@ try await db.write { (txn) throws(DBError) in
   `trigram` tokenizers and BM25 ranking accelerated by a WAND top-k scorer.
 - **Strict memory safety** — the engine compiles under SE-0458 `.strictMemorySafety()`;
   every `Unsafe*`/`RawSpan` page view is explicitly scoped and lifetime-checked.
-- **Zero dependencies** — only the Swift standard library, `Synchronization`, and Darwin.
+- **One runtime dependency** — the Swift standard library, `Synchronization`, and Darwin/Glibc,
+  plus ADJSONCore (ADJSON's Foundation- and swift-syntax-free JSON core) backing the SQL `json_*`
+  functions.
 
 ## Topics
 
