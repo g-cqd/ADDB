@@ -45,17 +45,10 @@ extension Relation {
             [.integer(parentRowid)], collations: [collations[0]])
         var rowids: [Int64] = []
         var cursor = Cursor(resolver: ctx, tree: index.handle)
-        var failure: DBError?
-        var positioned = false
-        prefix.withUnsafeBytes { raw in
-            do throws(DBError) {
-                _ = unsafe try cursor.seek(raw)
-                positioned = cursor.isValid
-            } catch {
-                failure = error
-            }
+        var positioned = try prefix.withUnsafeBytesThrowing { raw throws(DBError) in
+            _ = unsafe try cursor.seek(raw)
+            return cursor.isValid
         }
-        if let failure { throw failure }
         while positioned {
             let rowid: Int64?? = unsafe try cursor.withCurrent { (key, _) throws(DBError) in
                 let matches = prefix.withUnsafeBytes { p in

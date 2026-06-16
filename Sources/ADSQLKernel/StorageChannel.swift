@@ -23,36 +23,20 @@ public protocol StorageChannel: AnyObject, Sendable {
 }
 
 extension StorageChannel {
-    /// Byte-array convenience over `pwrite`.
-    ///
-    /// Note: implemented with an error capture instead of a typed-throws
-    /// closure because converting a `throws(DBError)` closure over
-    /// `UnsafeRawBufferPointer` to `rethrows` crashes the Swift 6.4 frontend
-    /// (SILGenCleanup: "Illegal convention for non-address types").
+    /// Byte-array convenience over `pwrite` (see `[UInt8].withUnsafeBytesThrowing`
+    /// for why the typed-throws closure is routed through a capturing helper).
     public func pwrite(_ bytes: [UInt8], at offset: Int) throws(DBError) {
-        var failure: DBError?
-        bytes.withUnsafeBytes { raw in
-            do throws(DBError) {
-                unsafe try pwrite(raw, at: offset)
-            } catch {
-                failure = error
-            }
+        try bytes.withUnsafeBytesThrowing { raw throws(DBError) in
+            unsafe try pwrite(raw, at: offset)
         }
-        if let failure { throw failure }
     }
 
     /// Byte-array convenience over `pread`.
     public func preadBytes(count: Int, at offset: Int) throws(DBError) -> [UInt8] {
         var out = [UInt8](repeating: 0, count: count)
-        var failure: DBError?
-        out.withUnsafeMutableBytes { raw in
-            do throws(DBError) {
-                unsafe try pread(into: raw, at: offset)
-            } catch {
-                failure = error
-            }
+        try out.withUnsafeMutableBytesThrowing { raw throws(DBError) in
+            unsafe try pread(into: raw, at: offset)
         }
-        if let failure { throw failure }
         return out
     }
 }

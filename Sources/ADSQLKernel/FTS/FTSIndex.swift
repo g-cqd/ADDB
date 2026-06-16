@@ -323,12 +323,9 @@ enum FTSIndex {
         _ statsCursor: inout Cursor<R>, docid: Int64
     ) throws(DBError) -> Double? {
         let key = KeyCodec.rowKey(docid)
-        var found = false
-        var failure: DBError?
-        key.withUnsafeBytes { raw in
-            do throws(DBError) { found = unsafe try statsCursor.seekForward(raw) } catch { failure = error }
+        let found = try key.withUnsafeBytesThrowing { raw throws(DBError) in
+            unsafe try statsCursor.seekForward(raw)
         }
-        if let failure { throw failure }
         guard found else { return nil }
         return unsafe try statsCursor.withCurrentValueBytes { (raw) throws(DBError) -> Double in
             var offset = 0
@@ -354,17 +351,10 @@ enum FTSIndex {
     ) throws(DBError) -> [[UInt8]] {
         var terms: [[UInt8]] = []
         var cursor = Cursor(resolver: resolver, tree: record.dict)
-        var positioned = false
-        var failure: DBError?
-        prefix.withUnsafeBytes { raw in
-            do throws(DBError) {
-                _ = unsafe try cursor.seek(raw)
-                positioned = cursor.isValid
-            } catch {
-                failure = error
-            }
+        var positioned = try prefix.withUnsafeBytesThrowing { raw throws(DBError) in
+            _ = unsafe try cursor.seek(raw)
+            return cursor.isValid
         }
-        if let failure { throw failure }
         while positioned {
             let proceed: Bool? = unsafe try cursor.withCurrent { (key, _) throws(DBError) in
                 let term = unsafe [UInt8](key)
@@ -421,17 +411,10 @@ enum FTSIndex {
     ) throws(DBError) {
         let prefix = blockKeyPrefix(term)
         var cursor = Cursor(resolver: resolver, tree: handle)
-        var positioned = false
-        var failure: DBError?
-        prefix.withUnsafeBytes { raw in
-            do throws(DBError) {
-                _ = unsafe try cursor.seek(raw)
-                positioned = cursor.isValid
-            } catch {
-                failure = error
-            }
+        var positioned = try prefix.withUnsafeBytesThrowing { raw throws(DBError) in
+            _ = unsafe try cursor.seek(raw)
+            return cursor.isValid
         }
-        if let failure { throw failure }
         while positioned {
             // One cursor access per block: prefix-check the raw key in place (no key
             // copy) and materialize the value only if it still belongs to this term.

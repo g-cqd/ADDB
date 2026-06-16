@@ -67,17 +67,11 @@ enum Relation {
     static func putBytes(
         _ ctx: TxnContext, _ tree: inout TreeHandle, key: [UInt8], value: [UInt8]
     ) throws(DBError) {
-        var failure: DBError?
-        key.withUnsafeBytes { keyBytes in
-            value.withUnsafeBytes { valueBytes in
-                do throws(DBError) {
-                    unsafe try BTree.put(ctx: ctx, tree: &tree, key: keyBytes, value: valueBytes)
-                } catch {
-                    failure = error
-                }
+        try key.withUnsafeBytesThrowing { keyBytes throws(DBError) in
+            try value.withUnsafeBytesThrowing { valueBytes throws(DBError) in
+                unsafe try BTree.put(ctx: ctx, tree: &tree, key: keyBytes, value: valueBytes)
             }
         }
-        if let failure { throw failure }
     }
 
     /// Table-tree put for an ascending, caller-guaranteed-maximal rowid key, routed
@@ -88,19 +82,13 @@ enum Relation {
         _ ctx: TxnContext, _ tree: inout TreeHandle, tableId: UInt32, key: [UInt8], value: [UInt8]
     ) throws(DBError) {
         var cache = ctx.appendCache[tableId]
-        var failure: DBError?
-        key.withUnsafeBytes { keyBytes in
-            value.withUnsafeBytes { valueBytes in
-                do throws(DBError) {
-                    unsafe try BTree.appendMax(
-                        ctx: ctx, tree: &tree, key: keyBytes, value: valueBytes, cache: &cache)
-                } catch {
-                    failure = error
-                }
+        defer { ctx.appendCache[tableId] = cache }  // write back the warmed cache even on throw
+        try key.withUnsafeBytesThrowing { keyBytes throws(DBError) in
+            try value.withUnsafeBytesThrowing { valueBytes throws(DBError) in
+                unsafe try BTree.appendMax(
+                    ctx: ctx, tree: &tree, key: keyBytes, value: valueBytes, cache: &cache)
             }
         }
-        ctx.appendCache[tableId] = cache
-        if let failure { throw failure }
     }
 
     @discardableResult
@@ -222,17 +210,10 @@ enum Relation {
     ) throws(DBError) {
         let (lower, upper) = Catalog.kindBounds(kind)
         var cursor = Cursor(resolver: resolver, tree: mainTree)
-        var positioned = false
-        var failure: DBError?
-        lower.withUnsafeBytes { raw in
-            do throws(DBError) {
-                _ = unsafe try cursor.seek(raw)
-                positioned = cursor.isValid
-            } catch {
-                failure = error
-            }
+        var positioned = try lower.withUnsafeBytesThrowing { raw throws(DBError) in
+            _ = unsafe try cursor.seek(raw)
+            return cursor.isValid
         }
-        if let failure { throw failure }
         while positioned {
             let proceed: Bool? = unsafe try cursor.withCurrent { (key, ref) throws(DBError) in
                 guard key.count >= 2, unsafe key[0] == Catalog.prefix, unsafe key[1] == kind else { return false }

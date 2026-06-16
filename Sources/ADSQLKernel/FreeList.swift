@@ -139,15 +139,9 @@ package enum FreeList {
             // recycles a just-harvested page instead of growing the file.
             ctx.allocator.pool.append(contentsOf: result.pages)
             harvested += result.pages.count
-            var failure: DBError?
-            result.key.withUnsafeBytes { keyBytes in
-                do throws(DBError) {
-                    _ = unsafe try BTree.delete(ctx: ctx, tree: &free, key: keyBytes)
-                } catch {
-                    failure = error
-                }
+            try result.key.withUnsafeBytesThrowing { keyBytes throws(DBError) in
+                _ = unsafe try BTree.delete(ctx: ctx, tree: &free, key: keyBytes)
             }
-            if let failure { throw failure }
         }
         ctx.meta.freeTree = free
         return harvested
@@ -227,17 +221,11 @@ package enum FreeList {
         guard !pages.isEmpty else { return }
         let key = entryKey(gen: gen, seq: seq)
         let value = encodePages(pages)
-        var failure: DBError?
-        key.withUnsafeBytes { keyBytes in
-            value.withUnsafeBytes { valueBytes in
-                do throws(DBError) {
-                    unsafe try BTree.put(ctx: ctx, tree: &tree, key: keyBytes, value: valueBytes)
-                } catch {
-                    failure = error
-                }
+        try key.withUnsafeBytesThrowing { keyBytes throws(DBError) in
+            try value.withUnsafeBytesThrowing { valueBytes throws(DBError) in
+                unsafe try BTree.put(ctx: ctx, tree: &tree, key: keyBytes, value: valueBytes)
             }
         }
-        if let failure { throw failure }
     }
 
     // MARK: - Inspection (integrity, tests)

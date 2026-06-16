@@ -422,17 +422,11 @@ public struct WriteTxn: ~Copyable {
     /// Inserts or replaces.
     public func put(_ key: [UInt8], _ value: [UInt8]) throws(DBError) {
         try Database.checkUserKey(key)
-        var failure: DBError?
-        key.withUnsafeBytes { keyBytes in
-            value.withUnsafeBytes { valueBytes in
-                do throws(DBError) {
-                    unsafe try BTree.put(ctx: ctx, key: keyBytes, value: valueBytes)
-                } catch {
-                    failure = error
-                }
+        try key.withUnsafeBytesThrowing { keyBytes throws(DBError) in
+            try value.withUnsafeBytesThrowing { valueBytes throws(DBError) in
+                unsafe try BTree.put(ctx: ctx, key: keyBytes, value: valueBytes)
             }
         }
-        if let failure { throw failure }
     }
 
     /// Returns true when the key existed.

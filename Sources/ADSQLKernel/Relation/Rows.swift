@@ -175,17 +175,10 @@ package struct RowCursor<R: PageResolver>: ~Copyable {
             }
         self.cursor = Cursor(resolver: resolver, tree: tree)
         if let lowerKey {
-            var failure: DBError?
-            var valid = false
-            lowerKey.withUnsafeBytes { raw in
-                do throws(DBError) {
-                    _ = unsafe try cursor.seek(raw)
-                    valid = cursor.isValid
-                } catch {
-                    failure = error
-                }
+            let valid = try lowerKey.withUnsafeBytesThrowing { raw throws(DBError) in
+                _ = unsafe try cursor.seek(raw)
+                return cursor.isValid
             }
-            if let failure { throw failure }
             exhausted = !valid
         } else {
             exhausted = !(try cursor.move(to: .first))
