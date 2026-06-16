@@ -7,15 +7,14 @@ public protocol QueryComponent: Sendable {
     func apply(to select: inout SQLSelect)
 }
 
-/// `SELECT <columns>` — names, ``SQLColumn``s, or ``Select/all`` for `*`.
+/// `SELECT <columns>` — column names, ``SQLColumn``s, aggregates
+/// (``Count()``/``Sum(_:)``), or ``Select/all`` for `*`. Items mix freely:
+/// `Select(Column("kind"), Count().as("n"))`.
 public struct Select: QueryComponent {
     let columns: [SQLResultColumn]
 
-    public init(_ names: String...) {
-        columns = names.map { .expr(.column(table: nil, name: $0, offset: 0), alias: nil, sourceText: $0) }
-    }
-    public init(_ columns: SQLColumn...) {
-        self.columns = columns.map { .expr($0.sqlExpression, alias: nil, sourceText: $0.name) }
+    public init(_ items: any SQLProjectionConvertible...) {
+        columns = items.map { $0.sqlProjection.column }
     }
     private init(star: Void) { columns = [.star] }
 
