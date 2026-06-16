@@ -119,6 +119,7 @@ let package = Package(
     products: [
         .library(name: "ADDB", targets: ["ADDB"]),
         .library(name: "ADSQL", targets: ["ADSQL"]),
+        .library(name: "ADSQLFullTextSearch", targets: ["ADSQLFullTextSearch"]),
         .library(name: "ADSQLImport", targets: ["ADSQLImport"]),
         .library(name: "ADSQLSearch", targets: ["ADSQLSearch"]),
         .executable(name: "adsql", targets: ["ADSQLTool"]),
@@ -148,6 +149,16 @@ let package = Package(
             dependencies: ["ADDBCore", .product(name: "ADJSONCore", package: "ADJSON")],
             swiftSettings: kernelSettings,
             plugins: isDev ? ["LintBuild"] : []),
+        // ADSQLFullTextSearch — the full-text-search *query* language as an opt-in
+        // superset of ADSQL: MATCH parsing, bm25f scoring, and block-max WAND. It
+        // implements ADDBCore's `FTSEvaluation` hook and installs it via
+        // `Database.enableFullTextSearch()`; ADDBCore keeps only the FTS index.
+        // `@_exported import ADSQL`, so `import ADSQLFullTextSearch` yields SQL + FTS.
+        .target(
+            name: "ADSQLFullTextSearch",
+            dependencies: ["ADDBCore", "ADSQL"],
+            swiftSettings: strictSettings,
+            plugins: isDev ? ["LintBuild"] : []),
         .executableTarget(
             name: "ADSQLTool", dependencies: ["ADSQL", "ADSQLImport"], swiftSettings: strictSettings),
         .systemLibrary(name: "CSQLite"),
@@ -160,27 +171,42 @@ let package = Package(
         // of apple-docs' frozen `ad_storage_search_pages` ABI. Depends on ADSQL only (NOT CSQLite), so it
         // stays link-clean exactly like the read engine.
         .target(
-            name: "ADSQLSearch", dependencies: ["ADSQL"], swiftSettings: strictSettings),
+            name: "ADSQLSearch", dependencies: ["ADSQL", "ADSQLFullTextSearch"],
+            swiftSettings: strictSettings),
         // ADSQLSearch is a bench dependency so the `search` scenario can call the real
         // `searchPagesFramed` / `SearchQuery` hot path it benchmarks against
         // system SQLite running the IDENTICAL `SearchQuery.sql` + `SearchQuery.bindings`.
         .executableTarget(
-            name: "ADSQLBench", dependencies: ["ADSQL", "ADSQLSearch", "CSQLite"],
+            name: "ADSQLBench",
+            dependencies: ["ADSQL", "ADSQLSearch", "ADSQLFullTextSearch", "CSQLite"],
             swiftSettings: benchSettings),
         .target(
             name: "ADDBTestSupport",
-            dependencies: ["ADDBCore"],
+            dependencies: ["ADDBCore", "CSQLite"],
             path: "Tests/ADDBTestSupport",
             swiftSettings: testSettings
         ),
         .testTarget(
             name: "ADDBTests",
-            dependencies: ["ADDBCore", "ADSQL", "ADDBTestSupport", "CSQLite"],
+            dependencies: [
+                "ADDBCore", "ADSQL", "ADSQLFullTextSearch", "ADDBTestSupport", "CSQLite",
+            ],
+            swiftSettings: testSettings
+        ),
+        // Full-text-search query-language tests (MATCH parse/eval, bm25f scoring,
+        // WAND, and SQL MATCH/rank end-to-end). Enables FTS via
+        // `Database.enableFullTextSearch()`; the index-build tests stay in ADDBTests.
+        .testTarget(
+            name: "ADSQLFullTextSearchTests",
+            dependencies: ["ADDBCore", "ADSQL", "ADSQLFullTextSearch", "ADDBTestSupport", "CSQLite"],
             swiftSettings: testSettings
         ),
         .testTarget(
             name: "ADSQLImportTests",
-            dependencies: ["ADDBCore", "ADSQL", "ADSQLImport", "ADSQLSearch", "ADDBTestSupport", "CSQLite"],
+            dependencies: [
+                "ADDBCore", "ADSQL", "ADSQLFullTextSearch", "ADSQLImport", "ADSQLSearch",
+                "ADDBTestSupport", "CSQLite",
+            ],
             swiftSettings: testSettings
         ),
 

@@ -190,11 +190,11 @@ enum SearchPagesScenario {
     /// first divergence so a wrong source aborts the run.
     static func denormEquivalenceCheck(originalPath: String, denormPath: String) throws {
         print("\n  -- DENORM equivalence (denorm framed == original framed: count + top docids) --")
-        let original = try Database.open(
+        let original = try Database.openFTS(
             at: originalPath,
             options: DatabaseOptions(durability: .none, maxMapSize: 32 << 30, readOnly: true))
         defer { original.close() }
-        let denorm = try Database.open(
+        let denorm = try Database.openFTS(
             at: denormPath,
             options: DatabaseOptions(durability: .none, maxMapSize: 32 << 30, readOnly: true))
         defer { denorm.close() }
@@ -229,7 +229,7 @@ enum SearchPagesScenario {
     /// return nothing here even though `documents` imported fine).
     static func sanityCheckRealCorpus(adsqlPath: String, sqlitePath: String) throws {
         print("\n  -- FTS-import sanity (documents_fts MATCH row counts, adsql vs sqlite) --")
-        let adsql = try Database.open(
+        let adsql = try Database.openFTS(
             at: adsqlPath,
             options: DatabaseOptions(durability: .none, maxMapSize: 32 << 30, readOnly: true))
         defer { adsql.close() }
@@ -273,7 +273,7 @@ enum SearchPagesScenario {
     // MARK: - Real-corpus single-thread latency (original §2.2 path only)
 
     static func singleThreadRealADSQL(path: String) throws {
-        let db = try Database.open(
+        let db = try Database.openFTS(
             at: path,
             options: DatabaseOptions(durability: .none, maxMapSize: 32 << 30, readOnly: true))
         defer { db.close() }
@@ -319,7 +319,7 @@ enum SearchPagesScenario {
     /// denorm corpus. Same battery as ``singleThreadRealADSQL(path:)`` so the per-query
     /// before/after is directly comparable.
     static func singleThreadRealADSQLDenorm(path: String) throws {
-        let db = try Database.open(
+        let db = try Database.openFTS(
             at: path,
             options: DatabaseOptions(durability: .none, maxMapSize: 32 << 30, readOnly: true))
         defer { db.close() }
@@ -348,7 +348,7 @@ enum SearchPagesScenario {
         // One shared handle; each `searchPagesFramed` call opens its OWN wait-free
         // MVCC `ReadTxn` snapshot per request — the genuine per-request hot path under
         // N threads, no shared reader/statement to contend on.
-        let db = try Database.open(
+        let db = try Database.openFTS(
             at: path,
             options: DatabaseOptions(durability: .none, maxMapSize: 32 << 30, readOnly: true))
         defer { db.close() }
@@ -398,7 +398,7 @@ enum SearchPagesScenario {
     /// 1/2/4/8 sweep as ``scaleRealADSQL(path:)`` but calling `searchPagesFramedDenorm`,
     /// so the throughput table shows ADSQL(denorm) alongside ADSQL(original) + SQLite.
     static func scaleRealADSQLDenorm(path: String) throws {
-        let db = try Database.open(
+        let db = try Database.openFTS(
             at: path,
             options: DatabaseOptions(durability: .none, maxMapSize: 32 << 30, readOnly: true))
         defer { db.close() }
@@ -424,7 +424,7 @@ enum SearchPagesScenario {
     // MARK: - Corpus build (ADSQL) — direct DDL, the §2.1 read schema
 
     static func buildADSQL(path: String, rows: Int) throws {
-        let db = try Database.open(
+        let db = try Database.openFTS(
             at: path, options: DatabaseOptions(durability: .none, maxMapSize: 32 << 30))
         defer { db.close() }
         for sql in SearchCorpus.adsqlDDL { try db.prepare(sql).run() }
@@ -519,7 +519,7 @@ enum SearchPagesScenario {
     // MARK: - 1. Single-thread latency
 
     static func singleThreadADSQL(path: String, rows: Int) throws {
-        let db = try Database.open(
+        let db = try Database.openFTS(
             at: path,
             options: DatabaseOptions(durability: .none, maxMapSize: 32 << 30, readOnly: true))
         defer { db.close() }
@@ -596,7 +596,7 @@ enum SearchPagesScenario {
         // call opens its OWN wait-free MVCC `ReadTxn` snapshot (the §2.5 framed
         // path, same call the single-thread arm and the real `ad_storage_search_pages`
         // body use), so this is the genuine per-request hot path under N threads.
-        let db = try Database.open(
+        let db = try Database.openFTS(
             at: path,
             options: DatabaseOptions(durability: .none, maxMapSize: 32 << 30, readOnly: true))
         defer { db.close() }

@@ -50,7 +50,7 @@ struct ImportRoundTripTests {
                 tokenize: ["porter", "unicode61"],
                 source: .init(table: "documents", columns: ["title", "abstract"]))
         ])
-        let db = try Database.open(at: targetPath)
+        let db = try Database.openFTS(at: targetPath)
         defer { db.close() }
         _ = try db.importSQLite(from: sourcePath, manifest: manifest)
 

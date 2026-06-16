@@ -1,3 +1,5 @@
+package import ADDBCore
+
 /// Block-max WAND ranked top-k (Ding & Suel, 2011). A *dynamic-pruning*
 /// retrieval path for `ORDER BY bm25(…) LIMIT k` over an FTS5 table: instead of
 /// scoring the entire MATCH candidate set and then sorting (the score-all

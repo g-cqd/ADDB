@@ -1,3 +1,5 @@
+package import ADDBCore
+
 /// Boolean MATCH evaluation. Turns an `FTSQuery` into a
 /// docid-ascending match set over the index: terms/prefixes/phrases resolve
 /// to postings, the operators are sorted-set merges, and `col:` restricts by

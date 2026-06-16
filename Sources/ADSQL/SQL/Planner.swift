@@ -44,7 +44,7 @@ enum AccessPlan: Sendable {
     /// nil ⇒ the ordinary descend-into-the-table path.
     case index(name: String, probes: [IndexProbe], constraint: String, covering: [String]?)
     /// Full-text MATCH on an FTS5 table: the row source is the docid set
-    /// `FTSMatch.evaluate` returns for `query` (a literal/parameter expression),
+    /// the FTS evaluator returns for `query` (a literal/parameter expression),
     /// not a B+tree scan. `query` is the MATCH right-hand operand. `weights` are
     /// the bm25 per-column weights the binder captured (empty → all-ones, i.e.
     /// plain `rank`); the executor pads/truncates them to the FTS column count and

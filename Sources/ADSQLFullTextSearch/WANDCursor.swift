@@ -1,3 +1,5 @@
+import ADDBCore
+
 /// A single FTS term's posting list as a block-max cursor for WAND. It
 /// walks docids in ascending order, gallops (`advance(to:)`) to a target docid by
 /// skipping whole posting blocks via their header `lastDocId`, and exposes the

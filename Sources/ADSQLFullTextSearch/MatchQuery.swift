@@ -1,3 +1,5 @@
+package import ADDBCore
+
 /// The MATCH query language. Parses an FTS5-style query string into an
 /// operator tree; boolean evaluation over postings and the SQL `MATCH`
 /// surface build on it. Grammar (precedence high→low): column filter

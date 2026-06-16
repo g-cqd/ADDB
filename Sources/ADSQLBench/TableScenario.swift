@@ -34,7 +34,7 @@ enum TableScenario {
     // MARK: - ADSQL
 
     static func runADSQL(path: String, rows: Int, config: BenchConfig) throws {
-        let db = try Database.open(
+        let db = try Database.openFTS(
             at: path, options: DatabaseOptions(durability: .none, maxMapSize: 32 << 30))
         defer { db.close() }
         try db.writeSync { (txn) throws(DBError) in

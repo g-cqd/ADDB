@@ -62,7 +62,7 @@ struct DenormImportTests {
         let source = dir.file("source.db")
         try makeSource(at: source)
 
-        let db = try Database.open(at: dir.file("out.adsql"))
+        let db = try Database.openFTS(at: dir.file("out.adsql"))
         defer { db.close() }
         _ = try db.importSQLite(from: source, manifest: manifest)
 

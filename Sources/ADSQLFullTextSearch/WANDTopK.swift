@@ -1,3 +1,5 @@
+import ADDBCore
+
 /// The block-max WAND top-k driver. Given the WAND-eligible single-term
 /// leaves of a ranked query (from `FTSWAND.classify`), it retrieves the top-k
 /// `(docid, score)` the score-all path would have produced — using a size-k

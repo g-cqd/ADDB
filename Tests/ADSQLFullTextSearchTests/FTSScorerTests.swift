@@ -2,7 +2,7 @@ import ADDBTestSupport
 import Testing
 
 @testable import ADDBCore
-@testable import ADSQL
+@testable import ADSQLFullTextSearch
 
 /// / — the bm25f scorer (`FTSScorer`). Driven through `WriteTxn.ftsScore`
 /// (parse + score over the index). Scores are SQLite-signed: **negative, and

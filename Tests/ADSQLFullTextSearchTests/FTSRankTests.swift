@@ -3,7 +3,7 @@ import CSQLite
 import Testing
 
 @testable import ADDBCore
-@testable import ADSQL
+@testable import ADSQLFullTextSearch
 
 /// / — the `rank` / `bm25` SQL surface + `ORDER BY rank`. The FTS5 table
 /// drives the query (outer); a JOIN on `base.id = fts.rowid` fetches the base
@@ -26,7 +26,7 @@ struct FTSRankTests {
     ]
 
     private func fixture(_ dir: TempDir) throws -> Database {
-        let db = try Database.open(at: dir.file("ftsrank.adsql"))
+        let db = try Database.openFTS(at: dir.file("ftsrank.adsql"))
         try db.prepare("CREATE TABLE documents(id INTEGER PRIMARY KEY, key TEXT NOT NULL)").run()
         try db.prepare(
             "CREATE VIRTUAL TABLE documents_fts USING fts5(title, body, tokenize='porter unicode61')"

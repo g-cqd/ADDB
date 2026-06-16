@@ -68,6 +68,11 @@ public final class Database: Sendable {
         var readers: [UInt64: Int] = [:]
         /// Last minimum published to the cross-process slot (0 = none).
         var publishedMin: UInt64 = 0
+        /// The full-text-search query evaluator (nil until `enableFullTextSearch()`).
+        /// Kept here, rather than in a separate box, so every read/write transaction
+        /// reads it inside the snapshot lock it already takes — zero extra locking on
+        /// the hot path whether or not FTS is enabled.
+        var ftsEvaluator: (any FTSEvaluation)?
     }
 
     public let path: String
@@ -118,20 +123,16 @@ public final class Database: Sendable {
         triggerEngineBox.withLock { if $0 == nil { $0 = engine } }
     }
 
-    /// The full-text-search query evaluator, installed by the `ADSQLFullTextSearch`
-    /// module via `enableFullTextSearch()`. Held behind the storage-defined
-    /// `FTSEvaluation` protocol so this layer never references a query-language
-    /// type, and copied onto each read/write transaction so MATCH resolves
-    /// uniformly. Stays nil until the module is enabled — a MATCH row source then
-    /// throws a clear error instead.
-    let ftsEvaluatorBox = Mutex<(any FTSEvaluation)?>(nil)
-
-    /// Installs the FTS query evaluator (idempotent, one-way). Unlike the trigger
-    /// engine — which the SQL layer self-installs on `prepare` — the evaluator
-    /// lives *above* the SQL engine, so the `ADSQLFullTextSearch` module installs
-    /// it explicitly (`Database.enableFullTextSearch()`).
+    /// Installs the FTS query evaluator (idempotent, one-way), held behind the
+    /// storage-defined `FTSEvaluation` protocol so this layer never references a
+    /// query-language type. Unlike the trigger engine — which the SQL layer
+    /// self-installs on `prepare` — the evaluator lives *above* the SQL engine, so
+    /// the `ADSQLFullTextSearch` module installs it explicitly
+    /// (`Database.enableFullTextSearch()`). Copied onto each read/write transaction
+    /// so MATCH resolves uniformly; stays nil until enabled — a MATCH row source
+    /// then throws a clear error instead.
     package func installFTSEvaluator(_ evaluator: any FTSEvaluation) {
-        ftsEvaluatorBox.withLock { if $0 == nil { $0 = evaluator } }
+        shared.withLock { if $0.ftsEvaluator == nil { $0.ftsEvaluator = evaluator } }
     }
 
     private init(
@@ -231,19 +232,21 @@ public final class Database: Sendable {
         _ body: (borrowing ReadTxn) throws(DBError) -> R
     ) throws(DBError) -> R {
         try withReaderSignpost("read") { () throws(DBError) in
-            let meta = try beginRead()
+            let (meta, fts) = try beginRead()
             defer { endRead(generation: meta.generation) }
             let txn = ReadTxn(
                 resolver: CommittedResolver(
                     source: pager, pageCount: meta.pageCount,
-                    verifyChecksums: options.verifyChecksumsOnRead,
-                    ftsEvaluator: ftsEvaluatorBox.withLock { $0 }),
+                    verifyChecksums: options.verifyChecksumsOnRead, ftsEvaluator: fts),
                 meta: meta, schemaCache: relationSchemaCache)
             return try body(txn)
         }
     }
 
-    func beginRead() throws(DBError) -> Meta {
+    /// Registers a reader and returns its snapshot meta plus the installed FTS
+    /// evaluator (read in the same critical section, so the read path takes no
+    /// extra lock for it). The evaluator is nil unless `enableFullTextSearch()` ran.
+    func beginRead() throws(DBError) -> (meta: Meta, fts: (any FTSEvaluation)?) {
         // Read-only handles have no writer in-process: refresh the committed
         // meta from the mapped meta pages (checksums make torn reads safe).
         let refreshed: Meta? =
@@ -252,17 +255,17 @@ public final class Database: Sendable {
             } else {
                 nil
             }
-        let meta: Meta? = shared.withLock { state in
+        let snapshot: (Meta, (any FTSEvaluation)?)? = shared.withLock { state in
             guard !state.closed else { return nil }
             if let refreshed, refreshed.generation > state.meta.generation {
                 state.meta = refreshed
             }
             state.readers[state.meta.generation, default: 0] += 1
             publishMinLocked(&state)
-            return state.meta
+            return (state.meta, state.ftsEvaluator)
         }
-        guard let meta else { throw DBError.databaseClosed }
-        return meta
+        guard let snapshot else { throw DBError.databaseClosed }
+        return snapshot
     }
 
     func endRead(generation: UInt64) {
@@ -316,18 +319,21 @@ public final class Database: Sendable {
     ) throws(DBError) -> R {
         readerTable.sweepStaleSlots()
         let foreignMin = readerTable.minimumGeneration() ?? UInt64.max
-        let snapshot: (Meta, UInt64)? = shared.withLock { state in
+        let snapshot: (Meta, UInt64, (any FTSEvaluation)?)? = shared.withLock { state in
             guard !state.closed else { return nil }
             let localMin = state.readers.keys.min() ?? UInt64.max
-            return (state.meta, state.meta.reclaimLimit(minReader: min(localMin, foreignMin)))
+            return (
+                state.meta, state.meta.reclaimLimit(minReader: min(localMin, foreignMin)),
+                state.ftsEvaluator
+            )
         }
-        guard let (meta, reclaimLimit) = snapshot else { throw DBError.databaseClosed }
+        guard let (meta, reclaimLimit, fts) = snapshot else { throw DBError.databaseClosed }
 
         let ctx = TxnContext(source: pager, meta: meta)
         ctx.appendCursorEnabled = options.execution.insert == .appendCursor
         ctx.insertHoistEnabled = options.execution.insert == .hoisted
         ctx.triggerEngine = triggerEngineBox.withLock { $0 }
-        ctx.ftsEvaluator = ftsEvaluatorBox.withLock { $0 }
+        ctx.ftsEvaluator = fts
         try FreeList.harvest(ctx: ctx, upTo: reclaimLimit)
         let baselineMain = ctx.meta.mainTree
 

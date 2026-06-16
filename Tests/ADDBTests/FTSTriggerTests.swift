@@ -1,4 +1,5 @@
 import ADDBTestSupport
+import ADSQLFullTextSearch
 import CSQLite
 import Testing
 
@@ -147,6 +148,7 @@ struct FTSTriggerTests {
         do {
             let db = try Database.open(at: path)
             defer { db.close() }
+            db.enableFullTextSearch()
             try db.prepare(
                 """
                 CREATE TABLE documents(
@@ -174,6 +176,7 @@ struct FTSTriggerTests {
         do {
             let db = try Database.open(at: path)
             defer { db.close() }
+            db.enableFullTextSearch()
             let triggers = try db.writeSync { (txn) throws(DBError) -> [String: TriggerDefinition] in
                 try txn.schema().triggers()
             }
@@ -250,6 +253,7 @@ struct FTSTriggerTests {
     /// surface that the triggers keep the index in step.
     private func ftsSyncFixture(_ dir: TempDir) throws -> Database {
         let db = try Database.open(at: dir.file("ftssync.adsql"))
+        db.enableFullTextSearch()
         try db.prepare(
             """
             CREATE TABLE documents(
@@ -359,6 +363,7 @@ struct FTSTriggerTests {
         do {
             let db = try Database.open(at: path)
             defer { db.close() }
+            db.enableFullTextSearch()
             try db.prepare(
                 """
                 CREATE TABLE documents(
@@ -384,6 +389,7 @@ struct FTSTriggerTests {
         do {
             let db = try Database.open(at: path)
             defer { db.close() }
+            db.enableFullTextSearch()
             #expect(try matchIds(db, "metal") == [7])
             try db.prepare(
                 """

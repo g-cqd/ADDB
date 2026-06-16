@@ -132,7 +132,7 @@ enum SelectExecutor {
         // for an FTS source, computing the per-doc bm25 score is dead work
         // unless the `rank` slot is actually read — by the projection, ORDER BY, or
         // residual — or WAND needs it. Skipping it makes a membership-only MATCH O(n)
-        // instead of O(n²) (FTSScorer.score re-decodes the term's whole list per doc).
+        // instead of O(n²) (the scorer otherwise re-decodes the term's list per doc).
         let ftsScoreNeeded: Bool = {
             guard case .fts = source else { return true }
             if ftsRankedTopK != nil { return true }
@@ -270,7 +270,7 @@ enum SelectExecutor {
         /// list) only for an index-only scan the binder proved safe: each row is
         /// served straight from the index leaf, no table descent. nil = descend.
         case index(Catalog.IndexRecord, [IndexBounds], covering: [String]?)
-        /// An FTS5 MATCH source: the docids `FTSMatch.evaluate` returns (ascending),
+        /// An FTS5 MATCH source: the docids the FTS evaluator returns (ascending),
         /// each scored by bm25f. `query` is the UTF-8 of the resolved MATCH query
         /// string; `weights` are the per-column bm25 weights (already padded to the
         /// FTS column count, all-ones for plain `rank`).
@@ -510,59 +510,38 @@ enum SelectExecutor {
                 }
             }
         case .fts(let record, let queryBytes, let weights):
-            // Evaluate the MATCH query to its docid set, score each by bm25f
-            // then hand each docid to `body` with an EMPTY span and the score:
-            // the FTS table's `RowSlot` is built from the synthetic rowid-alias
-            // definition, so `compute` returns `.integer(docid)` for `rowid`, `.real`
-            // for `rank`, and never reads the span. The join then descends on
-            // `base.id = fts.rowid` exactly as for an ordinary rowid source.
-            let query = try FTSQuery.parse(String(decoding: queryBytes, as: UTF8.self))
-            // Fetch the corpus aggregate once; pad weights to the FTS column count.
-            let global = try FTSIndex.globalStats(resolver, record)
-            let columns = record.definition.columns.count
-            var resolvedWeights = weights
-            if resolvedWeights.count < columns {
-                resolvedWeights += Array(repeating: 1.0, count: columns - resolvedWeights.count)
+            // The FTS *query* language (MATCH parse, bm25f scoring, block-max WAND)
+            // lives in the opt-in `ADSQLFullTextSearch` module, injected onto the
+            // resolver as an `FTSEvaluation`. This layer holds only the access path;
+            // it never names a query-language type.
+            guard let fts = resolver.ftsEvaluator else {
+                throw DBError.sqlUnsupported(
+                    "full-text search: import ADSQLFullTextSearch and call enableFullTextSearch()")
             }
             let empty = unsafe UnsafeRawBufferPointer(start: nil, count: 0)
             // — block-max WAND: a ranked top-k (ORDER BY rank ASC + LIMIT k) over an
             // eligible query shape retrieves the top-k by dynamic pruning, scoring only
-            // survivors (identical scores via FTSScorer). nil ⇒ fall back to score-all.
+            // survivors (identical scores). nil ⇒ fall back to score-all.
             if let k = ftsRankedTopK,
-                let top = try FTSWAND.topK(
-                    query: query, record: record, resolver: resolver, weights: resolvedWeights,
-                    global: global, k: k)
+                let top = try fts.rankedTopK(
+                    queryBytes: queryBytes, record: record, resolver: resolver, weights: weights, k: k)
             {
                 for entry in top {
                     if try unsafe !body(entry.docid, empty, entry.score) { return }
                 }
                 return
             }
-            // Score-all: evaluate the MATCH query to its docid set, score each by
-            // bm25f, then hand each docid to `body` with an EMPTY span and the
-            // score: the FTS table's `RowSlot` is built from the synthetic rowid-alias
-            // definition, so `compute` returns `.integer(docid)` for `rowid`, `.real`
-            // for `rank`, and never reads the span. The join then descends on
-            // `base.id = fts.rowid` exactly as for an ordinary rowid source.
-            let docids = try FTSMatch.evaluate(query, record: record, resolver: resolver)
-            // resolve the query ONCE (each leaf's df/IDF and per-document
-            // frequencies) so the per-document loop is a table lookup, not a re-decode
-            // of the term's posting list — nor, for a `foo*` prefix, a per-document re-
-            // enumeration of its document frequency, which dominated the score-all path.
-            // a membership-only query (no `rank`/`bm25` referenced) never reads the
-            // score, so skip building the scorer entirely.
-            let scorer: FTSScorer.PreparedScorer<R>? =
-                ftsScoreNeeded
-                ? try FTSScorer.PreparedScorer(
-                    query: query, record: record, resolver: resolver, weights: resolvedWeights,
-                    global: global)
-                : nil
-            // One persistent ascending cursor on the stats tree for the whole scan: the
-            // docids arrive ascending, so `docLength`'s `seekForward` skips the per-doc
-            // root→leaf descent for same-leaf docs.
-            var statsCursor = Cursor(resolver: resolver, tree: record.stats)
+            // Score-all: the MATCH membership docids (ascending), each handed to
+            // `body` with an EMPTY span and its bm25f score — the FTS table's
+            // `RowSlot` returns `.integer(docid)` for `rowid`, `.real` for `rank`, and
+            // never reads the span; the join then descends on `base.id = fts.rowid`
+            // exactly as for an ordinary rowid source. A membership-only MATCH (no
+            // `rank`/`bm25` read) skips the scorer entirely.
+            let (docids, scorer) = try fts.match(
+                queryBytes: queryBytes, record: record, resolver: resolver,
+                weights: weights, needScore: ftsScoreNeeded)
             for docid in docids {
-                let score = try scorer?.score(docid: docid, statsCursor: &statsCursor) ?? 0
+                let score = try scorer?.score(docid: docid) ?? 0
                 if try unsafe !body(docid, empty, score) { return }
             }
         }

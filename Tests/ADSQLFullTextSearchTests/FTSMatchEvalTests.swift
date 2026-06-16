@@ -2,7 +2,7 @@ import ADDBTestSupport
 import Testing
 
 @testable import ADDBCore
-@testable import ADSQL
+@testable import ADSQLFullTextSearch
 
 /// / — boolean MATCH evaluation over the index (membership; ranking
 /// is). Driven through `WriteTxn.ftsMatch`, which parses + evaluates.

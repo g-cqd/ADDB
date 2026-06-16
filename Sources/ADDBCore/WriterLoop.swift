@@ -72,12 +72,15 @@ extension Database {
 
             readerTable.sweepStaleSlots()
             let foreignMin = readerTable.minimumGeneration() ?? UInt64.max
-            let snapshot: (Meta, UInt64)? = shared.withLock { state in
+            let snapshot: (Meta, UInt64, (any FTSEvaluation)?)? = shared.withLock { state in
                 guard !state.closed else { return nil }
                 let localMin = state.readers.keys.min() ?? UInt64.max
-                return (state.meta, state.meta.reclaimLimit(minReader: min(localMin, foreignMin)))
+                return (
+                    state.meta, state.meta.reclaimLimit(minReader: min(localMin, foreignMin)),
+                    state.ftsEvaluator
+                )
             }
-            guard let (meta, reclaimLimit) = snapshot else {
+            guard let (meta, reclaimLimit, fts) = snapshot else {
                 for item in batch { item.fail(.databaseClosed) }
                 continue
             }
@@ -86,7 +89,7 @@ extension Database {
             ctx.appendCursorEnabled = options.execution.insert == .appendCursor
             ctx.insertHoistEnabled = options.execution.insert == .hoisted
             ctx.triggerEngine = triggerEngineBox.withLock { $0 }
-            ctx.ftsEvaluator = ftsEvaluatorBox.withLock { $0 }
+            ctx.ftsEvaluator = fts
             do throws(DBError) {
                 try FreeList.harvest(ctx: ctx, upTo: reclaimLimit)
             } catch {

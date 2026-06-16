@@ -54,7 +54,7 @@ struct ImportedFTSParityTests {
                 tokenize: ["porter", "unicode61"],
                 source: .init(table: "documents", columns: ["title", "abstract"]))
         ])
-        let db = try Database.open(at: dir.file("out.adsql"))
+        let db = try Database.openFTS(at: dir.file("out.adsql"))
         defer { db.close() }
         _ = try db.importSQLite(from: sourcePath, manifest: manifest)
 

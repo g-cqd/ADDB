@@ -169,7 +169,7 @@ extension Database {
     /// structure, page liveness; `deep` adds index ⇄ row bijection). Runs as
     /// a reader: the writer is unaffected.
     public func verifyIntegrity(deep: Bool = false) throws(DBError) -> IntegrityReport {
-        let meta = try beginRead()
+        let (meta, _) = try beginRead()
         defer { endRead(generation: meta.generation) }
         return try Integrity.check(
             resolver: CommittedResolver(source: pager, pageCount: meta.pageCount),

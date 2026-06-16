@@ -1,4 +1,5 @@
 import ADDBTestSupport
+import ADSQLFullTextSearch
 import Testing
 
 @testable import ADDBCore
@@ -70,6 +71,7 @@ struct FTSIndexTests {
         // Reopen: the batch is durable.
         let db = try Database.open(at: path)
         defer { db.close() }
+        db.enableFullTextSearch()
         let hits = try db.prepare("SELECT rowid FROM fts WHERE fts MATCH 'swift' ORDER BY rowid")
             .all().map { row -> Int64 in
                 guard case .integer(let id) = row[0] else { return -1 }

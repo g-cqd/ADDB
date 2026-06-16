@@ -43,7 +43,7 @@ struct ImportFollowOnTests {
         let source = dir.file("source.db")
         try makeFixture(at: source)
 
-        let db = try Database.open(at: dir.file("out.adsql"))
+        let db = try Database.openFTS(at: dir.file("out.adsql"))
         defer { db.close() }
         _ = try db.importSQLite(from: source, manifest: manifest)
 
@@ -57,7 +57,7 @@ struct ImportFollowOnTests {
         let source = dir.file("source.db")
         try makeFixture(at: source)
 
-        let db = try Database.open(at: dir.file("out.adsql"))
+        let db = try Database.openFTS(at: dir.file("out.adsql"))
         defer { db.close() }
         _ = try db.importSQLite(from: source, manifest: manifest)
 
@@ -76,7 +76,7 @@ struct ImportFollowOnTests {
         try makeFixture(at: source)
 
         func importedRowsAndMatches(_ name: String) throws -> ([[Value]], [[Value]]) {
-            let db = try Database.open(at: dir.file(name))
+            let db = try Database.openFTS(at: dir.file(name))
             defer { db.close() }
             _ = try db.importSQLite(from: source, manifest: manifest)
             let rows = try db.prepare("SELECT id, title, framework FROM documents ORDER BY id").all()
@@ -112,7 +112,7 @@ struct ImportFollowOnTests {
             try #require(sqlite3_exec(src, sql, nil, nil, nil) == SQLITE_OK, "exec: \(sql)")
         }
 
-        let db = try Database.open(at: dir.file("out.adsql"))
+        let db = try Database.openFTS(at: dir.file("out.adsql"))
         defer { db.close() }
         _ = try db.importSQLite(from: source)  // no FTS → no manifest needed
 
@@ -147,7 +147,7 @@ struct ImportFollowOnTests {
             try #require(sqlite3_exec(src, sql, nil, nil, nil) == SQLITE_OK, "exec: \(sql)")
         }
 
-        let db = try Database.open(at: dir.file("out.adsql"))
+        let db = try Database.openFTS(at: dir.file("out.adsql"))
         defer { db.close() }
         // Must NOT throw: `junk` is skipped via the manifest; `idx_label` (over-long
         // key) is skipped gracefully, not fatal.

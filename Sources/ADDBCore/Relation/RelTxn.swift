@@ -328,7 +328,10 @@ extension WriteTxn {
         try Relation.ftsRemoveAll(ctx, name: table)
     }
 
-    private func ftsRecord(_ name: String) throws(DBError) -> Catalog.FTSRecord {
+    /// Resolves an FTS table's catalog record (flushing buffered docs first for
+    /// read-your-writes). `package` so the `ADSQLFullTextSearch` query layer's
+    /// `ftsMatch`/`ftsScore` conveniences can reach it.
+    package func ftsRecord(_ name: String) throws(DBError) -> Catalog.FTSRecord {
         try Relation.flushFTS(ctx, name: name)  // read-your-writes: flush buffered docs first.
         guard let record = try Relation.ensureState(ctx).ftsRecords[name] else {
             throw DBError.noSuchTable(name)
@@ -350,27 +353,6 @@ extension WriteTxn {
 
     public func ftsDocStats(_ table: String, docid: Int64) throws(DBError) -> FTSDocStats? {
         try FTSIndex.docStats(ctx, ftsRecord(table), docid: docid)
-    }
-
-    /// Evaluates a MATCH query string against an FTS table → matching docids
-    /// (ascending). Boolean membership only; ranking arrives later.
-    public func ftsMatch(_ table: String, _ query: String) throws(DBError) -> [Int64] {
-        try FTSMatch.evaluate(FTSQuery.parse(query), record: ftsRecord(table), resolver: ctx)
-    }
-
-    /// The bm25f score of `docid` for a MATCH query string, under per-column
-    /// `weights` (defaulting to all-ones for plain bm25). Negative: smaller is more
-    /// relevant. Exposed for the scorer unit tests; the SQL `rank`/`bm25` surface
-    /// computes the same score in the executor.
-    public func ftsScore(
-        _ table: String, _ query: String, weights: [Double]? = nil, docid: Int64
-    ) throws(DBError) -> Double {
-        let record = try ftsRecord(table)
-        let columns = record.definition.columns.count
-        let resolved = weights ?? [Double](repeating: 1.0, count: columns)
-        return try FTSScorer.score(
-            FTSQuery.parse(query), record: record, resolver: ctx, docid: docid,
-            weights: resolved, global: try FTSIndex.globalStats(ctx, record))
     }
 
     /// Drops a table, its indexes, and every page they own.

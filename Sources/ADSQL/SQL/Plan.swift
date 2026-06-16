@@ -24,7 +24,7 @@ struct TableBinding: Sendable {
     /// (a single `rowid` alias column), so `f.rowid` resolves to slot 0 and a
     /// bare `f` reference is the MATCH subject; the planner produces `.fts` from
     /// the MATCH conjunct rather than from indexes, and the executor drives the
-    /// row source through `FTSMatch.evaluate` (no base scan).
+    /// row source through the injected FTS evaluator (no base scan).
     let isFTS: Bool
 
     init(reference: SQLTableRef, definition: TableDefinition, isFTS: Bool = false) {

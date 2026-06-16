@@ -77,7 +77,7 @@ enum AppleDocsFixture {
         defer { sqlite3_close_v2(src) }
         try buildFixture(src)
 
-        let db = try Database.open(at: dir.file("out.adsql"))
+        let db = try Database.openFTS(at: dir.file("out.adsql"))
         defer { db.close() }
         _ = try db.importSQLite(from: sourcePath, manifest: manifest)
 

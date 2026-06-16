@@ -43,7 +43,7 @@ final class ADSQLDriver: KVDriver, KVReader, Sendable {
             case "none": .none
             default: .barrier
             }
-        db = try Database.open(
+        db = try Database.openFTS(
             at: path, options: DatabaseOptions(durability: profile, maxMapSize: 32 << 30))
     }
 

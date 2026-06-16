@@ -2,7 +2,7 @@ import ADDBTestSupport
 import Testing
 
 @testable import ADDBCore
-@testable import ADSQL
+@testable import ADSQLFullTextSearch
 
 /// / — block-max WAND ranked top-k. WAND is a pure optimization: a ranked
 /// `ORDER BY rank/bm25(…) LIMIT k` over an eligible query (single term, or AND/OR
@@ -71,7 +71,7 @@ struct FTSWANDTests {
     @Test func wandMatchesScoreAllSingleTerm() throws {
         let dir = TempDir()
         defer { dir.cleanup() }
-        let db = try Database.open(at: dir.file("wand1.adsql"))
+        let db = try Database.openFTS(at: dir.file("wand1.adsql"))
         defer { db.close() }
         try build(db)
 
@@ -87,7 +87,7 @@ struct FTSWANDTests {
     @Test func wandMatchesScoreAllWeighted() throws {
         let dir = TempDir()
         defer { dir.cleanup() }
-        let db = try Database.open(at: dir.file("wandw.adsql"))
+        let db = try Database.openFTS(at: dir.file("wandw.adsql"))
         defer { db.close() }
         try build(db)
 
@@ -105,7 +105,7 @@ struct FTSWANDTests {
     @Test func wandMatchesScoreAllOR() throws {
         let dir = TempDir()
         defer { dir.cleanup() }
-        let db = try Database.open(at: dir.file("wandor.adsql"))
+        let db = try Database.openFTS(at: dir.file("wandor.adsql"))
         defer { db.close() }
         try build(db)
 
@@ -121,7 +121,7 @@ struct FTSWANDTests {
     @Test func wandMatchesScoreAllAND() throws {
         let dir = TempDir()
         defer { dir.cleanup() }
-        let db = try Database.open(at: dir.file("wandand.adsql"))
+        let db = try Database.openFTS(at: dir.file("wandand.adsql"))
         defer { db.close() }
         try build(db)
 
@@ -141,7 +141,7 @@ struct FTSWANDTests {
     @Test func limitExceedingMatchCount() throws {
         let dir = TempDir()
         defer { dir.cleanup() }
-        let db = try Database.open(at: dir.file("wandbig.adsql"))
+        let db = try Database.openFTS(at: dir.file("wandbig.adsql"))
         defer { db.close() }
         try build(db, count: 60)
 
@@ -156,7 +156,7 @@ struct FTSWANDTests {
     @Test func andWithMissingTermIsEmpty() throws {
         let dir = TempDir()
         defer { dir.cleanup() }
-        let db = try Database.open(at: dir.file("wandmiss.adsql"))
+        let db = try Database.openFTS(at: dir.file("wandmiss.adsql"))
         defer { db.close() }
         try build(db, count: 60)
 
@@ -169,7 +169,7 @@ struct FTSWANDTests {
     @Test func absentSingleTermIsEmpty() throws {
         let dir = TempDir()
         defer { dir.cleanup() }
-        let db = try Database.open(at: dir.file("wandabsent.adsql"))
+        let db = try Database.openFTS(at: dir.file("wandabsent.adsql"))
         defer { db.close() }
         try build(db, count: 60)
 
@@ -185,7 +185,7 @@ struct FTSWANDTests {
     @Test func fallbackShapesStillRankCorrectly() throws {
         let dir = TempDir()
         defer { dir.cleanup() }
-        let db = try Database.open(at: dir.file("wandfb.adsql"))
+        let db = try Database.openFTS(at: dir.file("wandfb.adsql"))
         defer { db.close() }
         try build(db)
 

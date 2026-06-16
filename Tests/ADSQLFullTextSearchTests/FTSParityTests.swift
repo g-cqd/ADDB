@@ -3,7 +3,7 @@ import CSQLite
 import Testing
 
 @testable import ADDBCore
-@testable import ADSQL
+@testable import ADSQLFullTextSearch
 
 /// / — the FTS *correctness gate* for closing. Proves the FOUR
 /// apple-docs FTS table shapes work end-to-end in ADSQL and match real SQLite
@@ -220,7 +220,7 @@ struct FTSParityTests {
     @Test func documentsFTSMatchesSQLite() throws {
         let dir = TempDir()
         defer { dir.cleanup() }
-        let db = try Database.open(at: dir.file("docs.adsql"))
+        let db = try Database.openFTS(at: dir.file("docs.adsql"))
         defer { db.close() }
         try buildDocumentsFTS(db)
 
@@ -304,7 +304,7 @@ struct FTSParityTests {
     @Test func documentsTrigramMatchesSQLite() throws {
         let dir = TempDir()
         defer { dir.cleanup() }
-        let db = try Database.open(at: dir.file("trigram.adsql"))
+        let db = try Database.openFTS(at: dir.file("trigram.adsql"))
         defer { db.close() }
         try buildTrigram(db)
 
@@ -368,7 +368,7 @@ struct FTSParityTests {
     @Test func documentsBodyFTSMatchesSQLite() throws {
         let dir = TempDir()
         defer { dir.cleanup() }
-        let db = try Database.open(at: dir.file("body.adsql"))
+        let db = try Database.openFTS(at: dir.file("body.adsql"))
         defer { db.close() }
         try buildBodyFTS(db)
 
@@ -458,7 +458,7 @@ struct FTSParityTests {
     @Test func sfSymbolsFTSMatchesSQLite() throws {
         let dir = TempDir()
         defer { dir.cleanup() }
-        let db = try Database.open(at: dir.file("sf.adsql"))
+        let db = try Database.openFTS(at: dir.file("sf.adsql"))
         defer { db.close() }
         try buildSFSymbols(db)
 

@@ -1,4 +1,5 @@
 import ADDBTestSupport
+import ADSQLFullTextSearch
 import Dispatch
 import Synchronization
 import Testing
@@ -140,6 +141,7 @@ struct GroupCommitTests {
         defer { dir.cleanup() }
         let db = try Database.open(at: dir.file("ftsgc.adsql"))
         defer { db.close() }
+        db.enableFullTextSearch()
         try db.prepare("CREATE VIRTUAL TABLE fts USING fts5(body, tokenize='porter unicode61')").run()
 
         // Stall the queue so both async writes land in one batch.
