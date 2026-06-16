@@ -37,8 +37,15 @@ enum SQLJSON {
     /// them and `leaf` maps a non-finite real to `null`), so the `"null"` fallback is just
     /// belt-and-suspenders — mirroring `SQLiteJSON.quote`.
     static func encode(_ value: JSONValue) -> String {
-        guard let bytes = try? value.encodedBytes(options: .sqlite) else { return "null" }
-        return String(decoding: bytes, as: UTF8.self)
+        do {
+            return String(decoding: try value.encodedBytes(options: .sqlite), as: UTF8.self)
+        } catch {
+            // The `.sqlite` encoder only rejects non-finite numbers, which `leaf` maps
+            // to null and parsed JSON cannot hold — so this is unreachable. Assert to
+            // surface any future invariant break; fall back to JSON null in release.
+            assertionFailure("ADJSON .sqlite encode failed unexpectedly: \(error)")
+            return "null"
+        }
     }
 
     /// A SQL scalar as a JSON leaf. ADSQL's `Value` carries no "JSON subtype", so a TEXT value
