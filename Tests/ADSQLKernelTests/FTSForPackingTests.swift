@@ -138,6 +138,38 @@ struct FTSForPackingTests {
         #expect(!ok, "truncated packed gaps must be rejected")
     }
 
+    @Test func corruptDocCountRejectedNotOverflow() {
+        // A corrupt docCount must be rejected gracefully — never trapping on the
+        // `gapCount * gapBits` multiply nor growing the output unboundedly (OOM).
+        // gapBits > 0: a tiny packed buffer paired with an absurd docCount.
+        var packed: [UInt8] = []
+        ForPacking.appendPackedGaps([100, 200, 300], to: &packed)
+        var offset = 0
+        var docids: [Int64] = []
+        #expect(
+            !ForPacking.decodeDocids(packed, &offset, docCount: Int.max, firstDocId: 1, into: &docids))
+        // gapBits == 0 (zero-gap duplicate run): an absurd docCount must not append unbounded.
+        var zero: [UInt8] = []
+        ForPacking.appendPackedGaps([0, 0, 0], to: &zero)
+        var zeroOffset = 0
+        var zeroDocids: [Int64] = []
+        #expect(
+            !ForPacking.decodeDocids(zero, &zeroOffset, docCount: Int.max, firstDocId: 1, into: &zeroDocids))
+    }
+
+    @Test func corruptSingleBlockDocCountThrows() {
+        // A single-block value claiming far more docids than its bytes could hold must
+        // fail with an integrity error, not trap on `Int(rawDocCount)` or OOM in
+        // `reserveCapacity`.
+        var bytes: [UInt8] = []
+        Varint.append(1, to: &bytes)  // blockCount
+        Varint.append(UInt64.max, to: &bytes)  // docCount — absurd
+        Varint.append(0, to: &bytes)  // firstZigzag
+        Varint.append(0, to: &bytes)  // lastDocId
+        Varint.append(0, to: &bytes)  // maxTotalTF
+        #expect(throws: DBError.self) { _ = try FTSPostings.decodeDocids(singleBlock: bytes) }
+    }
+
     /// End-to-end through the public `FTSPostings` codec at block boundaries, with
     /// gaps engineered to span several bit widths across blocks (each 128-block gets
     /// its own width). This is the same surface `decode`/`decodeDocids` expose.

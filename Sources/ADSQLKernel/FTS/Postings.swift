@@ -105,18 +105,29 @@ public enum FTSPostings {
         guard let blockCount = Varint.read(bytes, &offset) else {
             throw DBError.integrityFailure("fts postings: missing block count")
         }
+        // Each block carries >= 4 header varints, so a valid blockCount cannot exceed
+        // the byte count; reject a corrupt value before `Int(...)` can trap or the
+        // loop can spin (also keeps `Int(blockCount)` in range).
+        guard blockCount <= UInt64(bytes.count) else {
+            throw DBError.integrityFailure("fts postings: implausible block count")
+        }
         var result: [FTSPosting] = []
         for _ in 0..<Int(blockCount) {
             guard let rawDocCount = Varint.read(bytes, &offset),
                 let firstZigzag = Varint.read(bytes, &offset),
-                Varint.read(bytes, &offset) != nil,  // lastDocId — skip metadata (F3/F4)
-                Varint.read(bytes, &offset) != nil  // maxTotalTF — block-max bound (F4)
+                Varint.read(bytes, &offset) != nil,  // lastDocId — skip metadata
+                Varint.read(bytes, &offset) != nil  // maxTotalTF — block-max bound
             else { throw DBError.integrityFailure("fts postings: truncated block header") }
+            // Bound docCount against the block before `Int(...)` (trap) and
+            // `reserveCapacity` (OOM): even degenerate duplicate runs cannot exceed
+            // the block's bits, and every real doc carries >= 1 payload byte.
+            guard rawDocCount >= 1, rawDocCount <= UInt64(bytes.count) * 8 else {
+                throw DBError.integrityFailure("fts postings: implausible doc count")
+            }
             let docCount = Int(rawDocCount)
-            guard docCount >= 1 else { throw DBError.integrityFailure("fts postings: empty block") }
 
             var docids: [Int64] = []
-            docids.reserveCapacity(docCount)
+            docids.reserveCapacity(min(docCount, bytes.count))
             guard
                 ForPacking.decodeDocids(
                     bytes, &offset, docCount: docCount, firstDocId: Varint.unzigzag(firstZigzag),
@@ -172,10 +183,14 @@ public enum FTSPostings {
             Varint.read(bytes, &offset) != nil,  // lastDocId
             Varint.read(bytes, &offset) != nil  // maxTotalTF
         else { throw DBError.integrityFailure("fts postings: truncated block header") }
+        // Bound docCount against the block before `Int(...)` (trap) and
+        // `reserveCapacity` (OOM); see `decode` for the rationale.
+        guard rawDocCount >= 1, rawDocCount <= UInt64(bytes.count) * 8 else {
+            throw DBError.integrityFailure("fts postings: implausible doc count")
+        }
         let docCount = Int(rawDocCount)
-        guard docCount >= 1 else { throw DBError.integrityFailure("fts postings: empty block") }
         var docids: [Int64] = []
-        docids.reserveCapacity(docCount)
+        docids.reserveCapacity(min(docCount, bytes.count))
         guard
             ForPacking.decodeDocids(
                 bytes, &offset, docCount: docCount, firstDocId: Varint.unzigzag(firstZigzag),
@@ -251,14 +266,23 @@ enum ForPacking {
 
         var docid = firstDocId
         docids.append(docid)
+        guard docCount >= 1 else { return false }  // defensive; callers already guard
         let gapCount = docCount - 1
         guard gapCount > 0 else { return true }
         guard gapBits > 0 else {
             // All gaps are zero (duplicate docids in-block — degenerate but valid).
+            // Bound the duplicate count against the whole block: this branch reads no
+            // further bytes, so a corrupt docCount would otherwise drive an unbounded
+            // append (OOM). Even degenerate duplicates cannot exceed the block's bits.
+            guard gapCount <= bytes.count * 8 else { return false }
             for _ in 0..<gapCount { docids.append(docid) }
             return true
         }
 
+        // Each gap occupies `gapBits` (>= 1) bits, so a valid block carries at least
+        // `gapCount` bits beyond `offset`. Reject a corrupt docCount here — before
+        // `gapCount * gapBits`, which would otherwise overflow `Int` and trap.
+        guard gapCount <= (bytes.count - offset) * 8 else { return false }
         let totalBits = gapCount * gapBits
         let byteCount = (totalBits + 7) / 8
         guard offset + byteCount <= bytes.count else { return false }
