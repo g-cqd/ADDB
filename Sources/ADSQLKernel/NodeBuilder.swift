@@ -7,10 +7,10 @@
 /// Byte-level cell operations on slotted node pages. Purely mechanical —
 /// COW, allocation, and tree structure live in `BTree`.
 ///
-/// Leaf cell (inline):    [flags u8 | keyLen u16 | valueLen u16 | key | value]
-/// Leaf cell (overflow):  [flags u8 | keyLen u16 | valueLen u32 | head u64 | key]
-///   flags bit0 = value overflows
-/// Branch cell:           [keyLen u16 | childPage u64 | key]
+/// Leaf cell (inline): [flags u8 | keyLen u16 | valueLen u16 | key | value]
+/// Leaf cell (overflow): [flags u8 | keyLen u16 | valueLen u32 | head u64 | key]
+/// flags bit0 = value overflows
+/// Branch cell: [keyLen u16 | childPage u64 | key]
 ///
 /// Slots are u16 cell offsets in key order growing up from the header; cell
 /// content grows down from the page end.
@@ -45,7 +45,7 @@ package enum Node {
 
     // MARK: - Cell decoding
 
-    // SAFETY (Review 0001 F2): `@safe` over borrowed page pointers, asserted not
+    // SAFETY: `@safe` over borrowed page pointers, asserted not
     // enforced. A LeafCell is a transient projection produced by `leafCell(page:)`
     // and consumed within the same function (read its fields, compare, copy); it
     // is never stored or returned past the page access. Making it `~Escapable`
@@ -165,7 +165,7 @@ package enum Node {
 
     // MARK: - Cell encoding
 
-    // SAFETY (Review 0001 F2): `@safe` over a borrowed pointer, asserted not
+    // SAFETY: `@safe` over a borrowed pointer, asserted not
     // enforced. A LeafValue is constructed at a write site and consumed
     // synchronously by `encodeLeafCell`, which copies the inline bytes into the
     // page immediately; it is never stored. The `.inline` payload is the caller's

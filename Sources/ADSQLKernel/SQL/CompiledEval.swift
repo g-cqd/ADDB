@@ -213,7 +213,7 @@ enum CompiledEval {
                 try SQLFunctions.call(name, args: args, star: star, offset: offset, env)
             }
         default:
-            // .column (correlated), .scalarSubquery, .inJSONEach, .aggregateResult —
+            // column (correlated),.scalarSubquery,.inJSONEach,.aggregateResult —
             // handled by the tree-walk fallback.
             return nil
         }

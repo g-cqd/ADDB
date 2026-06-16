@@ -1,4 +1,4 @@
-/// Row delete + update for the storage layer (RFC 0009 H2/R4 — split from
+/// Row delete + update for the storage layer (split from
 /// DML.swift). `deleteRowCore`/`delete` (the physical single-row delete with index
 /// maintenance + ON DELETE cascade/restrict actions) and the two-phase row
 /// `update` (index + FK upkeep). An `extension Relation`; code motion + visibility.

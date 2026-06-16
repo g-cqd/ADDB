@@ -8,7 +8,7 @@ import Testing
 
 // MARK: - SQLite mirror (full-query oracle)
 
-/// A :memory: SQLite database used as the differential oracle for SELECT
+/// A:memory: SQLite database used as the differential oracle for SELECT
 /// execution: same DDL + data, same queries, compared result sets.
 final class SQLiteMirror {
     var db: OpaquePointer?

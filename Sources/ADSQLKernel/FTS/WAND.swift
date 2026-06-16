@@ -1,8 +1,8 @@
-/// Block-max WAND ranked top-k (M5/F6c — Ding & Suel, 2011). A *dynamic-pruning*
+/// Block-max WAND ranked top-k (Ding & Suel, 2011). A *dynamic-pruning*
 /// retrieval path for `ORDER BY bm25(…) LIMIT k` over an FTS5 table: instead of
-/// scoring the entire MATCH candidate set and then sorting (the F4 score-all
+/// scoring the entire MATCH candidate set and then sorting (the score-all
 /// path), it keeps a size-`k` heap and uses per-block score upper bounds — the
-/// `maxTotalTF` carried in each posting block header (F2a) — to SKIP whole
+/// `maxTotalTF` carried in each posting block header — to SKIP whole
 /// blocks and documents that provably cannot enter the top-k.
 ///
 /// ## Why it is a pure optimization (identical top-k)
@@ -13,32 +13,32 @@
 /// underestimates a real score (admissibility, below), the set of documents that
 /// can enter the heap is a superset of the true top-k, so the heap converges on
 /// the identical top-k — same rowids, same order — as score-all (and therefore,
-/// transitively via the F6a parity gate, as SQLite FTS5).
+/// transitively via the parity gate, as SQLite FTS5).
 ///
 /// ## The admissible per-block upper bound (never underestimates)
 /// bm25f contribution of a positive term `t` to a document `d` is
 ///
-///   contribution(t, d) = IDF(t) · wf·(k1+1) / (wf + k1·(1 − b + b·D/avgdl))
+/// contribution(t, d) = IDF(t) · wf·(k1+1) / (wf + k1·(1 − b + b·D/avgdl))
 ///
 /// with `wf = Σ_c weight_c · tf_c(t, d)` (weighted term frequency) and
 /// `D = Σ_c fieldLength_c(d)` (document total length). Treat it as
 /// `f(wf, D) = IDF · wf·(k1+1) / (wf + L)`, `L = k1·(1 − b + b·D/avgdl)`:
 ///
-///   - `∂f/∂wf = IDF·(k1+1)·L / (wf + L)² ≥ 0` — *increasing* in `wf`.
-///   - `∂f/∂D  = −IDF·wf·(k1+1)·(k1·b/avgdl) / (wf + L)² ≤ 0` — *decreasing* in `D`.
+/// - `∂f/∂wf = IDF·(k1+1)·L / (wf + L)² ≥ 0` — *increasing* in `wf`.
+/// - `∂f/∂D = −IDF·wf·(k1+1)·(k1·b/avgdl) / (wf + L)² ≤ 0` — *decreasing* in `D`.
 ///
 /// So the contribution is maximized by the LARGEST plausible `wf` and the
 /// SMALLEST plausible `D`. For a posting block we bound each:
 ///
-///   - `wf ≤ maxWeight · maxTotalTF`, where `maxTotalTF` (block header) is the
-///     max UNWEIGHTED Σ_c tf_c over the block's docs and `maxWeight = max_c
-///     weight_c ≥ 0`. Since every `tf_c ≥ 0` and weights are non-negative,
-///     `wf = Σ_c weight_c·tf_c ≤ maxWeight·Σ_c tf_c ≤ maxWeight·maxTotalTF`.
-///   - `D ≥ Dmin = 1`: any document in a term's posting list contains the term,
-///     so its total length is ≥ 1 token. Smaller `D` ⇒ larger contribution, so a
-///     LOWER bound on `D` yields the upper bound on the score; `Dmin = 1` is the
-///     safest provable lower bound (a conservative constant, per the F6c brief —
-///     zero precompute, never larger than any real `D`).
+/// - `wf ≤ maxWeight · maxTotalTF`, where `maxTotalTF` (block header) is the
+/// max UNWEIGHTED Σ_c tf_c over the block's docs and `maxWeight = max_c
+/// weight_c ≥ 0`. Since every `tf_c ≥ 0` and weights are non-negative,
+/// `wf = Σ_c weight_c·tf_c ≤ maxWeight·Σ_c tf_c ≤ maxWeight·maxTotalTF`.
+/// - `D ≥ Dmin = 1`: any document in a term's posting list contains the term,
+/// so its total length is ≥ 1 token. Smaller `D` ⇒ larger contribution, so a
+/// LOWER bound on `D` yields the upper bound on the score; `Dmin = 1` is the
+/// safest provable lower bound (a conservative constant, per the brief —
+/// zero precompute, never larger than any real `D`).
 ///
 /// Substituting gives `blockMax(t, block) = f(maxWeight·maxTotalTF, Dmin)` — a
 /// quantity ≥ contribution(t, d) for every `d` in the block. The bound for a

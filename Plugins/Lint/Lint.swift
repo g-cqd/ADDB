@@ -4,7 +4,7 @@ import PackagePlugin
 /// `swift package lint` — the project's formatting gate via `swift format lint --strict`, the same
 /// command CI and the pre-commit hook run, so local and CI rules can't drift. (ADSQL's
 /// shipped-library discipline — every unsafe construct explicitly `unsafe` or `@safe`-encapsulated —
-/// is enforced by the compiler under `.strictMemorySafety()`, so it needs no lint regex.)
+/// is enforced by the compiler under `.strictMemorySafety`, so it needs no lint regex.)
 @main
 struct LintPlugin: CommandPlugin {
     func performCommand(context: PluginContext, arguments: [String]) async throws {

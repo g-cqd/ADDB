@@ -1,4 +1,4 @@
-/// The block-max WAND top-k driver (F6c). Given the WAND-eligible single-term
+/// The block-max WAND top-k driver. Given the WAND-eligible single-term
 /// leaves of a ranked query (from `FTSWAND.classify`), it retrieves the top-k
 /// `(docid, score)` the score-all path would have produced — using a size-k
 /// min-heap and the per-block admissible bounds (`FTSWANDCursor`) to skip blocks
@@ -7,22 +7,22 @@
 /// per-document full-posting-list re-decode).
 ///
 /// ## Identical-result contract
-///   - A surviving document's score is computed with the SAME `FTSScorer`
-///     primitives the score-all path uses (`idf` / `lengthNorm` / `contribution`),
-///     from the SAME on-disk field-TF bytes and the SAME per-doc length, summed in
-///     the SAME leaf order (left-to-right, present terms only) — so it is
-///     bit-identical to `FTSScorer.score`. The block bound is only a skip test,
-///     never the reported score.
-///   - Documents are visited in ascending docid order, and the heap keeps the k
-///     LARGEST relevances, breaking ties toward the SMALLEST docid (an equal-
-///     scored later/larger docid never displaces an earlier/smaller one). This is
-///     exactly how the executor's bounded top-N resolves `ORDER BY rank[, rowid]`
-///     ties (stable, scan-order, drop-last), and the result is returned already in
-///     final ranked order, so the accumulator reproduces the identical projection.
-///   - The pruning threshold is the heap's current k-th best relevance `θ`; a
-///     block or document is skipped only when its admissible bound is `< θ`
-///     (strict). A bound `== θ` is not skipped: its true relevance could equal
-///     `θ`, and the tie-aware heap (not the prune) decides whether it enters.
+/// - A surviving document's score is computed with the SAME `FTSScorer`
+/// primitives the score-all path uses (`idf` / `lengthNorm` / `contribution`),
+/// from the SAME on-disk field-TF bytes and the SAME per-doc length, summed in
+/// the SAME leaf order (left-to-right, present terms only) — so it is
+/// bit-identical to `FTSScorer.score`. The block bound is only a skip test,
+/// never the reported score.
+/// - Documents are visited in ascending docid order, and the heap keeps the k
+/// LARGEST relevances, breaking ties toward the SMALLEST docid (an equal-
+/// scored later/larger docid never displaces an earlier/smaller one). This is
+/// exactly how the executor's bounded top-N resolves `ORDER BY rank[, rowid]`
+/// ties (stable, scan-order, drop-last), and the result is returned already in
+/// final ranked order, so the accumulator reproduces the identical projection.
+/// - The pruning threshold is the heap's current k-th best relevance `θ`; a
+/// block or document is skipped only when its admissible bound is `< θ`
+/// (strict). A bound `== θ` is not skipped: its true relevance could equal
+/// `θ`, and the tie-aware heap (not the prune) decides whether it enters.
 ///
 /// Returns nil when WAND cannot run (degenerate stats / a term that does not
 /// resolve to a single stem); the caller then uses the score-all path. An empty
@@ -87,7 +87,7 @@ enum FTSWANDTopK {
         var heap = TopKHeap(capacity: k)
         // One persistent ascending cursor on the stats tree: survivors are scored in
         // ascending docid order, so `docLength`'s `seekForward` skips the per-doc
-        // root→leaf descent for same-leaf docs (F6n).
+        // root→leaf descent for same-leaf docs.
         var statsCursor = Cursor(resolver: resolver, tree: record.stats)
         if cursors.count == 1 {
             // Single term (the hot case, e.g. "view"): pure block-max skipping — drop a
@@ -243,7 +243,7 @@ enum FTSWANDTopK {
     private static func rawPostings(
         _ resolver: some PageResolver, _ record: Catalog.FTSRecord, term: [UInt8]
     ) throws(DBError) -> [UInt8]? {
-        // F6d: a term's postings live across block-keys; union them into the single
+        // a term's postings live across block-keys; union them into the single
         // multi-block value the WAND cursor parses.
         try FTSIndex.postingsValue(resolver, record, term: term)
     }

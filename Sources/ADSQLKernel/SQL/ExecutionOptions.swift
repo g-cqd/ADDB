@@ -2,9 +2,9 @@
 /// *beside* the reference path and only become a default once they win on
 /// accuracy, performance, concurrency, parallelism, reliability, consistency, and
 /// integrity (see the maturity program). Two have graduated: **`join` defaults to
-/// `.auto`** (RFC 0009 H8 — the merge fast path when eligible, a proven `≡
+/// `.auto`** (the merge fast path when eligible, a proven `≡
 /// nestedLoop ≡ SQLite` read-only win, else the reference nested loop), and
-/// **`evaluator` defaults to `.compiledClosures`** (RFC 0009 H6/R3 — bind-time
+/// **`evaluator` defaults to `.compiledClosures`** (bind-time
 /// closure compilation, `≡ treeWalk ≡ SQLite` across the strategy matrix, p50 at
 /// parity with a tighter tail, falling back per-subexpression to tree-walk for any
 /// unsupported node). `.nestedLoop`/`.treeWalk` remain explicitly selectable;

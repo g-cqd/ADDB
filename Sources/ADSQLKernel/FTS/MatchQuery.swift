@@ -1,6 +1,6 @@
-/// The MATCH query language (M5/F3a). Parses an FTS5-style query string into an
-/// operator tree; boolean evaluation over postings (F3b) and the SQL `MATCH`
-/// surface (F3c) build on it. Grammar (precedence high→low): column filter
+/// The MATCH query language. Parses an FTS5-style query string into an
+/// operator tree; boolean evaluation over postings and the SQL `MATCH`
+/// surface build on it. Grammar (precedence high→low): column filter
 /// `col:` / `{a b}:` > `NOT` > `AND` (incl. implicit AND between adjacent terms)
 /// > `OR`. `AND`/`OR`/`NOT` are case-sensitive uppercase keywords (FTS5).
 ///

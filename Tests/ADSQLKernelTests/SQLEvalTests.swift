@@ -166,7 +166,7 @@ struct SQLEvalDifferentialTests {
 
     /// Full SQLite JSON1 surface (reads, builders, and mutations) checked against the
     /// bundled SQLite. Note: cases relying on SQLite's per-value "JSON subtype" (nested
-    /// json()/json_array results embedded as JSON rather than quoted) are intentionally
+    /// json/json_array results embedded as JSON rather than quoted) are intentionally
     /// excluded — ADSQL's `Value` carries no subtype, a documented divergence.
     static let jsonCorpus: [String] = [
         // json_extract: scalars, containers, string, missing, end-relative, multi-path

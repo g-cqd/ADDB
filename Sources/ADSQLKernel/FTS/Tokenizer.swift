@@ -1,7 +1,7 @@
-/// FTS tokenization (M5/F1). A `Tokenizer` turns a column's UTF-8 bytes into a
+/// FTS tokenization. A `Tokenizer` turns a column's UTF-8 bytes into a
 /// stream of terms, each carrying its source byte span (for highlight/snippet)
-/// and its sequential position (for phrase queries). The index build (F2) drives
-/// these into postings; the MATCH query layer (F3) tokenizes the query string
+/// and its sequential position (for phrase queries). The index build drives
+/// these into postings; the MATCH query layer tokenizes the query string
 /// with the same tokenizer so terms line up.
 ///
 /// Implementations are pure value logic — no `unsafe`. Decoding/encoding and

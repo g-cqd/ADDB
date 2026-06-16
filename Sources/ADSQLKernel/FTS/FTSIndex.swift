@@ -1,17 +1,17 @@
-/// FTS index build + maintenance (M5/F2b, F6d). Drives a tokenized document into
+/// FTS index build + maintenance. Drives a tokenized document into
 /// the three per-FTS-table B+trees the catalog `FTSRecord` owns:
 ///
-///   - **dict**: `term → varint df` (df == posting-list length). Gives F3
-///     prefix-term enumeration + IDF without decoding postings.
-///   - **postings**: a term's block-compressed posting list (F2a `FTSPostings`),
-///     stored **one fixed-size block per key** (F6d): key `varint(len)||term||
-///     bigEndian(blockNo)`, value a single-block `FTSPostings` payload (≤128
-///     docs). Appending a document rewrites only the last block (O(blockSize))
-///     instead of the whole list (O(list)), turning a bulk build from O(n²) into
-///     O(n). Blocks stay packed (all full but the last), so `blockNo = (df-1)/128`
-///     and a term's blocks are `0...lastNo` — no separate segment directory.
-///   - **stats**: `rowKey(docid) → forward record` (field lengths + the doc's
-///     distinct terms — the delete companion) and `[0x00] → global aggregates`.
+/// - **dict**: `term → varint df` (df == posting-list length). Gives
+/// prefix-term enumeration + IDF without decoding postings.
+/// - **postings**: a term's block-compressed posting list (`FTSPostings`),
+/// stored **one fixed-size block per key**: key `varint(len)||term||
+/// bigEndian(blockNo)`, value a single-block `FTSPostings` payload (≤128
+/// docs). Appending a document rewrites only the last block (O(blockSize))
+/// instead of the whole list (O(list)), turning a bulk build from O(n²) into
+/// O(n). Blocks stay packed (all full but the last), so `blockNo = (df-1)/128`
+/// and a term's blocks are `0...lastNo` — no separate segment directory.
+/// - **stats**: `rowKey(docid) → forward record` (field lengths + the doc's
+/// distinct terms — the delete companion) and `[0x00] → global aggregates`.
 ///
 /// Readers reconstitute a term's whole list by unioning its block-keys
 /// (`postingsValue`), so `postings`/MATCH/WAND/the scorer are unchanged.
@@ -20,19 +20,19 @@ enum FTSIndex {
     /// still count toward field length. B+tree keys are bounded by `maxKeySize`.
     static let maxTermBytes = 256
     /// Global-aggregates key. One byte sorts before every 8-byte `rowKey`, so a
-    /// `move(to: .last)` on the stats tree lands on the largest docid.
+    /// `move(to:.last)` on the stats tree lands on the largest docid.
     static let globalKey: [UInt8] = [0x00]
 
     // MARK: - Build
 
-    /// One document buffered in the transaction-scoped FTS memtable (F6f). `ftsAdd`
+    /// One document buffered in the transaction-scoped FTS memtable. `ftsAdd`
     /// appends these; the flush (`addBatch`) writes them coalesced.
     struct PendingDoc: Sendable {
         let docid: Int64
         let columnTexts: [String]
     }
 
-    /// Indexes a BATCH of documents in one coalesced pass (the F6f memtable flush).
+    /// Indexes a BATCH of documents in one coalesced pass (the memtable flush).
     /// Tokenizes every doc, accumulates `term → [posting]` across the whole batch,
     /// then merges each term's postings into the tree ONCE — O(distinct terms)
     /// block writes instead of O(docs × terms/doc), the build-throughput win.
@@ -242,7 +242,7 @@ enum FTSIndex {
         return next
     }
 
-    // MARK: - Reads (tests + F3/F4)
+    // MARK: - Reads (tests + /)
 
     static func postings(
         _ resolver: some PageResolver, _ record: Catalog.FTSRecord, term: [UInt8]
@@ -275,7 +275,7 @@ enum FTSIndex {
     }
 
     /// Docids only for `term` — unions the term's block-keys, decoding just docids
-    /// from each block and skipping its TF/position payload (F6e membership fast
+    /// from each block and skipping its TF/position payload (membership fast
     /// path). nil when the term is absent.
     static func docids(
         _ resolver: some PageResolver, _ record: Catalog.FTSRecord, term: [UInt8]
@@ -315,7 +315,7 @@ enum FTSIndex {
     /// stats tree. `seekForward` skips the root→leaf descent whenever `docid` lies in
     /// the cursor's current leaf, so scoring documents in ascending docid order
     /// (every ranked path does) pays ~one descent per leaf instead of one per
-    /// document — the dominant ranked cost the point-read incurred (F6n). It decodes
+    /// document — the dominant ranked cost the point-read incurred. It decodes
     /// ONLY the leading field-length varints (never the doc's term list), zero-copy.
     /// nil when the doc has no stats row (absent/removed). Bit-identical `D` to the
     /// prior point read. Hot path: one call per scored document.
@@ -368,7 +368,7 @@ enum FTSIndex {
         return terms
     }
 
-    // MARK: - Block-per-key storage (F6d)
+    // MARK: - Block-per-key storage
 
     /// The packed-block invariant means a term's blocks are `0...(df-1)/128`.
     @inline(__always)

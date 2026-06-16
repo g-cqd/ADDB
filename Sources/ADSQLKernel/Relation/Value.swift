@@ -1,6 +1,6 @@
 /// A typed SQL value. Columns are STRICT: a column stores exactly its
 /// declared type (or NULL when nullable); mismatches are typed errors, and
-/// coercion exists only at explicit boundaries (CAST in M4, the importer).
+/// coercion exists only at explicit boundaries (CAST in, the importer).
 public enum Value: Equatable, Sendable {
     case null
     case integer(Int64)

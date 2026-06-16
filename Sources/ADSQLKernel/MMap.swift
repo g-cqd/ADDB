@@ -18,7 +18,7 @@
 @safe public final class MMap: @unchecked Sendable {
     /// The naked mapping pointer is private: callers get only the bounded
     /// `pageBytes`/`bytes` views, so the unsafe pointer never leaves this type
-    /// (Review 0001 F3).
+    ///
     private let base: UnsafeRawPointer
     public let capacity: Int
 

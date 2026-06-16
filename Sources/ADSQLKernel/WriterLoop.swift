@@ -156,7 +156,7 @@ struct TxnRestorePoint {
     }
 
     /// Restores scalar state; page buffers are restored by
-    /// `TxnContext.rollbackRequestScope()`.
+    /// `TxnContext.rollbackRequestScope`.
     func apply(to ctx: TxnContext) {
         ctx.meta = meta
         ctx.pendingFree = pendingFree

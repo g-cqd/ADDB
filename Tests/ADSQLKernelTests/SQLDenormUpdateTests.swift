@@ -3,8 +3,8 @@ import Testing
 
 @testable import ADSQLKernel
 
-/// Feasibility/regression for productionizing **F6 denormalization via the importer**
-/// (RFC 0010): a `documents` table created WITH the six denorm columns (ADSQL has no
+/// Feasibility/regression for productionizing **denormalization via the importer**
+/// a `documents` table created WITH the six denorm columns (ADSQL has no
 /// ALTER TABLE) is populated by `UPDATE … SET col = <expr>` using ADSQL's own engine —
 /// `LOWER` / `CAST` / `json_extract` / `COALESCE` per-row, plus the `root_display`
 /// roots lookup. Pins that every denorm expression the apple-docs `/search` denorm

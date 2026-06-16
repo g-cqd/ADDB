@@ -1,4 +1,4 @@
-/// Aggregate + GROUP BY execution for `SelectExecutor` (RFC 0009 H2/R4 — split
+/// Aggregate + GROUP BY execution for `SelectExecutor` (split
 /// from Executor.swift). `runAggregated` drives the grouped/ungrouped aggregate
 /// pipeline (COUNT/SUM/… accumulation, HAVING, finalization) and `aggregateEnv`
 /// installs the per-group evaluation environment. `SelectExecutor` statics in an

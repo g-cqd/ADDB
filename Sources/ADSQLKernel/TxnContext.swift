@@ -90,7 +90,7 @@ package final class TxnContext: PageResolver, OverflowPager {
     /// mutation (a non-append re-shadows the root), so a stale entry never appends.
     var appendCache: [UInt32: BTree.AppendCache] = [:]
     /// Whether the opt-in `appendCursor` insert fast path is active for this
-    /// transaction (`DatabaseOptions.execution.insert == .appendCursor`); set once
+    /// transaction (`DatabaseOptions.execution.insert ==.appendCursor`); set once
     /// at ctx creation. Default off → the proven descent path.
     var appendCursorEnabled = false
 
@@ -103,7 +103,7 @@ package final class TxnContext: PageResolver, OverflowPager {
     /// rolled-back CREATE/DROP INDEX would otherwise leave a stale roster).
     var hoistedRoster: [UInt32: [String]] = [:]
     /// Whether the opt-in `hoisted` insert fast path is active for this transaction
-    /// (`DatabaseOptions.execution.insert == .hoisted`); set once at ctx creation.
+    /// (`DatabaseOptions.execution.insert ==.hoisted`); set once at ctx creation.
     /// Default off → the per-row reference path.
     var insertHoistEnabled = false
 
@@ -111,7 +111,7 @@ package final class TxnContext: PageResolver, OverflowPager {
     /// relational use. Value-typed: TxnRestorePoint snapshots it by copy.
     package internal(set) var relation: RelationState?
 
-    /// Active NEW/OLD row frame while a trigger body executes (M5/F5). The write
+    /// Active NEW/OLD row frame while a trigger body executes. The write
     /// path consults it so trigger-body expressions can read `new.col`/`old.col`;
     /// nil outside a trigger. Stacked frames restore the prior frame on return.
     var triggerFrame: TriggerFrame?

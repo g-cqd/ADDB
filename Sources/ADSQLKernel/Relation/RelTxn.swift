@@ -309,7 +309,7 @@ extension WriteTxn {
         try Relation.createVirtualTable(ctx, definition)
     }
 
-    // MARK: FTS maintenance + reads (F2b)
+    // MARK: FTS maintenance + reads
 
     public func ftsAdd(_ table: String, docid: Int64, columnTexts: [String]) throws(DBError) {
         try Relation.ftsAdd(ctx, name: table, docid: docid, columnTexts: columnTexts)
@@ -329,7 +329,7 @@ extension WriteTxn {
     }
 
     private func ftsRecord(_ name: String) throws(DBError) -> Catalog.FTSRecord {
-        try Relation.flushFTS(ctx, name: name)  // F6f read-your-writes: flush buffered docs first.
+        try Relation.flushFTS(ctx, name: name)  // read-your-writes: flush buffered docs first.
         guard let record = try Relation.ensureState(ctx).ftsRecords[name] else {
             throw DBError.noSuchTable(name)
         }
@@ -353,14 +353,14 @@ extension WriteTxn {
     }
 
     /// Evaluates a MATCH query string against an FTS table → matching docids
-    /// (ascending). Boolean membership only; ranking arrives in F4.
+    /// (ascending). Boolean membership only; ranking arrives later.
     public func ftsMatch(_ table: String, _ query: String) throws(DBError) -> [Int64] {
         try FTSMatch.evaluate(FTSQuery.parse(query), record: ftsRecord(table), resolver: ctx)
     }
 
-    /// The bm25f score (F4a) of `docid` for a MATCH query string, under per-column
+    /// The bm25f score of `docid` for a MATCH query string, under per-column
     /// `weights` (defaulting to all-ones for plain bm25). Negative: smaller is more
-    /// relevant. Exposed for the scorer unit tests; the SQL `rank`/`bm25()` surface
+    /// relevant. Exposed for the scorer unit tests; the SQL `rank`/`bm25` surface
     /// computes the same score in the executor.
     public func ftsScore(
         _ table: String, _ query: String, weights: [Double]? = nil, docid: Int64
@@ -387,7 +387,7 @@ extension WriteTxn {
         try Relation.dropIndex(ctx, name: name)
     }
 
-    /// Registers a row trigger (M5/F5); its body fires in the DML path.
+    /// Registers a row trigger; its body fires in the DML path.
     public func createTrigger(_ definition: TriggerDefinition) throws(DBError) {
         try Relation.createTrigger(ctx, definition)
     }

@@ -4,19 +4,19 @@ import Testing
 
 @testable import ADSQLKernel
 
-/// F4 — COVERING / INCLUDE-index serving. A SELECT whose every still-needed
+/// — COVERING / INCLUDE-index serving. A SELECT whose every still-needed
 /// base-table column lives in the chosen index's served set (the rowid-alias,
 /// read from the key, plus the INCLUDE columns, read from the entry value) is
 /// answered straight off the index cursor with NO descent into the base row.
 ///
 /// These tests pin BOTH halves of the contract:
-///   • POSITIVE — when a query is covered, the engine takes the index-only path
-///     (the plan says COVERING) AND returns rows identical to SQLite and to the
-///     same query run before the index existed (the planner-invariance oracle).
-///   • NEGATIVE — when a query needs a column the index does NOT serve (a
-///     non-indexed column, or a KEY column whose value is not in the entry
-///     value), the engine must fall back to a table descent and still return the
-///     correct rows — never serve garbage from an index-only span.
+/// • POSITIVE — when a query is covered, the engine takes the index-only path
+/// (the plan says COVERING) AND returns rows identical to SQLite and to the
+/// same query run before the index existed (the planner-invariance oracle).
+/// • NEGATIVE — when a query needs a column the index does NOT serve (a
+/// non-indexed column, or a KEY column whose value is not in the entry
+/// value), the engine must fall back to a table descent and still return the
+/// correct rows — never serve garbage from an index-only span.
 ///
 /// `CREATE INDEX` has no INCLUDE grammar yet, so indexes are created through the
 /// `txn.createIndex(IndexDefinition(…, includes:))` API; everything else is

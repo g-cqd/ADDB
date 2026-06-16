@@ -1,5 +1,5 @@
 /// SQL write execution over a `WriteTxn`: INSERT/UPDATE/DELETE plus DDL. Each
-/// reuses the M3 relational engine (strict typing, conflict policies, index
+/// reuses the relational engine (strict typing, conflict policies, index
 /// maintenance, FK actions) and the SQL evaluator for VALUES/SET/WHERE/
 /// RETURNING expressions. UPDATE and DELETE are two-phase (collect matching
 /// rowids, then mutate) to avoid mutating a tree under its own cursor.

@@ -7,9 +7,9 @@ private func parse(_ sql: String) throws -> SQLStatementAST {
     try SQLParser.parseOne(sql)
 }
 
-/// M5 / F0 — `CREATE VIRTUAL TABLE … USING fts5(…)` parsing and the catalog FTS
+/// / — `CREATE VIRTUAL TABLE … USING fts5(…)` parsing and the catalog FTS
 /// record (config + three owned trees) round-tripping through disk. No query or
-/// indexing yet — those arrive in F1–F4.
+/// indexing yet — those arrive in –.
 @Suite("FTS5 — F0 (parse + catalog record)")
 struct FTSCatalogTests {
     @Test func parsesSelfContainedAndExternalShapes() throws {

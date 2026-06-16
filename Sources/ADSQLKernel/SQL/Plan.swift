@@ -1,7 +1,7 @@
 /// Binding turns a parsed `SQLSelect` into a `BoundSelect`: the abstract
 /// syntax resolved against a concrete schema version. Binding is the only
 /// step that needs the schema, so a `Statement` caches one bound plan per
-/// committed catalog version (a DDL commit invalidates it). M4/PR3 binds the
+/// committed catalog version (a DDL commit invalidates it). /PR3 binds the
 /// single-table shape only — joins, aggregates, and compound selects are
 /// rejected here with named `sqlUnsupported` errors and arrive in later
 /// slices.
@@ -51,9 +51,9 @@ struct TableBinding: Sendable {
 /// returns the docid without touching any record span, so the empty span the
 /// `.fts` source supplies is never read; `f.rowid` joins the base table), and
 /// slot 1 is `rank` — the bm25 relevance score the `.fts` source computes per
-/// matching doc (F4). `f.rank` / bare `rank` resolves to slot 1 and reads the
+/// matching doc. `f.rank` / bare `rank` resolves to slot 1 and reads the
 /// score via `RowSlot.compute`'s `scoreIndex` path, parallel to the rowid path.
-/// The `bm25()` index of the rank slot.
+/// The `bm25` index of the rank slot.
 let ftsRankSlot = 1
 
 func syntheticFTSDefinition(_ name: String) -> TableDefinition {

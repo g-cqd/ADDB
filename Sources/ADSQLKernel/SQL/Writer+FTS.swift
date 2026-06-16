@@ -1,4 +1,4 @@
-/// FTS5 write path for `Writer` (RFC 0009 H2/R4 — split from Writer.swift). The
+/// FTS5 write path for `Writer`. The
 /// INSERT/UPDATE/DELETE handling for FTS5 virtual tables — the `insert`/`delete`/
 /// `delete-all`/`rebuild` command dispatch, docid resolution, and the column-text
 /// extraction helpers. An `extension Writer`; code motion + visibility.

@@ -3,16 +3,16 @@ import Testing
 
 @testable import ADSQLKernel
 
-/// M5 / F6c — block-max WAND ranked top-k. WAND is a pure optimization: a ranked
+/// / — block-max WAND ranked top-k. WAND is a pure optimization: a ranked
 /// `ORDER BY rank/bm25(…) LIMIT k` over an eligible query (single term, or AND/OR
 /// of terms) must return the IDENTICAL top-k — same rowids, same order — as the
 /// score-all path. These tests pin that invariant WITHOUT needing SQLite by
 /// differencing two ADSQL paths on the same data:
 ///
-///   - WAND path:      `ORDER BY rank LIMIT k`            (single-table ⇒ routed to WAND)
-///   - score-all path: `ORDER BY rank` then `prefix(k)`   (no LIMIT ⇒ no WAND)
+/// - WAND path: `ORDER BY rank LIMIT k` (single-table ⇒ routed to WAND)
+/// - score-all path: `ORDER BY rank` then `prefix(k)` (no LIMIT ⇒ no WAND)
 ///
-/// The score-all order is itself the F4 path the F6a parity suite proves equal to
+/// The score-all order is itself the path the parity suite proves equal to
 /// SQLite FTS5, so equality here chains WAND ⟷ score-all ⟷ FTS5. The suite also
 /// covers the eligibility boundary (prefix / phrase / NOT / column filters fall
 /// back, still correct) and edge cases (k ≥ match count, ties, AND with a missing

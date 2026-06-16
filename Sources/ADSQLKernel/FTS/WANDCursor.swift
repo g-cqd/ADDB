@@ -1,4 +1,4 @@
-/// A single FTS term's posting list as a block-max cursor for WAND (F6c). It
+/// A single FTS term's posting list as a block-max cursor for WAND. It
 /// walks docids in ascending order, gallops (`advance(to:)`) to a target docid by
 /// skipping whole posting blocks via their header `lastDocId`, and exposes the
 /// admissible per-block score bound (`currentBlockBound`) the pivot test needs.
@@ -9,7 +9,7 @@
 /// payload (it never needs those — surviving documents are scored by
 /// `FTSScorer`, which re-reads the postings). A block's docids are decoded only
 /// when the traversal actually enters it, so skipped blocks cost only their
-/// header parse. This is the on-disk `FTSPostings` block layout (F2a) read
+/// header parse. This is the on-disk `FTSPostings` block layout read
 /// header-first instead of fully materialized.
 struct FTSWANDCursor {
     /// The term's posting bytes (the raw tree value).
@@ -84,7 +84,7 @@ struct FTSWANDCursor {
             let docCountInBlock = Int(rawDocCount)
             guard docCountInBlock >= 1 else { return nil }
             let bodyOffset = offset
-            // Step past the FOR-packed docid gaps (F6g: varint gapBits + byte-aligned
+            // Step past the FOR-packed docid gaps (varint gapBits + byte-aligned
             // packed fields) to reach the per-doc field-TF section (recorded so a single
             // doc's TFs can be decoded on demand). Must match FTSPostings exactly.
             guard ForPacking.skipPackedGaps(bytes, &offset, gapCount: docCountInBlock - 1) else {
@@ -128,7 +128,7 @@ struct FTSWANDCursor {
     var currentBlockLast: Int64? { exhausted ? nil : blocks[blockIndex].lastDocId }
 
     /// Decodes the docids of block `index` (lazy; docids only — not field-TFs).
-    /// Reads the FOR-packed gaps (F6g) from `bodyOffset` — identical to
+    /// Reads the FOR-packed gaps from `bodyOffset` — identical to
     /// `FTSPostings.decodeDocids`. The block was structurally validated at `init`
     /// (header walk via `ForPacking.skipPackedGaps`), so the decode cannot fail
     /// here; on the impossible truncation it yields just `firstDocId` (safe).
@@ -188,7 +188,7 @@ struct FTSWANDCursor {
     /// `payloadScanDocPos`) advances forward with the cursor, so each preceding doc's
     /// payload is stepped over exactly ONCE per block — whole-block scoring is
     /// O(block), not O(block²) (it previously re-walked from the block's payload
-    /// start on every doc, the dominant ranked cost after F6i). docPos only moves
+    /// start on every doc, the dominant ranked cost after). docPos only moves
     /// forward within a block (`advance`/`advancePast`) and resets on `decodeBlock`,
     /// so the scan never needs to rewind; docs the pruner passes without scoring are
     /// caught up (and stepped over once) on the next call. Returns an all-zero
@@ -203,7 +203,7 @@ struct FTSWANDCursor {
     /// Fills `tfs` (length == `columns`) with the current doc's per-column term
     /// frequencies, reusing the caller's buffer so a whole-list scan (`runSingleTerm`,
     /// which scores every doc in an entered block) allocates no per-document field-TF
-    /// array. Identical bytes/values to `currentFieldTFs()`.
+    /// array. Identical bytes/values to `currentFieldTFs`.
     mutating func currentFieldTFs(into tfs: inout [UInt32]) {
         for index in tfs.indices { tfs[index] = 0 }
         guard !exhausted else { return }

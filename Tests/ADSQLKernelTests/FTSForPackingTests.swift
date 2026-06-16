@@ -2,7 +2,7 @@ import Testing
 
 @testable import ADSQLKernel
 
-/// F6g — frame-of-reference bit-packed docid gaps. Exhaustive low-level coverage
+/// — frame-of-reference bit-packed docid gaps. Exhaustive low-level coverage
 /// of the `ForPacking` codec (the writer in `FTSPostings.encode`, the readers in
 /// `FTSPostings.decode` / `decodeDocids` / `FTSWANDCursor`), independent of the
 /// SQLite parity gate: every bit width, byte-straddling field offsets, zero gaps,
@@ -190,7 +190,7 @@ struct FTSForPackingTests {
         // Re-encode each block independently the way block-per-key storage stores it.
         let block0 = Array(postings[0..<128])
         let single = FTSPostings.encode(block0, columns: 1, storePositions: false)
-        // encode() emits `varint blockCount(==1) || block`, exactly the single-block
+        // encode emits `varint blockCount(==1) || block`, exactly the single-block
         // value `decodeDocids` expects.
         let ids = try FTSPostings.decodeDocids(singleBlock: single)
         #expect(ids == block0.map(\.docid))

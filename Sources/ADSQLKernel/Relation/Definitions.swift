@@ -224,7 +224,7 @@ public enum FTSDetail: Equatable, Sendable {
 
 /// A parsed `USING fts5(…)` configuration. The `tokenize` spec is stored raw
 /// (whitespace-split tokens, e.g. `["porter","unicode61"]`); tokenizers are
-/// interpreted when they land (F1). Columns are plain text fields.
+/// interpreted when they land. Columns are plain text fields.
 public struct FTSDefinition: Equatable, Sendable {
     public var name: String
     public var columns: [String]
@@ -255,7 +255,7 @@ public struct FTSDefinition: Equatable, Sendable {
 
 // MARK: - Triggers
 
-/// The row event a trigger fires on (M5/F5). `BEFORE` and `INSTEAD OF` are
+/// The row event a trigger fires on. `BEFORE` and `INSTEAD OF` are
 /// unsupported — only `AFTER` row triggers, which is all apple-docs's FTS-sync
 /// DDL uses.
 public enum TriggerEvent: UInt8, Equatable, Sendable {

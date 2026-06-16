@@ -12,8 +12,9 @@ owner of SQLite-dialect JSON**: parse, `SQLiteJSONPath` walking, the `json_set`/
 
 > **This file is the single source of truth** — architecture, current status, the vs-SQLite
 > scorecard, and the prioritized backlog. It consolidates what were nine RFCs + three design
-> reviews (now folded in here; the originals remain in git history). Code comments that cite
-> `RFC 000x` / `Review 000x` / `F6x` refer to that history — they are kept as provenance.
+> reviews (now folded in here; the originals remain in git history). Code comments no longer
+> carry `RFC 000x` / `Review 000x` / milestone-finding citations — the technical content stands on
+> its own, and a lint gate (`.githooks/check-tags.sh`) keeps them out.
 
 **Modules:** `ADSQLKernel` (engine) · `ADSQL` (public façade, `@_exported`) · `ADSQLTool` (CLI) ·
 `ADSQLBench` (benchmarks vs system SQLite + FTS5) · `ADSQLTestSupport` (reference model store,

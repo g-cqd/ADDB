@@ -224,7 +224,7 @@ struct BTreeModelTests {
         // borrows from its right sibling (left-target); the last one, lacking a right
         // sibling, borrows from its left sibling (right-target).
         func emptyLeafToOneCell(firstKey base: Int) throws {
-            // Delete the run of keys sharing this leaf — [base+1 .. base+capacity-1],
+            // Delete the run of keys sharing this leaf — [base+1.. base+capacity-1],
             // clamped to `count` — leaving only `base`. The final delete underflows it.
             ctx = kernel.begin()
             for i in (base + 1)..<min(base + capacity, count) where model.get(key(i)) != nil {

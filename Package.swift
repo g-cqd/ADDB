@@ -9,7 +9,7 @@ import PackageDescription
 // dependency, so the committed `Package.resolved` stays accurate. (Passing `-warnings-as-errors` on
 // the `swift build` CLI instead would also fail on dependency warnings outside our control.)
 //
-// `StrictMemorySafety` is carved back to a warning (`-Wwarning`): `.strictMemorySafety()` flags every
+// `StrictMemorySafety` is carved back to a warning (`-Wwarning`): `.strictMemorySafety` flags every
 // unmarked unsafe construct, and shrinking that surface (via `Span`/`MutableSpan`/`InlineArray`) is a
 // tracked, in-progress effort rather than a one-shot `unsafe`-annotation sweep. So the gate errors on
 // every *other* diagnostic group (deprecations, unused results, implicit Sendable, …) while the
@@ -122,18 +122,18 @@ let package = Package(
         .executableTarget(
             name: "ADSQLTool", dependencies: ["ADSQL", "ADSQLImport"], swiftSettings: strictSettings),
         .systemLibrary(name: "CSQLite"),
-        // SQLite-file importer (M8 F1, RFC 0010): reads a source .db via CSQLite and writes an
+        // SQLite-file importer: reads a source.db via CSQLite and writes an
         // ADSQL database. Kept out of ADSQLKernel so the read-only engine never links sqlite3.
         .target(
             name: "ADSQLImport", dependencies: ["ADSQLKernel", "CSQLite"], swiftSettings: strictSettings),
-        // apple-docs search-pages serving (M8 INT, RFC 0010 §2): builds the §2.2 main query, binds the
+        // apple-docs search-pages serving: builds the §2.2 main query, binds the
         // §2.4 filter bag, and frames the §2.3 projection into the §2.5 response bytes — the Swift body
         // of apple-docs' frozen `ad_storage_search_pages` ABI. Depends on ADSQL only (NOT CSQLite), so it
         // stays link-clean exactly like the read engine.
         .target(
             name: "ADSQLSearch", dependencies: ["ADSQL"], swiftSettings: strictSettings),
         // ADSQLSearch is a bench dependency so the `search` scenario can call the real
-        // `searchPagesFramed` / `SearchQuery` (RFC 0010 §2) hot path it benchmarks against
+        // `searchPagesFramed` / `SearchQuery` hot path it benchmarks against
         // system SQLite running the IDENTICAL `SearchQuery.sql` + `SearchQuery.bindings`.
         .executableTarget(
             name: "ADSQLBench", dependencies: ["ADSQL", "ADSQLSearch", "CSQLite"],

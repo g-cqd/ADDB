@@ -1,4 +1,4 @@
-/// DDL parsing for `SQLParser` (RFC 0009 H2/R4 — split from Parser.swift).
+/// DDL parsing for `SQLParser`.
 /// CREATE (TABLE / INDEX / VIRTUAL TABLE / TRIGGER) and DROP: the column +
 /// constraint + table-body grammar, column types and DEFAULT / REFERENCES
 /// clauses, FTS5 virtual-table options, trigger bodies, and IF [NOT] EXISTS. An

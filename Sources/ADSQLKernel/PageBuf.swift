@@ -5,7 +5,7 @@
     // The naked mutable buffer is now `internal` (was `public`): the page
     // mutators (`Node.*`/`PageHeader.*`) live in this module, and external code
     // only needs the read-only view below, so the writable pointer no longer
-    // leaves the package (Review 0001 F4). SAFETY: the buffer outlives every
+    // leaves the package. SAFETY: the buffer outlives every
     // borrowed view of it — PageBuf owns it for its whole lifetime and frees it
     // exactly once in `deinit`. Vending it as a `MutableRawSpan` via a
     // `withMutableBytes` scope (compiler-checked borrow) is deferred: it would

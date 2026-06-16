@@ -1,20 +1,20 @@
 import ADSQL
 
-/// The RFC 0010 §2.5 response wire format (the `ad_storage_search_pages` return
+/// The response wire format (the `ad_storage_search_pages` return
 /// payload): a header `[u32 colCount][u32 rowCount]` followed by
 /// `rowCount × colCount` cells in row-major order, each a `[u8 tag][payload]`:
 ///
-/// | tag | type | payload                       |
+/// | tag | type | payload |
 /// |-----|------|-------------------------------|
-/// | `0` | NULL | (none)                        |
-/// | `1` | INT  | `[i64 LE]`                    |
+/// | `0` | NULL | (none) |
+/// | `1` | INT | `[i64 LE]` |
 /// | `2` | REAL | `[f64 LE]` (IEEE-754 bit pattern, LE) |
-/// | `3` | TEXT | `[u32 len][utf8 bytes]`       |
-/// | `4` | BLOB | `[u32 len][raw bytes]`        |
+/// | `3` | TEXT | `[u32 len][utf8 bytes]` |
+/// | `4` | BLOB | `[u32 len][raw bytes]` |
 ///
 /// Every multi-byte field is little-endian. The integers are emitted by explicit
 /// byte shifts (never a host-`withUnsafeBytes` reinterpret), so the bytes are
-/// identical regardless of CPU endianness — a requirement for the Linux gate (F0).
+/// identical regardless of CPU endianness — a requirement for the Linux gate.
 enum ResponseFraming {
     /// Cell type tags (§2.5).
     enum Tag: UInt8 {

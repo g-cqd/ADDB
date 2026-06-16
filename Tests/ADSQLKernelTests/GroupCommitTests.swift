@@ -128,7 +128,7 @@ struct GroupCommitTests {
         _ = try KernelOps.checkLiveness(CommittedResolver(source: pager), meta)
     }
 
-    /// F6f: one request buffers FTS docs; a SECOND request in the same batch forces
+    /// one request buffers FTS docs; a SECOND request in the same batch forces
     /// a flush of the shared buffer (via a MATCH) and then fails. The failing
     /// request's rollback must undo its flush yet leave the first request's docs to
     /// be re-flushed at commit — the most intricate memtable/group-commit

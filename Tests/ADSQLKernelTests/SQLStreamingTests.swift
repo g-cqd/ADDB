@@ -3,14 +3,14 @@ import Testing
 
 @testable import ADSQLKernel
 
-/// F5 — streaming `Statement.forEach`. The contract pinned here: `forEach` yields
-/// EXACTLY the same rows, in the same order, as `all()` — for every query shape,
+/// — streaming `Statement.forEach`. The contract pinned here: `forEach` yields
+/// EXACTLY the same rows, in the same order, as `all` — for every query shape,
 /// whether it takes the bounded-memory streamed single-table path (unbounded scan
 /// / filtered / rowid-ordered / DISTINCT-no-order) or the materialize-then-iterate
 /// path (unordered ORDER BY, bounded top-N, LIMIT, aggregate, join, compound) — and
 /// an early `false` return stops iteration immediately. The streamed path is a
 /// memory optimization; the OBSERVABLE equivalence + early-exit is the contract, and
-/// since `all()` is itself differentially tested vs SQLite, `forEach ≡ all()`
+/// since `all` is itself differentially tested vs SQLite, `forEach ≡ all`
 /// transitively pins streaming to SQLite semantics too.
 @Suite("SQL streaming forEach")
 struct SQLStreamingTests {
@@ -66,7 +66,7 @@ struct SQLStreamingTests {
         try db.prepare(sql).all(SQLParameters(positional: params)).map(\.values)
     }
 
-    /// `forEach` ≡ `all()` for every shape — the streamed paths and the materialized
+    /// `forEach` ≡ `all` for every shape — the streamed paths and the materialized
     /// (sort / top-N / LIMIT / aggregate / join / compound) paths alike.
     @Test func streamEqualsAllAcrossShapes() throws {
         let dir = TempDir()
@@ -141,7 +141,7 @@ struct SQLStreamingTests {
         #expect(count == 50)
     }
 
-    /// `forEach` on a non-row statement throws (mirrors `all()` on a write).
+    /// `forEach` on a non-row statement throws (mirrors `all` on a write).
     @Test func forEachOnNonSelectThrows() throws {
         let dir = TempDir()
         defer { dir.cleanup() }

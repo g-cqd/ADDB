@@ -39,7 +39,7 @@ public struct Row: Equatable, Sendable {
 ///
 /// Noncopyable **and `~Escapable`**: it borrows a `RawSpan` view of a mapped
 /// page valid only for the callback that receives it, and the compiler now
-/// *enforces* that it cannot outlive that borrow (Review 0001 F1 — `@safe`
+/// *enforces* that it cannot outlive that borrow (`@safe`
 /// previously only asserted this). A scan reads columns through it on demand;
 /// trying to store or return one fails to compile.
 public struct RowView: ~Copyable, ~Escapable {
@@ -192,7 +192,7 @@ package struct RowCursor<R: PageResolver>: ~Copyable {
 
     /// The next `(rowid, record bytes)` without materializing into a `Row`, or
     /// nil at the end of the bounds. The lazy-decode scan path builds its own
-    /// on-demand row view over these bytes; `next()` layers full
+    /// on-demand row view over these bytes; `next` layers full
     /// materialization on top.
     public mutating func nextRecord() throws(DBError) -> (rowid: Int64, record: [UInt8])? {
         guard !exhausted else { return nil }
@@ -350,7 +350,7 @@ package struct RowCursor<R: PageResolver>: ~Copyable {
         // Bind each record span to the resolver (the snapshot owner). A `RowView`
         // borrowing it therefore cannot outlive the snapshot: escaping the scan —
         // exactly the use-after-free the page recycler would make silent — fails
-        // to compile (Review 0001 F1). `resolver` is captured locally so the bound
+        // to compile. `resolver` is captured locally so the bound
         // views also cannot escape this call.
         let resolver = self.resolver
         // For an index-only scan, `span` is the covering entry value, decoded

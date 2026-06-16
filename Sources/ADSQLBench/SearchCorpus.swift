@@ -2,18 +2,18 @@ import ADSQL
 import ADSQLSearch
 import CSQLite
 
-/// Deterministic, apple-docs-shaped corpus for the `search` scenario (RFC 0010
+/// Deterministic, apple-docs-shaped corpus for the `search` scenario (
 /// §1/§2). Self-contained in ADSQLBench — the bench target cannot import the
 /// test-support `AppleDocsCorpus` (dependency constraint), so this is an
 /// independent generator of the SAME shape: the §2.1 read schema (`documents` +
 /// `roots` + `documents_fts`) seeded from a fixed-seed SplitMix64 stream over a
 /// realistic API-like vocabulary (framework names, symbol-ish titles, doc prose).
 ///
-/// A fresh `Generator()` replays byte-identical rows on every run and machine, and
+/// A fresh `Generator` replays byte-identical rows on every run and machine, and
 /// both engines build from their own fresh stream — so ADSQL and SQLite index
 /// IDENTICAL data and the latency/scaling compare is fair. Every §2.1 column the
 /// read path touches is populated (the 24-col projection reads real bytes; the 13
-/// filters discriminate): wide TEXT abstract/declaration/metadata (the A4 per-row
+/// filters discriminate): wide TEXT abstract/declaration/metadata (the per-row
 /// cost), `framework` both present and absent in `roots`, varied `source_type`,
 /// `source_metadata` JSON with `$.year`/`$.track`, toggled deprecated/beta, mixed
 /// `language`, and `min_*_num` platform ints (some NULL).
@@ -35,7 +35,7 @@ enum SearchCorpus {
 
     /// The `roots` row whose `slug` matches `framework` (the LEFT JOIN
     /// `r.slug = d.framework`), or `nil` when no roots row matches (the COALESCE
-    /// fallback) — the input to the F6 `root_display` / `root_slug` fold.
+    /// fallback) — the input to the `root_display` / `root_slug` fold.
     static func rootEntry(_ framework: String) -> (slug: String, displayName: String)? {
         roots.first { $0.slug == framework }
     }
@@ -71,7 +71,7 @@ enum SearchCorpus {
     static let sqliteDDL = adsqlDDL
 
     /// The 34 §2.1 `documents` columns, in the fixed bind order both engines use —
-    /// the 28 base columns plus the 6 F6 denormalized columns (`title_lc`, `key_lc`,
+    /// the 28 base columns plus the 6 denormalized columns (`title_lc`, `key_lc`,
     /// `year_num`, `track_lc`, `root_display`, `root_slug`) the denorm query reads.
     private static let insertColumns = """
         id, key, title, role, role_heading, abstract_text, declaration_text, headings,
@@ -190,7 +190,7 @@ enum SearchCorpus {
         var kind: String
         var language: String
         var urlDepth: Int64
-        // F6 denormalized columns (computed by `SearchDenorm`, byte-identical to the
+        // denormalized columns (computed by `SearchDenorm`, byte-identical to the
         // SQLite expressions they replace in the read query).
         var titleLC: String
         var keyLC: String
@@ -317,7 +317,7 @@ enum SearchCorpus {
             let kind = pick(kinds)
             let roleHeading = kind == "article" ? "Article" : "Symbol"
             let docRole = kind == "symbol" ? "symbol" : kind
-            // F6 denorm: fold the tier-string / year / track / roots scalars the §2.2
+            // denorm: fold the tier-string / year / track / roots scalars the §2.2
             // read query computes per match into precomputed columns. `roots` covers
             // the first 14 frameworks (LEFT JOIN hit ⇒ display_name); the last 6 miss
             // (COALESCE falls back to `framework`) — `SearchCorpus.rootEntry` resolves it.

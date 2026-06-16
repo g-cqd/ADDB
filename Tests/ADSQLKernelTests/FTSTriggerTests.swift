@@ -4,7 +4,7 @@ import Testing
 
 @testable import ADSQLKernel
 
-/// M5 / F5 — general `CREATE TRIGGER`. AFTER INSERT/UPDATE/DELETE row triggers
+/// / — general `CREATE TRIGGER`. AFTER INSERT/UPDATE/DELETE row triggers
 /// whose body is INSERT/DELETE/UPDATE statements referencing `NEW.*`/`OLD.*`,
 /// fired inside the same write transaction. The headline consumer is apple-docs's
 /// FTS-sync DDL (the ai/ad/au triggers keeping `documents_fts` in step with
@@ -637,7 +637,7 @@ struct WriterThreadStressTests {
     /// Regression for the writer-thread teardown self-join. A group-commit drain
     /// captures `Database` strongly (`[self]`), so the worker can drop the last
     /// reference when it frees that closure — running `Database.deinit` →
-    /// `WriterThread.shutdown()` ON the writer thread. `shutdown()` must detach
+    /// `WriterThread.shutdown` ON the writer thread. `shutdown` must detach
     /// there instead of `pthread_join`-ing itself; otherwise this loop deadlocks.
     /// Open → one async `write` → drop the handle, many times, so `deinit`
     /// repeatedly races the in-flight drain's final release on the writer thread.

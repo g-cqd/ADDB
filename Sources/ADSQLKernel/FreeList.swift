@@ -1,8 +1,8 @@
 /// Page reclamation. Freed pages are recorded in a second COW B+tree (the
 /// free tree) keyed by when they become reusable:
 ///
-///   key   = availAfterGen u64 BE ++ seq u16 BE   (memcmp order = numeric)
-///   value = count u32 LE ++ varint(first page) ++ varint(gaps...)
+/// key = availAfterGen u64 BE ++ seq u16 BE (memcmp order = numeric)
+/// value = count u32 LE ++ varint(first page) ++ varint(gaps...)
 ///
 /// Semantics: pages in an entry with `availAfterGen == E` were dropped by
 /// the commit of generation E — trees ≥ E no longer reference them. They are

@@ -3,8 +3,8 @@ import Testing
 
 @testable import ADSQLKernel
 
-/// M5 / F2b — self-contained FTS index build + maintenance through the SQL write
-/// API. Inspection uses the internal read helpers (the SQL MATCH query is F3).
+/// / — self-contained FTS index build + maintenance through the SQL write
+/// API. Inspection uses the internal read helpers (the SQL MATCH query is).
 @Suite("FTS5 — F2b index build + maintenance")
 struct FTSIndexTests {
     private func run(_ db: Database, _ sql: String) throws { try db.prepare(sql).run() }
@@ -43,7 +43,7 @@ struct FTSIndexTests {
         }
     }
 
-    /// F6f memtable read-your-writes: docs added in a transaction are buffered, but
+    /// memtable read-your-writes: docs added in a transaction are buffered, but
     /// a MATCH in the SAME transaction flushes the buffer first and sees them; a
     /// further add after a read re-buffers and is visible to the next read; and the
     /// whole batch is durable after commit.
@@ -77,7 +77,7 @@ struct FTSIndexTests {
         #expect(hits == [1, 3])
     }
 
-    /// F6f: batches that span the 128-doc block boundary stay complete and packed —
+    /// batches that span the 128-doc block boundary stay complete and packed —
     /// `writePacked` for a new term across two blocks, then the ascending-append
     /// path re-packing the last partial block plus new blocks for a follow-on batch.
     @Test func memtableBatchSpansBlockBoundaries() throws {
@@ -163,7 +163,7 @@ struct FTSIndexTests {
         }
     }
 
-    // MARK: F2c — content modes + the 'delete' idiom
+    // MARK: — content modes + the 'delete' idiom
 
     @Test func externalContentSyncsViaDeleteIdiom() throws {
         let dir = TempDir()

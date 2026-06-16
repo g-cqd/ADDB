@@ -3,8 +3,8 @@ import Testing
 
 @testable import ADSQLKernel
 
-/// M5 / F3b — boolean MATCH evaluation over the F2 index (membership; ranking
-/// is F4). Driven through `WriteTxn.ftsMatch`, which parses (F3a) + evaluates.
+/// / — boolean MATCH evaluation over the index (membership; ranking
+/// is). Driven through `WriteTxn.ftsMatch`, which parses + evaluates.
 @Suite("FTS5 — F3b boolean MATCH evaluation")
 struct FTSMatchEvalTests {
     /// A 3-doc fixture; returns the opened DB (caller closes).

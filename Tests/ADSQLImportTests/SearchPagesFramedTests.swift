@@ -5,7 +5,7 @@ import ADSQLTestSupport
 import CSQLite
 import Testing
 
-/// M8 INT (RFC 0010 §2) — the `ad_storage_search_pages` framed-output proof.
+/// — the `ad_storage_search_pages` framed-output proof.
 ///
 /// This is the adoption-gate proof that ADSQL can serve apple-docs' frozen
 /// `ad_storage_*` C ABI: it builds the SAME apple-docs-shaped corpus as
@@ -20,7 +20,7 @@ import Testing
 /// compared within 1e-9 relative (FTS5's float arithmetic differs in the last
 /// ULPs); `tier` (index 23) is exact. The framing header (`colCount`/`rowCount`)
 /// is checked directly, including the zero-row case.
-@Suite("apple-docs search-pages framing parity (RFC 0010 §2 INT)")
+@Suite("apple-docs search-pages framing parity")
 struct SearchPagesFramedTests {
     // MARK: - Probes
 
@@ -197,10 +197,10 @@ extension SearchPagesFramedTests {
         let description: String
     }
 
-    /// Walks the RFC 0010 §2.5 response layout:
-    ///   `[u32 colCount][u32 rowCount]` then `rowCount × colCount` cells, each
-    ///   `[u8 tag][payload]` — `0`=NULL, `1`=INT `[i64 LE]`, `2`=REAL `[f64 LE]`,
-    ///   `3`=TEXT `[u32 len][utf8]`, `4`=BLOB `[u32 len][bytes]`. All little-endian.
+    /// Walks the response layout:
+    /// `[u32 colCount][u32 rowCount]` then `rowCount × colCount` cells, each
+    /// `[u8 tag][payload]` — `0`=NULL, `1`=INT `[i64 LE]`, `2`=REAL `[f64 LE]`,
+    /// `3`=TEXT `[u32 len][utf8]`, `4`=BLOB `[u32 len][bytes]`. All little-endian.
     /// This decoder re-derives the format from the spec (it does NOT use the
     /// encoder's internal `Tag`), so byte-parity here is a genuine cross-check.
     func decodeFrame(_ bytes: [UInt8]) throws -> DecodedFrame {

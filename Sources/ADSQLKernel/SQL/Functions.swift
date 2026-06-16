@@ -234,7 +234,7 @@ enum SQLFunctions {
         guard hi > lo else { return nil }
         let core = String(decoding: bytes[lo..<hi], as: UTF8.self)
         if let v = Int64(core) { return .integer(v) }
-        // Reject hex/inf/nan spellings Double() accepts but SQLite does not.
+        // Reject hex/inf/nan spellings Double accepts but SQLite does not.
         for byte in bytes[lo..<hi] {
             switch byte {
             case 0x30...0x39, 0x2B, 0x2D, 0x2E, 0x65, 0x45: continue

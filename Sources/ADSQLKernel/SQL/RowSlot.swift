@@ -6,7 +6,7 @@
 /// and never copies the whole record. The rowid-alias column reads back from
 /// the rowid, and columns beyond the stored count fall to their schema default
 /// (mirroring `Relation.materializeRow`).
-// SAFETY (Review 0001 F1): unlike RowView/ValueRef (now `~Escapable`, lifetime-
+// SAFETY: unlike RowView/ValueRef (now `~Escapable`, lifetime-
 // checked), this stays `@safe` over a stored raw pointer because the invariant
 // is not compiler-enforceable here. `span` is re-pointed by `load` each row and
 // read only within that row's scan body; the slot caches decoded `Value`s, not
@@ -25,7 +25,7 @@
     /// if this slot models an FTS table. `compute` returns the per-row `score` for
     /// it without touching the span, parallel to the `aliasIndex → rowid` path.
     private let scoreIndex: Int?
-    /// Index-only (F4 covering) scan: when non-nil, the loaded `span` is the index
+    /// Index-only (covering) scan: when non-nil, the loaded `span` is the index
     /// entry's covering value — a `RecordCodec` record of these INCLUDE columns in
     /// declaration order, NOT the full table record. A column read then resolves to
     /// its slot within that value (rowid-alias still reads back from the rowid); a

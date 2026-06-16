@@ -1,4 +1,4 @@
-/// The decoded `ad_storage_search_pages` request (RFC 0010 §2.5 / apple-docs'
+/// The decoded `ad_storage_search_pages` request (/ apple-docs'
 /// `SearchPagesParams`): the FTS query, the verbatim `raw` term that drives the
 /// tier `CASE`, the result `limit`, and the 13 filter predicates of §2.4 — each
 /// optional, where a `nil` value is a passthrough (the filter does not bite).

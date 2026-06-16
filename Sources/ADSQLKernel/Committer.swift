@@ -1,12 +1,12 @@
 /// The commit protocol. Committed pages are immutable, so the only ordering
 /// that matters is "all data pages before the meta flip":
 ///
-///   1. preallocate the file to the new high-water mark
-///   2. stamp checksums on every dirty page
-///   3. write dirty pages (sorted, contiguous runs gathered into pwritev)
-///   4. sync (barrier or full, per durability profile)
-///   5. write the new meta to page (generation % 2)
-///   6. `.full` only: sync again (commit durable on return)
+/// 1. preallocate the file to the new high-water mark
+/// 2. stamp checksums on every dirty page
+/// 3. write dirty pages (sorted, contiguous runs gathered into pwritev)
+/// 4. sync (barrier or full, per durability profile)
+/// 5. write the new meta to page (generation % 2)
+/// 6. `.full` only: sync again (commit durable on return)
 ///
 /// Recovery is `Meta.recover` over the two meta pages: the newest
 /// checksum-valid one wins; a torn in-flight meta falls back one generation.

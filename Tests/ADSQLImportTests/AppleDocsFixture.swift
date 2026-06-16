@@ -4,10 +4,10 @@ import ADSQLTestSupport
 import CSQLite
 import Testing
 
-/// The shared apple-docs-shaped corpus + harness for the RFC 0010 §2 parity tests.
+/// The shared apple-docs-shaped corpus + harness for the parity tests.
 ///
 /// Both `AppleDocsMainQueryTests` (the §2.2–2.4 byte-parity-vs-SQLite harness) and
-/// `SearchPagesFramedTests` (the M8 INT framed-output proof) build the SAME small
+/// `SearchPagesFramedTests` (the framed-output proof) build the SAME small
 /// SQLite fixture, import it into ADSQL, and diff against the SQLite oracle running
 /// the identical §2.2 query — so the fixture, the manifest, the import harness, and
 /// the SQLite-oracle decode live here once.
@@ -34,11 +34,11 @@ enum AppleDocsFixture {
     ])
 
     /// (`$query`, `$raw`) probe pairs chosen to exercise every tier:
-    ///   - "swiftui"/"SwiftUI" — exact title-prefix + framework anchor (tiers 0/1/2).
-    ///   - "view"/"View"       — broad substring across many titles (tier 1/2/3).
-    ///   - "async"/"AsyncSequence" — prefix + substring against the seeded titles.
-    ///   - "data"/"Data"       — exact + substring.
-    ///   - "render"/"render"   — body/abstract-only porter stem (tier 3, rank spread).
+    /// - "swiftui"/"SwiftUI" — exact title-prefix + framework anchor (tiers 0/1/2).
+    /// - "view"/"View" — broad substring across many titles (tier 1/2/3).
+    /// - "async"/"AsyncSequence" — prefix + substring against the seeded titles.
+    /// - "data"/"Data" — exact + substring.
+    /// - "render"/"render" — body/abstract-only porter stem (tier 3, rank spread).
     static let probes: [(String, String)] = [
         ("swiftui", "SwiftUI"),
         ("view", "View"),
@@ -119,7 +119,7 @@ enum AppleDocsFixture {
             try exec(db, doc.insertSQL())
         }
 
-        // F6 build-time denormalization: populate the 6 denorm columns using SQLite's
+        // build-time denormalization: populate the 6 denorm columns using SQLite's
         // OWN scalar functions (`LOWER`/`CAST`/`json_extract`/`COALESCE`), so the
         // stored values are byte-exact to the §2.2 read-query expressions they fold
         // away — then the importer ports these columns into ADSQL verbatim. This is
@@ -278,7 +278,7 @@ extension AppleDocsFixture {
                 return out
             }
             func num(_ v: Int64?) -> String { v.map(String.init) ?? "NULL" }
-            // The text platform mirrors (min_ios .. min_visionos) carry the SDK-style
+            // The text platform mirrors (min_ios.. min_visionos) carry the SDK-style
             // string; left empty here (the read path reads the *_num columns).
             return """
                 INSERT INTO documents(

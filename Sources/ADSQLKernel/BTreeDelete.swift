@@ -141,7 +141,7 @@ extension BTree {
 
     /// Merges or borrows between an adjacent (left, right) pair under the
     /// parent cell `parentCellIndex` (the cell pointing at `right`). The target
-    /// (underfull) side is `leftIsTarget ? left : right`; its buffer is already
+    /// (underfull) side is `leftIsTarget ? left: right`; its buffer is already
     /// transaction-owned. The sibling's buffer is nil until shadowed on demand.
     private static func rebalancePair(
         _ ctx: TxnContext, tree: inout TreeHandle, path: [PathNode], level: Int,

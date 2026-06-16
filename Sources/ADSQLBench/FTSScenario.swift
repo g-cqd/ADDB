@@ -8,29 +8,29 @@ import Foundation
     import Glibc
 #endif
 
-/// F6b — the FTS *measurement* slice. FTS is already correctness-complete and
-/// SQLite-FTS5-parity-verified (F6a); this benchmarks the apple-docs
+/// — the FTS *measurement* slice. FTS is already correctness-complete and
+/// SQLite-FTS5-parity-verified; this benchmarks the apple-docs
 /// ranked-search shape against real SQLite FTS5 on three axes:
 ///
-///   1. index-build throughput (rows/s) — INSERT N docs into `documents_fts`,
-///   2. MATCH p50 — membership queries (single term / AND / OR / prefix),
-///   3. ranked top-k p50 — `ORDER BY bm25(documents_fts,10,5,3,2,1) LIMIT 20`.
+/// 1. index-build throughput (rows/s) — INSERT N docs into `documents_fts`,
+/// 2. MATCH p50 — membership queries (single term / AND / OR / prefix),
+/// 3. ranked top-k p50 — `ORDER BY bm25(documents_fts,10,5,3,2,1) LIMIT 20`.
 ///
-/// This baseline DATA-DRIVES the later perf slices (F6c block-max WAND, F6d
+/// This baseline DATA-DRIVES the later perf slices (block-max WAND,
 /// segments/merge). No engine tuning happens here — bench only.
 ///
-/// ADSQL's `FTSIndex` stores postings one block per key (F6d): appending a
-/// document rewrites only the last block, so the build is O(n) — not the pre-F6d
+/// ADSQL's `FTSIndex` stores postings one block per key: appending a
+/// document rewrites only the last block, so the build is O(n) — not the pre-
 /// O(n²) whole-list re-encode. Larger corpora are now feasible; `rowCap` bounds a
 /// bare run and `--rows` tunes it. The build still trails FTS5 by a roughly
 /// constant factor, and MATCH latency is dominated by decoding very common terms'
-/// long lists (the F6e codec signal); ranked top-k uses block-max WAND (F6c).
+/// long lists (the codec signal); ranked top-k uses block-max WAND.
 enum FTSScenario {
     /// Corpus-size clamp. `--rows` is clamped to this; a bare run (BenchConfig
-    /// defaults rows to 200k) and `--full` land here. F6d's O(n) build makes this
-    /// size finish in seconds — pre-F6d an 8k build took >3 min; now ≈3 s. Pre-F6d
+    /// defaults rows to 200k) and `--full` land here. 's O(n) build makes this
+    /// size finish in seconds — pre-an 8k build took >3 min; now ≈3 s. Pre-
     /// build curve, for reference: 500→0.30s · 1k→1.1s · 2k→4.7s · 4k→16.7s ·
-    /// 5k>60s (super-O(n²)); F6d is ~linear (≈ constant rows/s across sizes).
+    /// 5k>60s (super-O(n²)); is ~linear (≈ constant rows/s across sizes).
     /// SQLite FTS5 builds at ≈100k rows/s.
     static let rowCap = 8_000
 
@@ -44,7 +44,7 @@ enum FTSScenario {
     /// A second, abstract/declaration-heavy weight vector — exercises **bm25f**
     /// per-column weighting with a ranking distinct from `bm25` (title-heavy), so
     /// the bench measures the weighted-rank path and not just the default profile.
-    /// Ordering parity vs SQLite FTS5 under weighted bm25() is covered by
+    /// Ordering parity vs SQLite FTS5 under weighted bm25 is covered by
     /// `FTSParityTests`; this arm measures its latency on both engines.
     static let bm25fWeighted = "bm25(documents_fts, 1.0, 8.0, 6.0, 1.0, 1.0)"
 
@@ -85,7 +85,7 @@ enum FTSScenario {
     /// Kept modest: ADSQL ranked top-k for a near-universal term (e.g. "view")
     /// scores most of the corpus today, so it is tens-of-ms at the default 2k size
     /// — 100 reps per query gives a stable p50 without a multi-minute bench. (The
-    /// expense itself is the F6c WAND signal; this is a latency bench, not a stress
+    /// expense itself is the WAND signal; this is a latency bench, not a stress
     /// loop.)
     static let iterationsPerQuery = 100
 
@@ -137,7 +137,7 @@ enum FTSScenario {
         )
 
         // Count-sanity: an anchor term must hit a non-empty, bounded set (parity is
-        // already proven by F6a; this only guards against an empty/degenerate index).
+        // already proven by; this only guards against an empty/degenerate index).
         let anchorCount = try db.prepare(
             "SELECT count(*) FROM documents_fts WHERE documents_fts MATCH ?"
         ).all(.text("swiftui"))
@@ -486,11 +486,11 @@ enum FTSScenario {
 /// Self-contained, deterministic apple-docs-SHAPED corpus generator — lives IN
 /// ADSQLBench because the bench target depends only on `["ADSQL", "CSQLite"]`
 /// and cannot import `AppleDocsCorpus` (that's in the test-support target). This
-/// is a faithful, independent reimplementation of the F6a generator's shape:
+/// is a faithful, independent reimplementation of the generator's shape:
 /// tech-documentation vocabulary across title/abstract/declaration/headings/key,
 /// driven by a seeded SplitMix64 stream (no Foundation `random`/clock), so the
 /// same `id`/seed produces byte-identical rows on every run and machine. The two
-/// engines build from the SAME stream (a fresh `Generator()` each), so they
+/// engines build from the SAME stream (a fresh `Generator` each), so they
 /// index identical text. (Mirrors `Tests/ADSQLTestSupport/AppleDocsCorpus.swift`;
 /// not imported — see the brief's dependency constraint.)
 enum FTSCorpus {
@@ -503,7 +503,7 @@ enum FTSCorpus {
         let key: String
     }
 
-    // Fixed vocabulary, indexed by the seeded stream (same shape as the F6a corpus
+    // Fixed vocabulary, indexed by the seeded stream (same shape as the corpus
     // so single terms hit a meaningful fraction and bm25 ranking discriminates).
     static let frameworks = [
         "SwiftUI", "UIKit", "AppKit", "Foundation", "Combine", "CoreData",
@@ -541,7 +541,7 @@ enum FTSCorpus {
         "Return Value", "See Also", "Mentioned in", "Availability", "Conforms To",
     ]
 
-    /// Deterministic apple-docs row stream. A fresh `Generator()` replays the same
+    /// Deterministic apple-docs row stream. A fresh `Generator` replays the same
     /// rows; both engines use one each so they index byte-identical text. Uses the
     /// same SplitMix64 constants as the test-support `SplitMix64` (no Foundation).
     struct Generator {

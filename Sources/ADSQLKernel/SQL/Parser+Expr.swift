@@ -1,4 +1,4 @@
-/// Expression parsing for `SQLParser` (RFC 0009 H2/R4 — split from Parser.swift).
+/// Expression parsing for `SQLParser`.
 /// The precedence-climbing expression grammar: `expression` down through binary
 /// binding power, the BETWEEN/IN/LIKE/IS equality suffixes, prefix/unary, the
 /// primaries (literals, columns, parenthesised, subqueries), CASE, and function
@@ -26,7 +26,7 @@ extension SQLParser {
     /// `NOT NOT …`, `- - …` — can never overflow it. `pending` depth is still capped
     /// at `maxExprDepth`, so absurd nesting is rejected with a syntax error rather
     /// than silently accepted. Structured primaries (CASE, CAST, calls, subqueries,
-    /// IN/BETWEEN/LIKE) re-enter `expression()` for their sub-expressions; that
+    /// IN/BETWEEN/LIKE) re-enter `expression` for their sub-expressions; that
     /// recursion is bounded by `exprDepth`.
     mutating func climb(minBP startBP: Int) throws(DBError) -> SQLExpr {
         var pending: [ExprPending] = []
@@ -93,7 +93,7 @@ extension SQLParser {
                     minBP = 0
                     continue prefix
                 }
-                value = try primary()  // leaves + CASE/CAST/calls + scalar-subquery `( SELECT … )`
+                value = try primary()  // leaves + CASE/CAST/calls + scalar-subquery `(SELECT …)`
                 break prefix
             }
             // Operator position: run the infix loop at `minBP`, then settle one frame.
@@ -391,7 +391,7 @@ extension SQLParser {
         if unsupportedAggregates.contains(upper) {
             throw DBError.sqlUnsupported("\(upper)() aggregate")
         }
-        // `bm25(tbl, w0, …)` parses as an ordinary function call; the binder (F4b)
+        // `bm25(tbl, w0, …)` parses as an ordinary function call; the binder
         // rewrites it to a read of the FTS table's `rank` score slot.
         var star = false
         var args: [SQLExpr] = []

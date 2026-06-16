@@ -4,7 +4,7 @@ import Testing
 
 @testable import ADSQLKernel
 
-/// M5 / F4b — the `rank` / `bm25()` SQL surface + `ORDER BY rank`. The FTS5 table
+/// / — the `rank` / `bm25` SQL surface + `ORDER BY rank`. The FTS5 table
 /// drives the query (outer); a JOIN on `base.id = fts.rowid` fetches the base
 /// rows — the apple-docs search shape — and `ORDER BY rank LIMIT k` returns the
 /// most relevant docs first (SQLite's negative-ascending convention). Ordering
@@ -138,7 +138,7 @@ struct FTSRankTests {
         defer { dir.cleanup() }
         let db = try fixture(dir)
         defer { db.close() }
-        // bm25() / rank are projectable: the value equals the score used to order.
+        // bm25 / rank are projectable: the value equals the score used to order.
         let rows = try db.prepare(
             """
             SELECT d.id, bm25(f) FROM documents_fts f JOIN documents d ON d.id = f.rowid
@@ -160,7 +160,7 @@ struct FTSRankTests {
         defer { dir.cleanup() }
         let db = try fixture(dir)
         defer { db.close() }
-        // bm25() names a non-FTS table: the binder can't rewrite it to a rank slot,
+        // bm25 names a non-FTS table: the binder can't rewrite it to a rank slot,
         // so it survives as a function call and fails at evaluation.
         do {
             _ = try db.prepare("SELECT bm25(documents) FROM documents").all()
@@ -191,7 +191,7 @@ struct FTSRankTests {
     }
 
     /// The ranked rowid order must match SQLite FTS5 for plain `rank` and for
-    /// weighted `bm25()`. Same corpus, same `porter unicode61` tokenizer, same
+    /// weighted `bm25`. Same corpus, same `porter unicode61` tokenizer, same
     /// weights — so equal ordering validates the bm25f scorer end to end. Skipped
     /// (with the hand-derived oracle still covering correctness) when the linked
     /// sqlite3 lacks FTS5.

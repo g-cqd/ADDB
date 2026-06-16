@@ -8,7 +8,7 @@ import Synchronization
 #endif
 
 // SE-0444 (MemberImportVisibility): on Linux, Dispatch re-exports the pthread types
-// through CDispatch, so `pthread_attr_t()`'s init below needs CDispatch imported
+// through CDispatch, so `pthread_attr_t`'s init below needs CDispatch imported
 // explicitly. canImport-guarded — a no-op where CDispatch isn't a separate module.
 #if canImport(CDispatch)
     import CDispatch
@@ -18,9 +18,9 @@ import Synchronization
 /// controlled stack. It is a drop-in replacement for the `adsql.writer`
 /// `DispatchQueue` and preserves that queue's exact contract:
 ///
-///   * serial mutual exclusion — at most one job runs at a time;
-///   * FIFO order — jobs run in enqueue order;
-///   * `sync` blocks the caller until the job has run *on the writer thread*.
+/// * serial mutual exclusion — at most one job runs at a time;
+/// * FIFO order — jobs run in enqueue order;
+/// * `sync` blocks the caller until the job has run *on the writer thread*.
 ///
 /// Why a dedicated thread instead of the Dispatch queue: write execution
 /// re-enters itself recursively (row triggers fire `Writer.execute`, whose DML
@@ -140,7 +140,7 @@ import Synchronization
     ///
     /// `body` is non-escaping, but it must cross a thread boundary to run on the
     /// writer thread, which requires `@escaping` + `Sendable`. This is sound:
-    /// the caller `wait()`s on `done` and the writer `signal()`s it only after
+    /// the caller `wait`s on `done` and the writer `signal`s it only after
     /// `body` returns, so `body` never runs concurrently with — nor outlives —
     /// this call. There is exactly one accessor at any instant (the writer while
     /// it runs `body`; the caller, parked, before and after). `withoutActuallyEscaping`
@@ -188,7 +188,7 @@ import Synchronization
         guard let tid = unsafe thread.withLock({ unsafe $0.tid }) else { return }
         // A group-commit drain captures `Database` strongly (`[self]`); when the
         // worker frees that closure (`runAndComplete`'s `body = nil`) it can drop
-        // the LAST reference, so `Database.deinit` — hence this `shutdown()` — may
+        // the LAST reference, so `Database.deinit` — hence this `shutdown` — may
         // run ON the writer thread itself. Joining the calling thread is `EDEADLK`/
         // UB, so detect that case and `pthread_detach` instead: `shuttingDown` plus
         // the signal above guarantee `runLoop` returns, after which a detached
@@ -237,7 +237,7 @@ import Synchronization
     /// establishes happens-before, so the resuming caller observes the body
     /// already released and the post-condition holds. `consuming` ensures no copy
     /// lingers in this frame. The release of `body` cannot move after
-    /// `done.signal()`: both are opaque calls (an ARC release and a semaphore
+    /// `done.signal`: both are opaque calls (an ARC release and a semaphore
     /// signal) the optimizer cannot prove are independent, so it may not reorder
     /// them; `@inline(never)` additionally preserves this ordering across any
     /// inlining into `runLoop`.

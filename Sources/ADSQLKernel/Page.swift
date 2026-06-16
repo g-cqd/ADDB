@@ -1,14 +1,14 @@
 /// Node page header codec and slotted-page primitives.
 ///
 /// Header (32 bytes):
-///   0–7   XXH64 over bytes 8..<16384, seeded with the page number
-///   8     page type (branch / leaf / overflow / freelist)
-///   9     flags (reserved)
-///   10–11 cellCount — for overflow pages: dataLen
-///   12–13 cellAreaStart (cell content grows down from the page end)
-///   14–15 fragmentedBytes (dead bytes inside the cell area)
-///   16–23 branch: leftmostChild · overflow: nextOverflowPage · else 0
-///   24–31 reserved
+/// 0–7 XXH64 over bytes 8..<16384, seeded with the page number
+/// 8 page type (branch / leaf / overflow / freelist)
+/// 9 flags (reserved)
+/// 10–11 cellCount — for overflow pages: dataLen
+/// 12–13 cellAreaStart (cell content grows down from the page end)
+/// 14–15 fragmentedBytes (dead bytes inside the cell area)
+/// 16–23 branch: leftmostChild · overflow: nextOverflowPage · else 0
+/// 24–31 reserved
 ///
 /// After the header comes the slot array (u16 cell offsets, key-sorted,
 /// growing up) and, from the end of the page growing down, the cells.

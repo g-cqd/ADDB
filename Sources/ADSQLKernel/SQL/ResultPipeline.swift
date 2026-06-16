@@ -1,4 +1,4 @@
-/// Result-assembly pipeline for `SelectExecutor` (RFC 0009 H2/R4 — split from
+/// Result-assembly pipeline for `SelectExecutor` (split from
 /// Executor.swift). The per-row evaluation context (`RowContext`/`rowEnv` and the
 /// correlated-subquery guard), compound (UNION/UNION ALL) finalization, the
 /// post-scan DISTINCT dedup + reference analysis, ORDER BY sort, and LIMIT/OFFSET
@@ -166,7 +166,7 @@ extension SelectExecutor {
     /// True when `orderBy` ranks the leading FTS table's bm25 `rank` slot ascending
     /// (best/most-negative first), optionally followed by the FTS rowid ascending —
     /// i.e. `ORDER BY rank` or `ORDER BY bm25(…), rowid`. This is the only shape
-    /// routed to the F6c WAND path: its score-then-smallest-rowid tiebreak matches
+    /// routed to the WAND path: its score-then-smallest-rowid tiebreak matches
     /// the heap's, so WAND returns the identical top-k. Any other ordering (DESC, a
     /// non-rank leading key, a different trailing tiebreak) returns false and keeps
     /// score-all.
@@ -190,7 +190,7 @@ extension SelectExecutor {
     }
 
     /// True when `e` (or any sub-expression) reads bound column `(table, column)`.
-    /// Used to decide whether an FTS query needs per-doc bm25 scoring (F6e): a
+    /// Used to decide whether an FTS query needs per-doc bm25 scoring: a
     /// membership-only MATCH never reads the `rank` slot, so scoring is dead work.
     /// A scalar subquery is treated conservatively (assume the score may be read).
     static func exprReferences(_ e: SQLExpr, table: Int, column: Int) -> Bool {

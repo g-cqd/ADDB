@@ -15,7 +15,7 @@ enum SelectExecutor {
         subquery: @escaping SubqueryRunner = rejectSubquery,
         execution: ExecutionOptions = .default,
         mergeIndexes: (outer: Catalog.IndexRecord, inner: Catalog.IndexRecord)? = nil,
-        // F5 streaming: when set, the **unbounded single-table** path (no LIMIT/OFFSET,
+        // streaming: when set, the **unbounded single-table** path (no LIMIT/OFFSET,
         // no sort, no bounded-top-N) emits each surviving row to this sink as it is
         // produced — no full-result materialization — and returns `[]`. `sink` returns
         // false to stop early. Every other shape (sort/top-N/aggregate/join/distinct-
@@ -87,7 +87,7 @@ enum SelectExecutor {
             if case .index(_, let list, _) = source { return list.count > 1 }
             return false
         }()
-        // F6c — block-max WAND ranked top-k: when the leading FTS source is ordered by
+        // — block-max WAND ranked top-k: when the leading FTS source is ordered by
         // its bm25 `rank` slot ascending (best first) under a LIMIT, retrieve the
         // top-(offset+limit) by dynamic pruning instead of scoring the whole match set.
         // `k` is offset+limit (the slice drops the offset afterward). Enabled only for
@@ -120,14 +120,14 @@ enum SelectExecutor {
         case .table: residual = plan.whereExpr
         case .rowids, .index, .fts: residual = plan.residualWithoutCovered
         }
-        // F4 index-only: a covering source serves each row from the index entry's
+        // index-only: a covering source serves each row from the index entry's
         // value, so the slot must decode columns through the INCLUDE layout (the full
         // `includes` list) instead of by schema position. nil ⇒ ordinary record.
         let covering: [String]? = {
             if case .index(_, _, let includes) = source { return includes }
             return nil
         }()
-        // F6e: for an FTS source, computing the per-doc bm25 score is dead work
+        // for an FTS source, computing the per-doc bm25 score is dead work
         // unless the `rank` slot is actually read — by the projection, ORDER BY, or
         // residual — or WAND needs it. Skipping it makes a membership-only MATCH O(n)
         // instead of O(n²) (FTSScorer.score re-decodes the term's whole list per doc).
@@ -168,7 +168,7 @@ enum SelectExecutor {
             }
             return { () throws(DBError) -> Value in try SQLEval.evaluate(expr, env) }
         }
-        // F5: stream row-by-row only when nothing downstream needs the full set first —
+        // stream row-by-row only when nothing downstream needs the full set first —
         // no LIMIT/OFFSET slice (`bounds`), no post-scan sort (`collectKeys`), no bounded
         // top-N. (A LIMIT query is already memory-bounded, so it materializes-then-iterates.)
         let canStream = sink != nil && bounds == nil && !collectKeys && topN == nil
@@ -193,7 +193,7 @@ enum SelectExecutor {
                 rowid: rowid, span: span, score: score, sink: streamSink)
         }
 
-        // F5: rows were emitted to `sink` as produced — nothing to materialize/slice.
+        // rows were emitted to `sink` as produced — nothing to materialize/slice.
         if canStream { return [] }
 
         var rows = accumulator.rows
@@ -265,12 +265,12 @@ enum SelectExecutor {
         case table
         case rowids([Int64])
         /// An index range scan. `covering` is non-nil (the index's full INCLUDE
-        /// list) only for an F4 index-only scan the binder proved safe: each row is
+        /// list) only for an index-only scan the binder proved safe: each row is
         /// served straight from the index leaf, no table descent. nil = descend.
         case index(Catalog.IndexRecord, [IndexBounds], covering: [String]?)
         /// An FTS5 MATCH source: the docids `FTSMatch.evaluate` returns (ascending),
         /// each scored by bm25f. `query` is the UTF-8 of the resolved MATCH query
-        /// string; `weights` are the per-column bm25() weights (already padded to the
+        /// string; `weights` are the per-column bm25 weights (already padded to the
         /// FTS column count, all-ones for plain `rank`).
         case fts(Catalog.FTSRecord, query: [UInt8], weights: [Double])
     }
@@ -304,7 +304,7 @@ enum SelectExecutor {
         /// Single TEXT ORDER BY column for the zero-copy top-N early-drop (nil = the
         /// general `[Value]` sort-key path).
         let fastSort: (column: Int, descending: Bool, nocase: Bool)?
-        /// F4 index-only: the INCLUDE layout each row's span decodes through (the
+        /// index-only: the INCLUDE layout each row's span decodes through (the
         /// covering index's full `includes`); nil ⇒ the span is a full table record.
         let covering: [String]?
         var seenOutputs: Set<GroupKey> = []
@@ -378,7 +378,7 @@ enum SelectExecutor {
             if distinct, !seenOutputs.insert(GroupKey(projected, collations: distinctCollations)).inserted {
                 return true
             }
-            // F5: emit straight to the sink (no `rows` growth). `canStream` guarantees
+            // emit straight to the sink (no `rows` growth). `canStream` guarantees
             // there is no LIMIT/OFFSET/sort/top-N here, so scan order is the final order.
             if let sink { return try sink(projected) }
             rows.append(projected)
@@ -490,13 +490,13 @@ enum SelectExecutor {
             }
         case .index(let index, let boundsList, let planCovering):
             // Index-only serving with NO table descent in two cases:
-            //   • existence-only (an existence-only join inner): `coveringIncludes: []`
-            //     selects the no-descent branch and serves an (unread) empty-ish span;
-            //     the rowid comes from the key and the caller reads no inner column.
-            //   • F4 covering scan: the binder proved every needed base-table column is
-            //     the rowid-alias or an INCLUDE column, so serve them from the entry
-            //     value via the index's FULL `includes` layout. Existence-only wins when
-            //     both apply (it reads nothing, so the smaller [] is sufficient).
+            // • existence-only (an existence-only join inner): `coveringIncludes: []`
+            // selects the no-descent branch and serves an (unread) empty-ish span;
+            // the rowid comes from the key and the caller reads no inner column.
+            // • covering scan: the binder proved every needed base-table column is
+            // the rowid-alias or an INCLUDE column, so serve them from the entry
+            // value via the index's FULL `includes` layout. Existence-only wins when
+            // both apply (it reads nothing, so the smaller [] is sufficient).
             let covering: [String]? = existenceOnly ? [] : planCovering
             for bounds in boundsList {
                 let (lower, upper) = try Relation.scanBounds(bounds, index: index, table: table)
@@ -508,8 +508,8 @@ enum SelectExecutor {
                 }
             }
         case .fts(let record, let queryBytes, let weights):
-            // Evaluate the MATCH query to its docid set (F3b), score each by bm25f
-            // (F4a), then hand each docid to `body` with an EMPTY span and the score:
+            // Evaluate the MATCH query to its docid set, score each by bm25f
+            // then hand each docid to `body` with an EMPTY span and the score:
             // the FTS table's `RowSlot` is built from the synthetic rowid-alias
             // definition, so `compute` returns `.integer(docid)` for `rowid`, `.real`
             // for `rank`, and never reads the span. The join then descends on
@@ -523,7 +523,7 @@ enum SelectExecutor {
                 resolvedWeights += Array(repeating: 1.0, count: columns - resolvedWeights.count)
             }
             let empty = unsafe UnsafeRawBufferPointer(start: nil, count: 0)
-            // F6c — block-max WAND: a ranked top-k (ORDER BY rank ASC + LIMIT k) over an
+            // — block-max WAND: a ranked top-k (ORDER BY rank ASC + LIMIT k) over an
             // eligible query shape retrieves the top-k by dynamic pruning, scoring only
             // survivors (identical scores via FTSScorer). nil ⇒ fall back to score-all.
             if let k = ftsRankedTopK,
@@ -536,18 +536,18 @@ enum SelectExecutor {
                 }
                 return
             }
-            // Score-all: evaluate the MATCH query to its docid set (F3b), score each by
-            // bm25f (F4a), then hand each docid to `body` with an EMPTY span and the
+            // Score-all: evaluate the MATCH query to its docid set, score each by
+            // bm25f, then hand each docid to `body` with an EMPTY span and the
             // score: the FTS table's `RowSlot` is built from the synthetic rowid-alias
             // definition, so `compute` returns `.integer(docid)` for `rowid`, `.real`
             // for `rank`, and never reads the span. The join then descends on
             // `base.id = fts.rowid` exactly as for an ordinary rowid source.
             let docids = try FTSMatch.evaluate(query, record: record, resolver: resolver)
-            // F6i: resolve the query ONCE (each leaf's df/IDF and per-document
+            // resolve the query ONCE (each leaf's df/IDF and per-document
             // frequencies) so the per-document loop is a table lookup, not a re-decode
             // of the term's posting list — nor, for a `foo*` prefix, a per-document re-
             // enumeration of its document frequency, which dominated the score-all path.
-            // F6e: a membership-only query (no `rank`/`bm25` referenced) never reads the
+            // a membership-only query (no `rank`/`bm25` referenced) never reads the
             // score, so skip building the scorer entirely.
             let scorer: FTSScorer.PreparedScorer<R>? =
                 ftsScoreNeeded
@@ -557,7 +557,7 @@ enum SelectExecutor {
                 : nil
             // One persistent ascending cursor on the stats tree for the whole scan: the
             // docids arrive ascending, so `docLength`'s `seekForward` skips the per-doc
-            // root→leaf descent for same-leaf docs (F6n).
+            // root→leaf descent for same-leaf docs.
             var statsCursor = Cursor(resolver: resolver, tree: record.stats)
             for docid in docids {
                 let score = try scorer?.score(docid: docid, statsCursor: &statsCursor) ?? 0

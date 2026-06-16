@@ -48,8 +48,10 @@ jobs:
       - name: Lint (formatting gate)
         run: swift package lint
       - name: Lint (internal tags)
-        # TODO/FIXME must stay at zero; provenance-citation scanning activates once
-        # STRICT_TAGS=1 is set here (after the tree-wide strip lands).
+        # The tree-wide strip has landed, so STRICT_TAGS=1 forbids both TODO/FIXME and
+        # internal provenance citations (RFC 00xx / Review NNNN / milestone-finding tags).
+        env:
+          STRICT_TAGS: "1"
         run: ./.githooks/check-tags.sh all
       - name: Build
         run: swift build

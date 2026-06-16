@@ -77,9 +77,9 @@ public enum SearchQuery {
         ORDER BY tier, rank LIMIT $limit
         """
 
-    // MARK: - F6 denormalized variant (RFC 0010 §2.2-2.4 "F6")
+    // MARK: - denormalized variant
 
-    /// The §2.3 projection for the F6 DENORMALIZED query. Byte-identical output to
+    /// The §2.3 projection for the DENORMALIZED query. Byte-identical output to
     /// ``projection``, but the two framework-fold columns read the precomputed
     /// `root_display` / `root_slug` columns instead of `COALESCE(r.…, d.framework)`
     /// (so the `LEFT JOIN roots` is dropped), and the tier `CASE` compares the
@@ -103,7 +103,7 @@ public enum SearchQuery {
              ELSE 3 END AS tier
         """
 
-    /// The 13 §2.4 filter predicates for the F6 DENORMALIZED query. Identical to
+    /// The 13 §2.4 filter predicates for the DENORMALIZED query. Identical to
     /// ``filters`` except the two JSON predicates read precomputed columns: `year`
     /// is `d.year_num = $year` (the `CAST(json_extract(…,'$.year') AS INTEGER)`
     /// folded into `year_num`), and `track_like` is `d.track_lc LIKE $track_like`
@@ -131,7 +131,7 @@ public enum SearchQuery {
         AND ($min_visionos IS NULL OR d.min_visionos_num IS NULL OR d.min_visionos_num <= $min_visionos)
         """
 
-    /// The F6 DENORMALIZED statement: the ``denormProjection`` over `documents_fts`
+    /// The DENORMALIZED statement: the ``denormProjection`` over `documents_fts`
     /// joined to `documents` (NO `LEFT JOIN roots` — folded into `root_display` /
     /// `root_slug`), `WHERE documents_fts MATCH $query` plus ``denormFilters``,
     /// `ORDER BY tier, rank LIMIT $limit`. A faithful rewrite of ``sql`` proven
@@ -146,7 +146,7 @@ public enum SearchQuery {
         ORDER BY tier, rank LIMIT $limit
         """
 
-    /// Builds the bind bag for the F6 ``denormSQL``. Identical to ``bindings(for:)``
+    /// Builds the bind bag for the ``denormSQL``. Identical to ``bindings(for:)``
     /// except the verbatim `$raw` is replaced by `$raw_lc` — the raw term lowered
     /// ONCE here (via ``SearchDenorm/lower(_:)``, the same ASCII fold SQLite `LOWER`
     /// applies) and bound, so the tier `CASE` never calls `LOWER($raw)` per row.
@@ -222,12 +222,12 @@ public enum SearchQuery {
 
 extension Database {
     /// Runs the apple-docs §2.2 main search query for `params` and frames the
-    /// result rows into the RFC 0010 §2.5 response bytes — the Swift body of the
+    /// result rows into the response bytes — the Swift body of the
     /// frozen `ad_storage_search_pages` ABI (the C `@_cdecl` export lands LATER, in
     /// apple-docs; see `ResponseFraming` for the wire layout).
     ///
-    /// Correctness-first per RFC 0010 ("the prototype may use the existing `.all()`
-    /// path + manual framing; F5/A2–A4 optimize later"): it binds the §2.4 filter
+    /// Correctness-first per ("the prototype may use the existing `.all`
+    /// path + manual framing; /–optimize later"): it binds the §2.4 filter
     /// bag (each `nil` filter a passthrough), executes via `prepare(sql).all(...)`,
     /// and hand-encodes the `[u32 colCount][u32 rowCount]` header + per-cell
     /// `[u8 tag][payload]` body. The column order is the fixed §2.3 projection.
@@ -236,14 +236,14 @@ extension Database {
         return ResponseFraming.frame(rows: rows, columnCount: SearchQuery.columnCount)
     }
 
-    /// The F6 DENORMALIZED counterpart of ``searchPagesFramed(_:)``: runs
+    /// The DENORMALIZED counterpart of ``searchPagesFramed(_:)``: runs
     /// ``SearchQuery/denormSQL`` (which reads the precomputed `title_lc`/`key_lc`/
     /// `year_num`/`track_lc`/`root_display`/`root_slug` columns and drops the
     /// `LEFT JOIN roots`) with ``SearchQuery/denormBindings(for:)``, then frames the
     /// SAME §2.3 24-column projection into the SAME §2.5 bytes. Proven to produce
     /// byte-identical output to ``searchPagesFramed(_:)`` by
     /// `SearchDenormEquivalenceTests`; the perf gate runs both arms in `ADSQLBench
-    /// search`. Requires the denorm columns to be populated (the importer's F6 step,
+    /// search`. Requires the denorm columns to be populated (the importer's step,
     /// prototyped here in the bench corpus + the test fixture).
     public func searchPagesFramedDenorm(_ params: SearchPagesParams) throws(DBError) -> [UInt8] {
         let rows = try prepare(SearchQuery.denormSQL)

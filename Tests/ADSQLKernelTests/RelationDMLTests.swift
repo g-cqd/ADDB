@@ -372,7 +372,7 @@ struct RelationDMLSemanticsTests {
     }
 
     /// The lazy `forEachRow`/`RowView` path decodes exactly the same values as
-    /// the eager `next()`/`Row` path, for both table (rowid-order) and index
+    /// the eager `next`/`Row` path, for both table (rowid-order) and index
     /// (key-order, warm table-cursor fetch) scans, across every column kind: the
     /// rowid alias, a static default, a blob, text, and NULLs.
     // Hoisted out of the test bodies (generic local funcs + a shared 3-doc fixture)

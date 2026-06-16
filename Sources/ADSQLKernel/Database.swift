@@ -26,7 +26,7 @@ public struct DatabaseOptions: Sendable {
     /// on the read path — continuous corruption detection for untrusted database
     /// files, at the cost of an XXH64 over each page touched. Off by default: the
     /// format is crash-safe by construction and reads are the hot path;
-    /// `verifyIntegrity()` remains the on-demand whole-file check.
+    /// `verifyIntegrity` remains the on-demand whole-file check.
     public var verifyChecksumsOnRead: Bool
 
     public init(
@@ -106,8 +106,8 @@ public final class Database: Sendable {
     /// pthread start-arg references `WriterThread` (via `Unmanaged`), not
     /// `Database`. A group-commit drain job DOES capture `Database` (`[self]`), so
     /// the worker can drop the last reference when it frees that closure — meaning
-    /// `deinit` (and this `shutdown()`) may run on the writer thread itself.
-    /// `WriterThread.shutdown()` handles that case by detaching instead of
+    /// `deinit` (and this `shutdown`) may run on the writer thread itself.
+    /// `WriterThread.shutdown` handles that case by detaching instead of
     /// self-joining; off the writer thread it joins synchronously.
     deinit {
         writerThread.shutdown()
@@ -389,7 +389,7 @@ public struct ReadTxn: ~Copyable {
     /// underscored `_unsafeBytes:` SPI asserts (does not check) the span's
     /// lifetime and is unstable across compilers, so it is confined here to one
     /// call site; both callers keep `bytes` alive for the closure's duration
-    /// (Review 0001 F5).
+    ///
     private static func withRawSpan<R, E: Error>(
         over bytes: UnsafeRawBufferPointer, _ body: (RawSpan) throws(E) -> R
     ) throws(E) -> R {

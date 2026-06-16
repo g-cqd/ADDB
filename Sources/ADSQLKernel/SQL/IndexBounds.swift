@@ -1,5 +1,5 @@
 /// Access-path probe evaluation + type-boundary coercion for `SelectExecutor`
-/// (RFC 0009 H2/R4 — split from Executor.swift). Turns a WHERE's equality/range
+/// Turns a WHERE's equality/range
 /// constraints into rowid lists and index `IndexBounds` (`evaluateRowids`,
 /// `buildIndexBounds`), coercing each probe value to the indexed column's storage
 /// class with SQLite's boundary rules (`coerceEquality`/`coerceBound`). `SelectExecutor`

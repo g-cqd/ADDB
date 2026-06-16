@@ -21,7 +21,7 @@ public struct RelationState: Sendable {
     var tableRecords: [String: Catalog.TableRecord] = [:]
     var indexRecords: [String: Catalog.IndexRecord] = [:]
     var ftsRecords: [String: Catalog.FTSRecord] = [:]
-    /// F6f memtable: documents buffered this transaction, flushed coalesced into a
+    /// memtable: documents buffered this transaction, flushed coalesced into a
     /// table's FTS trees at the first read of that table (`flushFTS`) or at commit
     /// (`serializeState`). Value-typed, so `TxnRestorePoint` snapshots/restores it
     /// for free on a group-commit rollback.
@@ -246,7 +246,7 @@ enum Relation {
     /// rows. Runs after the user body (requestEpoch must be 0) and strictly
     /// before `FreeList.serialize`.
     static func serializeState(ctx: TxnContext) throws(DBError) {
-        try flushAllFTS(ctx)  // F6f: flush buffered FTS docs into the trees before serializing handles.
+        try flushAllFTS(ctx)  // flush buffered FTS docs into the trees before serializing handles.
         guard var state = ctx.relation else { return }
         var main = ctx.meta.mainTree
 
@@ -335,8 +335,8 @@ enum Relation {
     }
 
     /// Creates an FTS virtual table: a catalog record owning three (initially
-    /// empty) B+trees. Roots are allocated lazily on first write (F2), exactly
-    /// like a table/index handle. No indexing here — F0 is foundations only.
+    /// empty) B+trees. Roots are allocated lazily on first write, exactly
+    /// like a table/index handle. No indexing here — is foundations only.
     static func createVirtualTable(_ ctx: TxnContext, _ definition: FTSDefinition) throws(DBError) {
         var state = try ensureState(ctx)
         guard state.tableRecords[definition.name] == nil, state.ftsRecords[definition.name] == nil else {
@@ -432,7 +432,7 @@ enum Relation {
         ctx.relation = state
     }
 
-    // MARK: - Triggers (M5/F5)
+    // MARK: - Triggers
 
     /// Registers a trigger: validates its name (unique across the table/index/
     /// fts/trigger namespace) and its target (an existing base table), then

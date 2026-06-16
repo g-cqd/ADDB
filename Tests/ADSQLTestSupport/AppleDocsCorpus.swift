@@ -1,5 +1,5 @@
 /// A deterministic, apple-docs-SHAPED synthetic corpus for the FTS parity gate
-/// (M5/F6a) and the later FTS bench (F6b). "Apple-docs-shaped" means the text
+/// and the later FTS bench. "Apple-docs-shaped" means the text
 /// reads like DocC reference pages — framework names, symbol/type names,
 /// declarations, headings, and short prose abstracts — so MATCH queries return
 /// non-trivial, varied result sets and bm25 ranking is discriminating.
@@ -12,13 +12,13 @@
 /// by the seeded stream.
 ///
 /// Shapes covered (one `Document` feeds all four apple-docs FTS tables):
-///   - `documents_fts`     ← title, abstract, declaration, headings, key
-///   - `documents_trigram` ← title (external content over `documents`)
-///   - `documents_body_fts`← body (contentless)
-///   - `sf_symbols_fts`    ← name, keywords, categories, aliases
+/// - `documents_fts` ← title, abstract, declaration, headings, key
+/// - `documents_trigram` ← title (external content over `documents`)
+/// - `documents_body_fts`← body (contentless)
+/// - `sf_symbols_fts` ← name, keywords, categories, aliases
 ///
 /// The row count is parameterized so the parity test uses ~2k (fast + plenty to
-/// discriminate ranking) while F6b can scale the *same* generator to ≥100k.
+/// discriminate ranking) while can scale the *same* generator to ≥100k.
 package enum AppleDocsCorpus {
     /// One synthetic documentation row. `id` is the 1-based rowid shared by the
     /// base table and every FTS table (so `d.id == fts.rowid`, the apple-docs join).

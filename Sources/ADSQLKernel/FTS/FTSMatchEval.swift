@@ -1,8 +1,8 @@
-/// Boolean MATCH evaluation (M5/F3b). Turns an `FTSQuery` (F3a) into a
-/// docid-ascending match set over the F2 index: terms/prefixes/phrases resolve
+/// Boolean MATCH evaluation. Turns an `FTSQuery` into a
+/// docid-ascending match set over the index: terms/prefixes/phrases resolve
 /// to postings, the operators are sorted-set merges, and `col:` restricts by
 /// field. Query phrase text is tokenized with the table's own tokenizer, so
-/// `Running` matches the indexed stem `run`. Membership only — ranking is F4.
+/// `Running` matches the indexed stem `run`. Membership only; ranking is a separate layer.
 enum FTSMatch {
     /// Phrase hits in one column for `docid`: the number of starting positions of
     /// the first token where every later token sits at the next consecutive
@@ -115,7 +115,7 @@ enum FTSMatch {
         /// Docids of a single term, optionally restricted to documents where the
         /// term occurs in one of `columns` (via the per-field term frequencies).
         private func docids(_ term: [UInt8], columns: Set<Int>?) throws(DBError) -> [Int64] {
-            // No column filter: membership needs only docids — take the F6e fast path
+            // No column filter: membership needs only docids — take the fast path
             // that skips each doc's TF/position payload.
             guard let columns else { return try FTSIndex.docids(resolver, record, term: term) ?? [] }
             guard let postings = try FTSIndex.postings(resolver, record, term: term) else { return [] }

@@ -1,13 +1,13 @@
 /// Catalog persistence: system rows in the main tree under the reserved
 /// 0x00 prefix.
 ///
-///   00 76                  → version row: catalogVersion u64 LE ||
-///                            nextTableId u32 LE || nextIndexId u32 LE
-///   00 74 <tableName>      → TableRecord
-///   00 69 <indexName>      → IndexRecord
-///   00 71 <tableId u32 BE> → AUTOINCREMENT high-water u64 LE
-///   00 66 <ftsName>        → FTSRecord
-///   00 67 <triggerName>    → raw CREATE TRIGGER SQL text (UTF-8; re-parsed)
+/// 00 76 → version row: catalogVersion u64 LE ||
+/// nextTableId u32 LE || nextIndexId u32 LE
+/// 00 74 <tableName> → TableRecord
+/// 00 69 <indexName> → IndexRecord
+/// 00 71 <tableId u32 BE> → AUTOINCREMENT high-water u64 LE
+/// 00 66 <ftsName> → FTSRecord
+/// 00 67 <triggerName> → raw CREATE TRIGGER SQL text (UTF-8; re-parsed)
 ///
 /// Tree roots move on every COW commit, so records embed their TreeHandle
 /// and `Relation.serializeState` rewrites changed records at commit time.
@@ -17,8 +17,8 @@ enum Catalog {
     static let kindTable: UInt8 = 0x74  // 't'
     static let kindIndex: UInt8 = 0x69  // 'i'
     static let kindSequence: UInt8 = 0x71  // 'q'
-    static let kindFTS: UInt8 = 0x66  // 'f' — FTS virtual-table record (M5/F0)
-    static let kindTrigger: UInt8 = 0x67  // 'g' — CREATE TRIGGER text (M5/F5)
+    static let kindFTS: UInt8 = 0x66  // 'f' — FTS virtual-table record
+    static let kindTrigger: UInt8 = 0x67  // 'g' — CREATE TRIGGER text
 
     // MARK: - Keys
 
@@ -92,7 +92,7 @@ enum Catalog {
     }
 
     /// An FTS virtual table: its config plus the three B+trees it owns (term
-    /// dictionary, postings, doc/field stats). Roots are `.empty` until F2 writes
+    /// dictionary, postings, doc/field stats). Roots are `.empty` until writes
     /// the first posting; `serializeState` rewrites the record when any moves.
     struct FTSRecord: Equatable, Sendable {
         var ftsId: UInt32
@@ -146,11 +146,11 @@ enum Catalog {
     }
 
     // TableRecord layout:
-    //   u8 recVersion || u32 LE tableId || handle(18) || u8 tableFlags
-    //   || u16 LE columnCount || columns || u8 pkKind (0 implicit, 1 alias)
-    //   || [alias: name + u8 autoincrement] || u8 fkCount || fks
+    // u8 recVersion || u32 LE tableId || handle(18) || u8 tableFlags
+    // || u16 LE columnCount || columns || u8 pkKind (0 implicit, 1 alias)
+    // || [alias: name + u8 autoincrement] || u8 fkCount || fks
     // Column: name || u8 type || u8 flags(bit0 notNull, bit1 nocase)
-    //   || u8 defaultKind (0 none,1 null,2 int,3 real,4 text,5 blob,6 now) || payload
+    // || u8 defaultKind (0 none,1 null,2 int,3 real,4 text,5 blob,6 now) || payload
     // FK: u8 colCount || names || parentName || u8 action
 
     static func encode(_ record: TableRecord) -> [UInt8] {
@@ -340,9 +340,9 @@ enum Catalog {
     }
 
     // IndexRecord layout (self-contained: single-record fetches need no scan):
-    //   u8 recVersion || u32 LE indexId || u32 LE tableId || handle(18)
-    //   || u8 idxFlags(bit0 unique) || tableName || u8 colCount || column names
-    //   [optional, trailing] u8 includeCount || include column names
+    // u8 recVersion || u32 LE indexId || u32 LE tableId || handle(18)
+    // || u8 idxFlags(bit0 unique) || tableName || u8 colCount || column names
+    // [optional, trailing] u8 includeCount || include column names
     // The trailing INCLUDE block is back-compatible: records written before
     // covering indexes have no trailing bytes and decode to `includes: []`, so no
     // recordVersion bump is needed and old databases keep opening.
@@ -406,12 +406,12 @@ enum Catalog {
     }
 
     // FTSRecord layout:
-    //   u8 recVersion || u32 LE ftsId || dict(18) || postings(18) || stats(18)
-    //   || u16 LE colCount || column names
-    //   || u8 tokenizeCount || tokenize tokens
-    //   || u8 contentKind (0 self, 1 external[+table+rowid], 2 contentless[+u8 del])
-    //   || u8 prefixCount || prefix sizes (u8 each)
-    //   || u8 detail (0 full, 1 column, 2 none) || u8 columnSize
+    // u8 recVersion || u32 LE ftsId || dict(18) || postings(18) || stats(18)
+    // || u16 LE colCount || column names
+    // || u8 tokenizeCount || tokenize tokens
+    // || u8 contentKind (0 self, 1 external[+table+rowid], 2 contentless[+u8 del])
+    // || u8 prefixCount || prefix sizes (u8 each)
+    // || u8 detail (0 full, 1 column, 2 none) || u8 columnSize
 
     static func encode(_ record: FTSRecord) -> [UInt8] {
         var out: [UInt8] = [recordVersion]

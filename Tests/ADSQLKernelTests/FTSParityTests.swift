@@ -4,50 +4,50 @@ import Testing
 
 @testable import ADSQLKernel
 
-/// M5 / F6a — the FTS *correctness gate* for closing M5. Proves the FOUR
+/// / — the FTS *correctness gate* for closing. Proves the FOUR
 /// apple-docs FTS table shapes work end-to-end in ADSQL and match real SQLite
 /// FTS5 on a realistic synthetic corpus (`AppleDocsCorpus`, ~2k docs, seeded so
 /// it is byte-identical across runs/machines). For each shape we build the SAME
 /// schema + corpus into ADSQL and a `SQLiteMirror`, then assert:
 ///
-///   1. MATCH result-set (rowid SET) equality across a battery of operators
-///      (single term, AND, OR, NOT, prefix `term*`, phrase `"a b"`,
-///      column-filtered `col:term`) — only the operators each shape supports.
-///   2. Ranked top-k ORDER equality (`ORDER BY bm25(tbl, weights) LIMIT k`),
-///      mirroring `FTSRankTests.rankedOrderEqualsSQLiteFTS5`.
+/// 1. MATCH result-set (rowid SET) equality across a battery of operators
+/// (single term, AND, OR, NOT, prefix `term*`, phrase `"a b"`,
+/// column-filtered `col:term`) — only the operators each shape supports.
+/// 2. Ranked top-k ORDER equality (`ORDER BY bm25(tbl, weights) LIMIT k`),
+/// mirroring `FTSRankTests.rankedOrderEqualsSQLiteFTS5`.
 ///
-/// The whole differential is guarded by `sqliteHasFTS5()`; when the linked
+/// The whole differential is guarded by `sqliteHasFTS5`; when the linked
 /// sqlite3 lacks FTS5 we still assert non-differential invariants (anchor terms
 /// match a non-empty set, ranked scores are negative and monotonic) so the test
 /// is never a silent no-op.
 ///
 /// Shapes & how each is driven (the apple-docs pattern):
-///   - `documents_fts`     self-contained, porter; driven through base-table DML
-///     via the ai/ad/au sync triggers (so the trigger path is exercised too).
-///   - `documents_trigram` external content over `documents`, trigram; populated
-///     by INSERTing (rowid, title) read from `documents` (apple-docs idiom).
-///   - `documents_body_fts`contentless, porter; populated by INSERT (rowid, body)
-///     and deleted via the `'delete'` command idiom.
-///   - `sf_symbols_fts`    self-contained, porter, prefix='2 3', detail=column,
-///     columnsize=0; populated by direct multi-column INSERT.
+/// - `documents_fts` self-contained, porter; driven through base-table DML
+/// via the ai/ad/au sync triggers (so the trigger path is exercised too).
+/// - `documents_trigram` external content over `documents`, trigram; populated
+/// by INSERTing (rowid, title) read from `documents` (apple-docs idiom).
+/// - `documents_body_fts`contentless, porter; populated by INSERT (rowid, body)
+/// and deleted via the `'delete'` command idiom.
+/// - `sf_symbols_fts` self-contained, porter, prefix='2 3', detail=column,
+/// columnsize=0; populated by direct multi-column INSERT.
 ///
-/// Option-gap findings (see the per-shape tests + the F6a report):
-///   - `columnsize=0` is correctness-equivalent today: SQLite FTS5 keeps the
-///     per-doc *total* token count regardless, and bm25 length-norm uses that
-///     total (which ADSQL computes by summing field lengths) — verified to give
-///     bit-identical bm25 vs `columnsize=1`. Only the per-column storage saving
-///     is absent (a perf/storage follow-up, not a correctness gap).
-///   - `prefix='2 3'` is parse-only: query-time `term*` matching is served by a
-///     term-dictionary scan, returning the same rows; the index-time prefix
-///     index is a perf optimization, deferred (flagged as follow-up).
-///   - `detail=column` (sf_symbols): SQLite *rejects* phrase queries on it; so we
-///     issue none for that shape (apple-docs doesn't either).
+/// Option-gap findings (see the per-shape tests + the report):
+/// - `columnsize=0` is correctness-equivalent today: SQLite FTS5 keeps the
+/// per-doc *total* token count regardless, and bm25 length-norm uses that
+/// total (which ADSQL computes by summing field lengths) — verified to give
+/// bit-identical bm25 vs `columnsize=1`. Only the per-column storage saving
+/// is absent (a perf/storage follow-up, not a correctness gap).
+/// - `prefix='2 3'` is parse-only: query-time `term*` matching is served by a
+/// term-dictionary scan, returning the same rows; the index-time prefix
+/// index is a perf optimization, deferred (flagged as follow-up).
+/// - `detail=column` (sf_symbols): SQLite *rejects* phrase queries on it; so we
+/// issue none for that shape (apple-docs doesn't either).
 @Suite("FTS5 — F6a apple-docs shapes ⟷ SQLite FTS5 parity")
 struct FTSParityTests {
     // Deterministic, and dense enough that single terms hit a large set and bm25
     // ordering is non-trivial, while staying fast in CI (single-list FTS write
-    // amplification — the F6d perf target — makes large builds slow). The bench
-    // (F6b) scales the same generator to ≥100k.
+    // amplification — the perf target — makes large builds slow). The bench
+    // scales the same generator to ≥100k.
     static let docCount = 500
     static let seed: UInt64 = 0xF6A_C0FFEE
 
@@ -86,7 +86,7 @@ struct FTSParityTests {
     /// Ranked top-k rowids for ADSQL: `ORDER BY <orderExpr>, rowid LIMIT k`, best
     /// first. The explicit `, rowid` makes equal-score ties deterministic (rowid
     /// ascending) identically to SQLite below, so parity holds regardless of how
-    /// either engine breaks fully-equal `ORDER BY ... LIMIT` keys internally.
+    /// either engine breaks fully-equal `ORDER BY... LIMIT` keys internally.
     private func adsqlRanked(
         _ db: Database, _ table: String, _ orderExpr: String, _ query: String, limit: Int
     ) throws -> [Int64] {

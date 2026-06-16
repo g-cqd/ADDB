@@ -1,6 +1,6 @@
 /// SQL tokenizer: case-insensitive keywords, 'string' literals with ''
 /// escapes, "quoted identifiers", integer/real/hex numerics, ?, $name and
-/// :name parameters, -- and /* */ comments. Tokens carry byte offsets for
+/// name parameters, -- and /* */ comments. Tokens carry byte offsets for
 /// error spans.
 struct SQLToken: Equatable, Sendable {
     enum Kind: Equatable, Sendable {
@@ -50,7 +50,7 @@ enum SQLLexer {
         "NATURAL", "RIGHT", "FULL", "USING", "GLOB", "REGEXP", "WITHOUT",
         "HAVING", "ESCAPE", "PRAGMA", "VACUUM", "EXPLAIN", "ALTER", "VIRTUAL",
         "TRIGGER", "VIEW", "ADD", "COLUMN", "RENAME", "TO",
-        // CREATE TRIGGER grammar (M5/F5). Non-reserved in SQLite, so the parser
+        // CREATE TRIGGER grammar. Non-reserved in SQLite, so the parser
         // also lists them in `identifierKeywords` to keep them usable as names.
         "AFTER", "BEFORE", "INSTEAD", "FOR", "EACH", "ROW", "OF",
     ]
@@ -145,7 +145,7 @@ enum SQLLexer {
                     SQLToken(kind: .identifier(String(decoding: out, as: UTF8.self)), offset: start))
                 continue
             }
-            // Numbers (incl. .5, 0x1F)
+            // Numbers (incl..5, 0x1F)
             if isDigit(b) || (b == 0x2E && peek(1).map(isDigit) == true) {
                 if b == 0x30, peek(1) == 0x78 || peek(1) == 0x58 {
                     i += 2
@@ -254,7 +254,7 @@ enum SQLLexer {
                 tokens.append(SQLToken(kind: .parameter(.positional(positionalCount)), offset: start))
                 continue
             }
-            if b == 0x24 || b == 0x3A {  // $name :name
+            if b == 0x24 || b == 0x3A {  // $name:name
                 i += 1
                 var j = i
                 while j < bytes.count, isIdentBody(bytes[j]) { j += 1 }

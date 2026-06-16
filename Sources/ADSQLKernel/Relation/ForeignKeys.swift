@@ -1,4 +1,4 @@
-/// ON DELETE actions. M3 foreign keys reference the parent's rowid (the
+/// ON DELETE actions. foreign keys reference the parent's rowid (the
 /// INTEGER PRIMARY KEY alias) through exactly one child column — the shape
 /// apple-docs uses everywhere (`document_id REFERENCES documents(id)`).
 ///

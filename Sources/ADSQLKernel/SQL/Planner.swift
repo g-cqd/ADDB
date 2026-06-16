@@ -37,16 +37,16 @@ enum AccessPlan: Sendable {
     /// has *proved* every base-table column the query still needs lives in this
     /// index's served set — the rowid-alias (read from the key) plus its INCLUDE
     /// columns (read from the entry value). The executor then serves rows straight
-    /// from the index leaf with NO table descent (F4). It carries the index's FULL
+    /// from the index leaf with NO table descent. It carries the index's FULL
     /// `includes` list (the entry-value layout the decoder walks), never a subset.
     /// nil ⇒ the ordinary descend-into-the-table path.
     case index(name: String, probes: [IndexProbe], constraint: String, covering: [String]?)
     /// Full-text MATCH on an FTS5 table: the row source is the docid set
     /// `FTSMatch.evaluate` returns for `query` (a literal/parameter expression),
     /// not a B+tree scan. `query` is the MATCH right-hand operand. `weights` are
-    /// the bm25() per-column weights the binder captured (empty → all-ones, i.e.
+    /// the bm25 per-column weights the binder captured (empty → all-ones, i.e.
     /// plain `rank`); the executor pads/truncates them to the FTS column count and
-    /// scores each matching doc with them (F4).
+    /// scores each matching doc with them.
     case fts(table: String, query: SQLExpr, weights: [Double])
 }
 
@@ -89,7 +89,7 @@ enum Planner {
             let (query, conjunct) = ftsMatchConjunct(whereExpr, source: source)
         {
             return AccessPlanning(
-                // Default all-ones weights (`rank`); the binder overlays bm25() weights.
+                // Default all-ones weights (`rank`); the binder overlays bm25 weights.
                 plan: .fts(table: source.table, query: query, weights: []),
                 yieldsOrder: orderBy.isEmpty,
                 rowidOrderSatisfiesOrderBy: false,
@@ -114,7 +114,7 @@ enum Planner {
         }
 
         // 2. Best index by equality-prefix length, then trailing range, then IN
-        //    on a sole leading column.
+        // on a sole leading column.
         if let chosen = chooseIndex(
             constraints, orderBy: orderBy, source: source, indexes: indexes,
             definition: definition, rowidOrder: rowidOrder)
@@ -139,7 +139,7 @@ enum Planner {
         indexes: [IndexDefinition], definition: TableDefinition
     ) -> (plan: AccessPlan, coveredConjuncts: [SQLExpr]) {
         // An FTS inner table is driven by a MATCH conjunct in its ON clause. MATCH
-        // re-evaluates per outer row here (acceptable for F3c; FTS-first avoids it).
+        // re-evaluates per outer row here (acceptable for; FTS-first avoids it).
         if inner.isFTS, let (query, _) = ftsMatchConjunct(on, source: inner) {
             return (.fts(table: inner.table, query: query, weights: []), [])
         }

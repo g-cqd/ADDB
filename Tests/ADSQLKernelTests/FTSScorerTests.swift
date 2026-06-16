@@ -3,8 +3,8 @@ import Testing
 
 @testable import ADSQLKernel
 
-/// M5 / F4a — the bm25f scorer (`FTSScorer`). Driven through `WriteTxn.ftsScore`
-/// (parse + score over the F2 index). Scores are SQLite-signed: **negative, and
+/// / — the bm25f scorer (`FTSScorer`). Driven through `WriteTxn.ftsScore`
+/// (parse + score over the index). Scores are SQLite-signed: **negative, and
 /// smaller is more relevant**, so a "better" score is more negative. These are
 /// relevance/monotonicity properties (not byte-identity to FTS5 — the SQL
 /// surface in `FTSRankTests` carries the differential ordering gate).
@@ -134,7 +134,7 @@ struct FTSScorerTests {
         #expect(doc2Body < doc1Body)
     }
 
-    /// `rank` (all-ones weights) and an explicit all-ones `bm25()` are identical,
+    /// `rank` (all-ones weights) and an explicit all-ones `bm25` are identical,
     /// and differ from a non-uniform weighting when the term sits in one field.
     @Test func uniformWeightsDifferFromWeighted() throws {
         let dir = TempDir()

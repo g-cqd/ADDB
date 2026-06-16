@@ -1,17 +1,17 @@
-/// F6 (RFC 0010 §2.2-2.4, the "F6" build-time denormalization) — the helpers that
+/// — the helpers that
 /// precompute the denormalized `documents` columns the ``SearchQuery/denormSQL``
 /// read query consumes. Each helper reproduces, in Swift, the EXACT SQLite scalar
 /// the denorm column folds away, so a row populated with these values makes the
 /// denorm query a faithful rewrite of the §2.2 form:
 ///
-/// | denorm column   | folds the §2.2 expression                                          |
+/// | denorm column | folds the §2.2 expression |
 /// |-----------------|--------------------------------------------------------------------|
-/// | `title_lc`      | `LOWER(d.title)`                                                   |
-/// | `key_lc`        | `LOWER(d.key)`                                                    |
-/// | `year_num`      | `CAST(json_extract(d.source_metadata, '$.year') AS INTEGER)`     |
-/// | `track_lc`      | `LOWER(COALESCE(json_extract(d.source_metadata, '$.track'), ''))` |
-/// | `root_display`  | `COALESCE(r.display_name, d.framework)`                          |
-/// | `root_slug`     | `COALESCE(r.slug, d.framework)`                                  |
+/// | `title_lc` | `LOWER(d.title)` |
+/// | `key_lc` | `LOWER(d.key)` |
+/// | `year_num` | `CAST(json_extract(d.source_metadata, '$.year') AS INTEGER)` |
+/// | `track_lc` | `LOWER(COALESCE(json_extract(d.source_metadata, '$.track'), ''))` |
+/// | `root_display` | `COALESCE(r.display_name, d.framework)` |
+/// | `root_slug` | `COALESCE(r.slug, d.framework)` |
 ///
 /// The denormalization is computed at build time from the STRUCTURED inputs the
 /// corpus already holds (the year `Int64`, the track `String?`, the framework, the

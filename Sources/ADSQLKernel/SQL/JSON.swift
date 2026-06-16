@@ -5,7 +5,7 @@ import ADJSONCore
 /// path semantics, `JSONValue` is the mutable tree (preserving the integer/real distinction
 /// and document order), `JSONValue.setting`/`removing` are the `json_set`/`insert`/`replace`/
 /// `remove` mutation engine, `SQLiteJSON` provides `extract`/`type`/`array_length`/`valid`/
-/// `patch`, and `encodedBytes(options: .sqlite)` renders bytes byte-for-byte with `sqlite3`
+/// `patch`, and `encodedBytes(options:.sqlite)` renders bytes byte-for-byte with `sqlite3`
 /// (`%!.15g` reals, `\b`/`\f` short escapes, unescaped slashes, minified, declaration order).
 /// This layer only maps between SQL `Value`s and JSON and wires the `json_*` functions.
 enum SQLJSON {

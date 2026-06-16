@@ -4,7 +4,7 @@ import Testing
 
 @testable import ADSQLKernel
 
-/// `Insert.hoisted` (RFC 0009 H3/R1) — the per-statement plan that hoists the
+/// `Insert.hoisted` — the per-statement plan that hoists the
 /// owned-index roster out of the row loop (cached per (txn, tableId)) and drops
 /// ctx's alias to the relational state past conflict resolution so the write
 /// loop's handle updates mutate in place (no per-row first-touch dictionary COW).

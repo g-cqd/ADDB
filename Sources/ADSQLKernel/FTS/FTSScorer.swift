@@ -4,26 +4,26 @@
     import Glibc
 #endif
 
-/// bm25 / bm25f relevance scoring (M5/F4a). Turns an `FTSQuery` (F3a) plus the
-/// F2 index statistics into a single relevance score per matching document,
+/// bm25 / bm25f relevance scoring. Turns an `FTSQuery` plus the
+/// index statistics into a single relevance score per matching document,
 /// using the Okapi BM25 ranking function with per-field weights (bm25f) —
-/// SQLite FTS5's `rank` / `bm25()` model.
+/// SQLite FTS5's `rank` / `bm25` model.
 ///
 /// Only **positive query leaves** score: terms/phrases reached under `AND`/`OR`
 /// (and inside a `col:` restriction) contribute; the right operand of a `NOT`
-/// is a pure exclusion (already removed from the match set by F3b) and never
+/// is a pure exclusion (already removed from the match set by) and never
 /// scores. For each positive leaf phrase `p`:
 ///
-///   - `IDF(p) = log((N − df_p + 0.5) / (df_p + 0.5))`, clamped to a tiny
-///     positive `1e-6` when ≤ 0 (FTS5's behavior: a term in more than half the
-///     corpus would otherwise get a negative IDF and *invert* the ranking; the
-///     clamp keeps it weakly positive so denser docs still rank first).
-///   - `wf(p, row) = Σ_c weight_c · freq(p, c, row)` — weighted occurrences of
-///     `p` in each column `c` (a term: per-column tf; a phrase: per-column
-///     adjacency count). A `col:` restriction zeroes the weight of every other
-///     column.
-///   - `D = Σ_c fieldLengths(row)`; `avgdl = (Σ_c totalFieldLengths) / N`.
-///   - `contribution = IDF(p) · wf·(k1+1) / (wf + k1·(1 − b + b·D/avgdl))`.
+/// - `IDF(p) = log((N − df_p + 0.5) / (df_p + 0.5))`, clamped to a tiny
+/// positive `1e-6` when ≤ 0 (FTS5's behavior: a term in more than half the
+/// corpus would otherwise get a negative IDF and *invert* the ranking; the
+/// clamp keeps it weakly positive so denser docs still rank first).
+/// - `wf(p, row) = Σ_c weight_c · freq(p, c, row)` — weighted occurrences of
+/// `p` in each column `c` (a term: per-column tf; a phrase: per-column
+/// adjacency count). A `col:` restriction zeroes the weight of every other
+/// column.
+/// - `D = Σ_c fieldLengths(row)`; `avgdl = (Σ_c totalFieldLengths) / N`.
+/// - `contribution = IDF(p) · wf·(k1+1) / (wf + k1·(1 − b + b·D/avgdl))`.
 ///
 /// `score(row) = −Σ_p contribution`. The sum is **negated** so that, per the
 /// SQLite convention, smaller (more negative) is more relevant and `ORDER BY
@@ -38,7 +38,7 @@ enum FTSScorer {
     /// the ranking).
     static let minIDF = 1e-6
 
-    // MARK: - Scoring primitives (shared by score-all and the F6c WAND path)
+    // MARK: - Scoring primitives (shared by score-all and the WAND path)
 
     /// bm25 length-normalization term `L = k1·(1 − b + b·D/avgdl)` for a document of
     /// total length `docLength` against corpus average `avgdl`. Factored out so the
@@ -288,7 +288,7 @@ enum FTSScorer {
         ) throws(DBError) -> PreparedLeaf {
             guard record.definition.detail != .none else {
                 // Without positions a phrase cannot be scored per column; it still matched
-                // (F3b requires positions for phrases), so it contributes nothing.
+                // (requires positions for phrases), so it contributes nothing.
                 return PreparedLeaf(idf: FTSScorer.idf(df: 0, n: n), allowed: allowed, perDocFreq: [:])
             }
             var docs = Set<Int64>()

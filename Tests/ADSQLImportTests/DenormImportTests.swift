@@ -4,7 +4,7 @@ import ADSQLTestSupport
 import CSQLite
 import Testing
 
-/// F6 build-time denormalization through the importer (RFC 0010): a manifest `Denorm`
+/// build-time denormalization through the importer: a manifest `Denorm`
 /// spec makes `Database.importSQLite` create + populate the apple-docs `/search` denorm
 /// columns directly — the productionized form of what the bench validated as a ~2.2×
 /// win over SQLite at 8-way. Per-row columns (`LOWER`/`CAST`/`json_extract`) + the

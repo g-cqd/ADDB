@@ -143,7 +143,7 @@ public struct SQLInsert: Equatable, Sendable {
         case abort
         case replace  // INSERT OR REPLACE
         case ignore  // INSERT OR IGNORE
-        /// ON CONFLICT(column) DO UPDATE SET ...
+        /// ON CONFLICT(column) DO UPDATE SET...
         case doUpdate(target: String, sets: [SQLAssignment])
     }
     /// Row source: literal VALUES tuples or a SELECT.

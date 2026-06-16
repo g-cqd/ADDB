@@ -25,7 +25,7 @@ protocol KVDriver: AnyObject {
 /// Sendable because a reader is shared across the concurrent benchmark tasks
 /// (ADSQL: one wait-free snapshot handle; SQLite: a per-task connection). The
 /// conformance lets the bench hand a reader to a task without disabling the
-/// concurrency check (Review 0001 F6).
+/// concurrency check.
 protocol KVReader: AnyObject, Sendable {
     func get(_ key: [UInt8]) throws -> Int?
 }
@@ -108,8 +108,8 @@ final class SQLiteDriver: KVDriver {
         }
         db = handle
         // Mirrors apple-docs production pragmas; synchronous maps the requested
-        // durability (FULL = fsync per WAL commit ≈ ADSQL .barrier semantics on
-        // macOS; fullfsync mirrors .full; NORMAL/none relaxes).
+        // durability (FULL = fsync per WAL commit ≈ ADSQL.barrier semantics on
+        // macOS; fullfsync mirrors.full; NORMAL/none relaxes).
         try exec("PRAGMA journal_mode=WAL")
         switch durability {
         case "full":

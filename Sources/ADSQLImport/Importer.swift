@@ -2,15 +2,15 @@ public import ADSQLKernel
 
 extension Database {
     /// Imports a source SQLite `.db` into this (already-open, writable) ADSQL
-    /// database — the apple-docs swap gate (M8 F1, RFC 0010). It:
+    /// database — the apple-docs swap gate. It:
     ///
     /// - auto-introspects every regular source table (`sqlite_master` +
-    ///   `PRAGMA table_info`), creates it with strict, affinity-mapped columns
-    ///   (preserving the `INTEGER PRIMARY KEY` rowid), and **batch-copies** its
-    ///   rows, coercing each loose source cell to its strict column type, then
-    ///   ports its explicit (`CREATE INDEX`) secondary indexes;
+    /// `PRAGMA table_info`), creates it with strict, affinity-mapped columns
+    /// (preserving the `INTEGER PRIMARY KEY` rowid), and **batch-copies** its
+    /// rows, coercing each loose source cell to its strict column type, then
+    /// ports its explicit (`CREATE INDEX`) secondary indexes;
     /// - reconstructs each FTS5 table named in `manifest` from its source rows
-    ///   (FTS5 config isn't introspectable, hence the manifest);
+    /// (FTS5 config isn't introspectable, hence the manifest);
     /// - returns a **deep** integrity report.
     ///
     /// Rows are committed in batches of `batchSize` (one write transaction each)
@@ -40,7 +40,7 @@ extension Database {
             guard !existing.contains(tableName) else {
                 throw DBError.invalidDefinition("import target already contains table '\(tableName)'")
             }
-            // F6: create any build-time denorm columns WITH the table (no ALTER TABLE);
+            // create any build-time denorm columns WITH the table (no ALTER TABLE);
             // they are populated after every table exists (see `populateDenorm`).
             let denormColumns = manifest.denorm.first { $0.table == tableName }?.columnDefinitions ?? []
             try importTable(
@@ -54,7 +54,7 @@ extension Database {
             try importFTS(fts, from: source, batchSize: batchSize)
         }
 
-        // F6: fill the denorm columns now that every source table (incl. any lookup
+        // fill the denorm columns now that every source table (incl. any lookup
         // table a denorm column reads) has been imported.
         for denorm in manifest.denorm { try populateDenorm(denorm) }
 
@@ -72,7 +72,7 @@ extension Database {
             } else {
                 .implicitRowid
             }
-        // Source columns first, then any F6 denorm columns (nullable, filled post-copy).
+        // Source columns first, then any denorm columns (nullable, filled post-copy).
         let definition = TableDefinition(
             tableName,
             columns: columns.map { ColumnDefinition($0.name, $0.type, notNull: $0.notNull) } + denormColumns,
@@ -123,7 +123,7 @@ extension Database {
         }
     }
 
-    /// F6: fills the denorm columns of `denorm.table` (created empty during the copy).
+    /// fills the denorm columns of `denorm.table` (created empty during the copy).
     /// Per-row columns via one `UPDATE … SET name = valueSQL, …`; each lookup column via
     /// one `UPDATE` per (small) lookup-table row keyed on `matchColumn`, then a
     /// `fallbackColumn` fill for the rows with no match. Column names + value expressions

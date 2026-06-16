@@ -4,7 +4,7 @@ import ADSQLTestSupport
 import CSQLite
 import Testing
 
-/// M8 (RFC 0010 §2) — apple-docs "main" search-query byte-parity verification.
+/// — apple-docs "main" search-query byte-parity verification.
 ///
 /// This is a VERIFY-AND-REPORT harness, not a feature build: it constructs a small
 /// apple-docs-shaped SQLite corpus (`AppleDocsFixture`), imports it into ADSQL via
@@ -19,11 +19,11 @@ import Testing
 /// (`d.source_type IN (SELECT value FROM json_each($sources_json))`) clause is
 /// exercised via ADSQL's *self-contained* `inJSONEach` AST node (parsed from the
 /// contracted shape, evaluated by `SQLJSON.eachValues`) — NOT the FROM-clause
-/// table-valued `json_each` of RFC 0011, which this harness never touches.
+/// table-valued `json_each` of which this harness never touches.
 ///
 /// The shared corpus, manifest, import harness, probes, and the SQLite oracle live
-/// in `AppleDocsFixture` (also used by the M8 INT `SearchPagesFramedTests`).
-@Suite("apple-docs main query parity (RFC 0010 §2)")
+/// in `AppleDocsFixture` (also used by the `SearchPagesFramedTests`).
+@Suite("apple-docs main query parity")
 struct AppleDocsMainQueryTests {
     // MARK: - The §2.2 / §2.3 query surface (string-built so each clause is explicit)
 
@@ -328,7 +328,7 @@ struct AppleDocsMainQueryTests {
     /// (Tie coverage is also real: the "swiftui"/"data"/"render" probes each yield
     /// rows with identical `(tier, rank)` keys, so the full-row positional equality
     /// in `expectParity` additionally pins tie-ordering parity under `ORDER BY tier,
-    /// rank` with no explicit rowid tiebreak — the F2 ascending-rowid tie-break holds
+    /// rank` with no explicit rowid tiebreak — the ascending-rowid tie-break holds
     /// through the JOIN + multi-key sort.)
     @Test func probesExerciseEveryTierAndBothCoalesceBranches() throws {
         try AppleDocsFixture.withImportedCorpus { db, src in

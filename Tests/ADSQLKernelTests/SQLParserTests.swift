@@ -68,7 +68,7 @@ struct SQLParserStatementTests {
     }
 
     @Test func searchShapedQuery() throws {
-        // The apple-docs FTS-search SELECT minus MATCH (M5): tier CASE + filters.
+        // The apple-docs FTS-search SELECT minus MATCH: tier CASE + filters.
         let s = try selectOf(
             """
             SELECT d.id, d.key,
@@ -359,11 +359,11 @@ struct SQLParserStatementTests {
 struct SQLParserErrorTests {
     static let unsupported: [(String, String)] = [
         ("WITH x AS (SELECT 1) SELECT * FROM x", "WITH"),
-        // `… MATCH 'q'` now parses (F3c); it binds/plans to an FTS access path.
+        // `… MATCH 'q'` now parses; it binds/plans to an FTS access path.
         ("SELECT COUNT(DISTINCT a) FROM t", "DISTINCT"),
         ("SELECT AVG(a) FROM t", "AVG"),
         ("SELECT MAX(a) FROM t", "MAX"),
-        // bm25() now parses as a function call (F4b); the binder rewrites it to the
+        // bm25 now parses as a function call; the binder rewrites it to the
         // FTS `rank` score slot. (Was rejected at parse time before ranking landed.)
         ("SELECT a, ROW_NUMBER() OVER (ORDER BY a) FROM t", "window"),
         ("SELECT * FROM (SELECT 1)", "FROM"),
@@ -436,7 +436,7 @@ struct SQLParserErrorTests {
         }
         // Sanity: the loop ran 40 mutations per corpus entry (tied to the corpus so
         // it stays correct as entries are added/removed — e.g. bm25 leaving the
-        // unsupported set in F4 — rather than to a magic constant).
+        // unsupported set in — rather than to a magic constant).
         #expect(attempts == corpus.count * 40)
     }
 }

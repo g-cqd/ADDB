@@ -1,4 +1,4 @@
-/// FTS5 index maintenance for the storage layer (RFC 0009 H2/R4 — split from
+/// FTS5 index maintenance for the storage layer (split from
 /// Relation.swift). `ftsAdd`/`ftsRemove` and the dictionary + postings + stats
 /// tree updates that keep an FTS5 virtual table's three trees consistent as
 /// documents are indexed and removed. An `enum Relation` extension; code motion.
@@ -10,14 +10,14 @@ extension Relation {
     ) throws(DBError) {
         var state = try ensureState(ctx)
         guard state.ftsRecords[name] != nil else { throw DBError.noSuchTable(name) }
-        // F6f: buffer the document; the coalesced batch is written by `flushFTS` at
+        // buffer the document; the coalesced batch is written by `flushFTS` at
         // the next read of this table or at commit. No tree writes here.
         state.ftsBuffer[name, default: []].append(
             FTSIndex.PendingDoc(docid: docid, columnTexts: columnTexts))
         ctx.relation = state
     }
 
-    /// Flushes one FTS table's buffered docs (F6f) into its trees in a single
+    /// Flushes one FTS table's buffered docs into its trees in a single
     /// coalesced batch. No-op when the buffer is empty.
     static func flushFTS(_ ctx: TxnContext, name: String) throws(DBError) {
         guard var state = ctx.relation, let pending = state.ftsBuffer[name], !pending.isEmpty
@@ -40,7 +40,7 @@ extension Relation {
     /// Removes a document from an FTS table; returns false when it wasn't present.
     @discardableResult
     static func ftsRemove(_ ctx: TxnContext, name: String, docid: Int64) throws(DBError) -> Bool {
-        try flushFTS(ctx, name: name)  // F6f: the doc may be buffered — write it before removing.
+        try flushFTS(ctx, name: name)  // the doc may be buffered — write it before removing.
         var state = try ensureState(ctx)
         guard var record = state.ftsRecords[name] else { throw DBError.noSuchTable(name) }
         let removed = try FTSIndex.remove(ctx, record: &record, docid: docid)
@@ -54,7 +54,7 @@ extension Relation {
         let state = try ensureState(ctx)
         guard let record = state.ftsRecords[name] else { throw DBError.noSuchTable(name) }
         let treeNext = try FTSIndex.nextRowid(ctx, statsHandle: record.stats)
-        // F6f: buffered (not-yet-flushed) docs aren't in the stats tree — consult the
+        // buffered (not-yet-flushed) docs aren't in the stats tree — consult the
         // buffer's max docid so batched auto-rowid inserts don't collide.
         let bufferMax = state.ftsBuffer[name]?.lazy.map(\.docid).max() ?? 0
         return max(treeNext, bufferMax + 1)
@@ -63,7 +63,7 @@ extension Relation {
     /// Clears an FTS table's index (the `'delete-all'` command).
     static func ftsRemoveAll(_ ctx: TxnContext, name: String) throws(DBError) {
         var state = try ensureState(ctx)
-        state.ftsBuffer[name] = nil  // F6f: drop buffered docs too (delete-all clears everything).
+        state.ftsBuffer[name] = nil  // drop buffered docs too (delete-all clears everything).
         guard var record = state.ftsRecords[name] else { throw DBError.noSuchTable(name) }
         try FTSIndex.removeAll(ctx, record: &record)
         state.ftsRecords[name] = record

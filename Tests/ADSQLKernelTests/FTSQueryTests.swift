@@ -4,9 +4,9 @@ import Testing
 
 @testable import ADSQLKernel
 
-/// M5 / F3c — the SQL `MATCH` surface. An FTS5 table drives the query (outer);
+/// / — the SQL `MATCH` surface. An FTS5 table drives the query (outer);
 /// a JOIN on `base.id = fts.rowid` fetches the base rows, exactly the apple-docs
-/// search shape. Boolean membership only (ranking is F4). The end-to-end results
+/// search shape. Boolean membership only (ranking is). The end-to-end results
 /// are checked against a hand-derived oracle, and the matching-rowid *sets* are
 /// checked against real SQLite FTS5 (when the linked sqlite3 has FTS5).
 @Suite("FTS5 — F3c MATCH SQL surface")
@@ -151,7 +151,7 @@ struct FTSQueryTests {
     }
 
     @Test func bm25ParsesAsFunctionCall() throws {
-        // bm25() is no longer rejected at parse time (F4b): it parses as an ordinary
+        // bm25 is no longer rejected at parse time: it parses as an ordinary
         // function call and the binder rewrites it to the FTS `rank` score slot.
         let parsed = try SQLParser.parseOne("SELECT bm25(documents_fts) FROM documents_fts")
         guard case .select(let select) = parsed, case .expr(let expr, _, _) = select.columns[0],

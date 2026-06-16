@@ -4,15 +4,15 @@ import ADSQLTestSupport
 import CSQLite
 import Testing
 
-/// M8 F2 — FTS byte-parity gate, exercised end-to-end through the importer: build a
-/// SQLite corpus with a multi-column porter+unicode61 FTS5 table, import it (F1),
+/// — FTS byte-parity gate, exercised end-to-end through the importer: build a
+/// SQLite corpus with a multi-column porter+unicode61 FTS5 table, import it,
 /// then assert ADSQL and the source SQLite FTS5 agree, for a corpus of `MATCH`
 /// queries (under default and apple-docs-style per-column weights), on:
-///   1. the **matching docid set** + the **numeric bm25 relevance** of every match
-///      (ADSQL computes byte-identical scores), and
-///   2. the **ranked row order** of `ORDER BY <rank>` with **no explicit rowid
-///      tiebreak** — including ties, which now order ascending-rowid like SQLite
-///      (the bounded-top-N upper-bound insert fix), matching the WAND path.
+/// 1. the **matching docid set** + the **numeric bm25 relevance** of every match
+/// (ADSQL computes byte-identical scores), and
+/// 2. the **ranked row order** of `ORDER BY <rank>` with **no explicit rowid
+/// tiebreak** — including ties, which now order ascending-rowid like SQLite
+/// (the bounded-top-N upper-bound insert fix), matching the WAND path.
 @Suite("Imported FTS bm25 parity")
 struct ImportedFTSParityTests {
     private let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)

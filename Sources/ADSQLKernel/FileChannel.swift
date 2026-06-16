@@ -11,7 +11,7 @@ import Synchronization
 package final class FileChannel: StorageChannel, @unchecked Sendable {
     package let fileDescriptor: Int32
     private let closeOnDeinit: Bool
-    /// Guards against double-close: a second close() on a recycled descriptor
+    /// Guards against double-close: a second close on a recycled descriptor
     /// number would tear down an unrelated file out from under another thread.
     private let closed = Atomic<Bool>(false)
 
@@ -221,7 +221,7 @@ package final class FileChannel: StorageChannel, @unchecked Sendable {
         guard fileDescriptor >= 0 else { return }
         let (exchanged, _) = closed.compareExchange(
             expected: false, desired: true, ordering: .acquiringAndReleasing)
-        // Module-qualified to call the libc syscall, not this type's `close()`.
+        // Module-qualified to call the libc syscall, not this type's `close`.
         #if canImport(Darwin)
             if exchanged { _ = Darwin.close(fileDescriptor) }
         #else

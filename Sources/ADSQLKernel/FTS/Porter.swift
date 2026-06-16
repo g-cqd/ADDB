@@ -1,7 +1,7 @@
 /// The `porter` tokenizer: runs a base tokenizer (default `unicode61`) then
 /// applies the **classic Porter (1980) stemmer** to each ASCII term. SQLite
 /// FTS5's `porter` uses the original Porter algorithm, so this matches it for
-/// the F3 membership differential gate (Porter2/Snowball would diverge). Tokens
+/// the membership differential gate (Porter2/Snowball would diverge). Tokens
 /// that aren't pure ASCII `a–z` pass through unchanged, as in SQLite.
 public struct PorterTokenizer: FTSTokenizer {
     public let base: any FTSTokenizer

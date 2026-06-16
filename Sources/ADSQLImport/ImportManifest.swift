@@ -63,11 +63,11 @@ public struct ImportManifest: Sendable, Codable {
         }
     }
 
-    /// Build-time denormalization (RFC 0010 F6): extra columns the importer creates
+    /// Build-time denormalization: extra columns the importer creates
     /// WITH `table` (ADSQL has no `ALTER TABLE`) and populates by `UPDATE` AFTER the
     /// row copy + all other tables exist (a lookup reads another imported table). Lets
     /// a consumer serve a denormalized read query with no per-row `LOWER`/`json_extract`
-    /// or JOIN — the F6 win on apple-docs `/search` (≈2.2× vs SQLite at 8-way, RFC §6).
+    /// or JOIN — the win on apple-docs `/search` (≈2.2× vs SQLite at 8-way, RFC §6).
     public struct Denorm: Sendable, Codable {
         public var table: String
         /// Per-row computed columns: `name` ← `valueSQL` (an expression over the row,
@@ -128,7 +128,7 @@ public struct ImportManifest: Sendable, Codable {
     /// zstd-payload table). Auto-introspection imports every regular table except
     /// these + the FTS shadows.
     public var skipTables: [String]
-    /// Build-time denormalization to apply after import (F6), keyed by table.
+    /// Build-time denormalization to apply after import, keyed by table.
     public var denorm: [Denorm]
     public init(ftsTables: [FTSTable] = [], skipTables: [String] = [], denorm: [Denorm] = []) {
         self.ftsTables = ftsTables

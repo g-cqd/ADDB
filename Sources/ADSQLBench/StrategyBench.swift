@@ -1,6 +1,6 @@
 import ADSQL
 
-/// Multi-criteria strategy matrix (RFC 0009 H1). For each (join × evaluator)
+/// Multi-criteria strategy matrix. For each (join × evaluator)
 /// strategy combination, run the `sql` scenario for ADSQL and print its latency
 /// lines under a labeled header; the SQLite arm runs once as the external
 /// baseline. This is the **performance** axis of the seven criteria; the other

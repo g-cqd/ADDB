@@ -11,18 +11,18 @@ import Foundation
 // Scenarios: cold get scan concurrent upsert table sql fts strategy search
 // Default (no scenario args): cold get scan concurrent upsert table.
 // `sql`, `fts`, and `search` are opt-in (heavier): the FTS index build is
-// write-amplified today (F6b), so a bare run would otherwise stall on it — pass
-// the scenario explicitly. `search` is the RFC 0010 §1 apple-docs `/search`
+// write-amplified today, so a bare run would otherwise stall on it — pass
+// the scenario explicitly. `search` is the apple-docs `/search`
 // hot-path measurement (ADSQL `searchPagesFramed` vs SQLite, single-thread latency
 // + 1/2/4/8-thread concurrency scaling); it builds its own apple-docs-shaped corpus.
 //
 // REAL-CORPUS mode for `search`: pass `--corpus <adsql-path> --sqlite <sqlite-path>`
 // to SKIP synthetic generation and measure against pre-built databases instead (the
-// definitive RFC 0010 §1 measurement at the real 4 GB apple-docs scale). Runs the
-// ORIGINAL `searchPagesFramed` only (the real corpus has no F6 denorm columns).
+// definitive measurement at the real 4 GB apple-docs scale). Runs the
+// ORIGINAL `searchPagesFramed` only (the real corpus has no denorm columns).
 // Additionally pass `--corpus-denorm <adsql-path>` (an ADSQL corpus whose documents
-// carry the F6 denorm columns) to ALSO measure `searchPagesFramedDenorm` at real
-// scale — the decisive "does F6 cross SQLite" arm (RFC 0010 §2.2-2.4 "F6").
+// carry the denorm columns) to ALSO measure `searchPagesFramedDenorm` at real
+// scale — the decisive "does cross SQLite" arm.
 
 // Line-buffer stdout so progress prints (corpus build, per-step latency) flush LIVE
 // even when redirected to a file. Fully-buffered output otherwise withholds them until
@@ -121,7 +121,7 @@ do {
                     try StrategyBench.run(engines: engines, dir: dir, config: config)
                 }
             case "search":
-                // RFC 0010 §1 apple-docs `/search` hot path — self-contained matrix over
+                // apple-docs `/search` hot path — self-contained matrix over
                 // both engines (builds the corpus + runs the read passes); run once.
                 if engine == engines.first {
                     try SearchPagesScenario.run(engines: engines, dir: dir, config: config)

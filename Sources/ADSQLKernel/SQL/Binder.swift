@@ -227,7 +227,7 @@ enum Binder {
         let boundJoinsOn = joins.map { bind($0.on) }
         let mergePlan = mergeJoinPlan(joins: joins, boundOn: boundJoinsOn, binding: binding, schema: schema)
         // Apply the captured weights now that every expression has been bound (so a
-        // bm25() anywhere in the projection/ORDER BY is seen). Default to all-ones
+        // bm25 anywhere in the projection/ORDER BY is seen). Default to all-ones
         // for a plain `rank` reference (the table index is the leading table or the
         // join depth).
         var leadingAccess = bindAccess(applyWeights(planning.plan, ftsWeights, depth: 0), binding)
@@ -287,7 +287,7 @@ enum Binder {
         let finalizationReferenced: Set<Int> =
             finalUnknown ? Set(tables.indices) : finalRefs
 
-        // F4 — covering / INCLUDE-index serving: if the chosen leading access is an
+        // — covering / INCLUDE-index serving: if the chosen leading access is an
         // index scan and EVERY base-table column this query still needs is served by
         // that index — the rowid-alias (read from the key) or an INCLUDE column (read
         // from the entry value) — serve rows index-only, with no descent into the base
@@ -301,17 +301,17 @@ enum Binder {
         {
             // Columns of table 0 the executor must still read from a row at the leaf.
             // Sources, exhaustively:
-            //   • projection outputs — always read;
-            //   • the RESIDUAL WHERE (`boundResidual`), NOT the full WHERE: the dropped
-            //     conjuncts are exact equalities the index probe enforces by position
-            //     (`col = const`), so their column is never read from a row — only the
-            //     constant the cursor was seeked to. (`boundResidual` == the residual
-            //     here: this branch is gated to the single-table path where the binder
-            //     applied `removeCovered`.) Using the residual is what lets the canonical
-            //     `SELECT c,d FROM t WHERE a=?` (with `a` a key column) be covering;
-            //   • HAVING / ORDER BY / GROUP BY — read during sort/group;
-            //   • the access probe values — constants/parameters in practice, folded in
-            //     defensively so a future probe shape cannot under-count.
+            // • projection outputs — always read;
+            // • the RESIDUAL WHERE (`boundResidual`), NOT the full WHERE: the dropped
+            // conjuncts are exact equalities the index probe enforces by position
+            // (`col = const`), so their column is never read from a row — only the
+            // constant the cursor was seeked to. (`boundResidual` == the residual
+            // here: this branch is gated to the single-table path where the binder
+            // applied `removeCovered`.) Using the residual is what lets the canonical
+            // `SELECT c,d FROM t WHERE a=?` (with `a` a key column) be covering;
+            // • HAVING / ORDER BY / GROUP BY — read during sort/group;
+            // • the access probe values — constants/parameters in practice, folded in
+            // defensively so a future probe shape cannot under-count.
             // Every source is a *bound* expression, so a base-table reference appears as
             // `.boundColumn(0, c)` this collector sees; an unresolved `.column` would
             // have set `unknownRefs` and disabled the whole branch. This is why the set
@@ -526,7 +526,7 @@ enum Binder {
         }
     }
 
-    /// Adds the COLUMN indices of `table` that `expr` reads to `columns` (F4
+    /// Adds the COLUMN indices of `table` that `expr` reads to `columns` (
     /// covering analysis — the per-table refinement of `collectTableRefs`). Sets
     /// `unknown` for an unresolved/correlated `.column` or a scalar subquery, whose
     /// reachable columns can't be determined here (the caller then refuses to claim
@@ -624,8 +624,8 @@ enum Binder {
         }
     }
 
-    /// Overlays captured bm25() weights onto an `.fts` access plan for the table at
-    /// `depth`; other plans pass through. With no bm25() call the plan keeps the
+    /// Overlays captured bm25 weights onto an `.fts` access plan for the table at
+    /// `depth`; other plans pass through. With no bm25 call the plan keeps the
     /// Planner's default (empty → all-ones at execution), i.e. plain `rank`.
     private static func applyWeights(
         _ access: AccessPlan, _ weights: [Int: [Double]], depth: Int

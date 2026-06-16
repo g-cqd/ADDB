@@ -17,7 +17,7 @@ package enum BTree {
 
     /// Re-expresses an inline value pointer as a `RawSpan` whose lifetime is the
     /// resolver that owns the mapping, so a `~Escapable` `ValueRef.inline` cannot
-    /// outlive the snapshot (Review 0001 F2).
+    /// outlive the snapshot.
     @_lifetime(borrow resolver)
     static func boundInline<R: PageResolver>(
         _ bytes: UnsafeRawBufferPointer, to resolver: borrowing R
@@ -305,7 +305,7 @@ package enum BTree {
     }
 
     /// Page number of the rightmost (max-key) leaf, descending the last child at
-    /// each branch level — mirrors `Cursor.descend(edge: .last)` but returns only
+    /// each branch level — mirrors `Cursor.descend(edge:.last)` but returns only
     /// the leaf page so the append cache can be refreshed after a cold `put`.
     static func rightmostLeaf(ctx: TxnContext, tree: TreeHandle) throws(DBError) -> UInt64? {
         guard tree.rootPage != 0 else { return nil }

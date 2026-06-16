@@ -6,13 +6,13 @@ import Synchronization
 /// materialize "power cut" images honoring barrier ordering:
 ///
 /// - Writes are tagged with a *group*; `sync(.barrier)` and `sync(.full)`
-///   close the current group (ordering boundary).
+/// close the current group (ordering boundary).
 /// - `sync(.full)` additionally pins the durable floor: a crash can never
-///   lose groups at or below it.
+/// lose groups at or below it.
 /// - A crash picks a cut group in `[durableFloor, currentGroup]`: earlier
-///   groups apply fully, the cut group applies per 4 KiB sub-block at random
-///   (writeback may reorder *within* barrier groups, never across), later
-///   groups vanish.
+/// groups apply fully, the cut group applies per 4 KiB sub-block at random
+/// (writeback may reorder *within* barrier groups, never across), later
+/// groups vanish.
 package final class SimulatedDisk: StorageChannel, @unchecked Sendable {
     enum Mutation {
         case write(offset: Int, bytes: [UInt8])

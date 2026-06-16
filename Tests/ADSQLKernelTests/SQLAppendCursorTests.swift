@@ -4,7 +4,7 @@ import Testing
 
 @testable import ADSQLKernel
 
-/// `Insert.appendCursor` (RFC 0009 H5) — the warm rightmost-leaf append fast path.
+/// `Insert.appendCursor` — the warm rightmost-leaf append fast path.
 /// Every test asserts it is byte-identical to the proven `.standard` path AND to
 /// SQLite, keeps `verifyIntegrity(deep:)` clean, and stays correct across leaf
 /// splits, deletes (the rootPage cache invalidation), explicit rowids, OR REPLACE,

@@ -1,4 +1,4 @@
-/// Binding & plan-rewriting transforms for `Binder` (RFC 0009 H2/R4 — split from
+/// Binding & plan-rewriting transforms for `Binder` (split from
 /// Binder.swift). The helpers that rewrite a bound plan's access / trailing /
 /// aggregate parts to slot-resolved column references, strip WHERE conjuncts the
 /// access path already covers, derive join equalities and their below-the-join
@@ -22,13 +22,13 @@ extension Binder {
         case .fts(let table, let query, let weights):
             // The query string is a literal/parameter; bind it like any expression
             // (a stray column ref would just stay `.column` and fail at evaluation).
-            // The weights were already captured/applied from any bm25() call.
+            // The weights were already captured/applied from any bm25 call.
             return .fts(table: table, query: bindColumnsNoWeights(query, binding), weights: weights)
         }
     }
 
     /// `bindColumns` for the access-path expressions (probe values, MATCH query):
-    /// these never contain a bm25() call, so the weight collector is discarded.
+    /// these never contain a bm25 call, so the weight collector is discarded.
     private static func bindColumnsNoWeights(_ expr: SQLExpr, _ binding: QueryBinding) -> SQLExpr {
         var weights: [Int: [Double]] = [:]
         return bindColumns(expr, binding, &weights)

@@ -4,12 +4,12 @@
 /// Grammar (tags chosen so storage classes sort NULL < INTEGER < REAL <
 /// TEXT < BLOB, with gaps for a future unified-numeric tag):
 ///
-///   NULL          : 05
-///   INTEGER       : 10 || 8B BE of (bitPattern XOR 0x8000…)        (sign flip)
-///   REAL          : 18 || 8B BE monotone(double)                   (-0 → +0)
-///   TEXT binary   : 20 || escaped utf8 || 00
-///   TEXT nocase   : 21 || escaped asciiFold(utf8) || 00
-///   BLOB          : 28 || escaped bytes || 00
+/// NULL: 05
+/// INTEGER: 10 || 8B BE of (bitPattern XOR 0x8000…) (sign flip)
+/// REAL: 18 || 8B BE monotone(double) (-0 → +0)
+/// TEXT binary: 20 || escaped utf8 || 00
+/// TEXT nocase: 21 || escaped asciiFold(utf8) || 00
+/// BLOB: 28 || escaped bytes || 00
 ///
 /// Escaping (FoundationDB tuple-layer scheme): every 0x00 payload byte
 /// becomes 0x00 0xFF; the terminator is a bare 0x00. A terminated field
@@ -64,7 +64,7 @@ package enum KeyCodec {
     }
 
     /// TEXT field from raw UTF-8 bytes, applying the NOCASE ASCII fold when
-    /// `collation == .nocase` — identical output to `append(.text(...))`.
+    /// `collation ==.nocase` — identical output to `append(.text(...))`.
     static func appendTextBytes<S: Sequence>(
         _ bytes: S, collation: Collation, to key: inout [UInt8]
     ) where S.Element == UInt8 {

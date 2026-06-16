@@ -9,7 +9,7 @@ public enum Format {
     public static let magicBytes: [UInt8] = Array("ADSQLv0".utf8) + [0]
     public static let lockMagicBytes: [UInt8] = Array("ADSQLLCK".utf8)
 
-    /// v1 (M5/F0): adds the catalog FTS record kind (`0x66`) and its three owned
+    /// v1: adds the catalog FTS record kind (`0x66`) and its three owned
     /// B+trees — gates older readers that would silently ignore FTS tables.
     public static let formatVersion: UInt32 = 1
     public static let pageSize: Int = 16384

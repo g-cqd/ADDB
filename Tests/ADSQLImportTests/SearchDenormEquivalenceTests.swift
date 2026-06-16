@@ -5,10 +5,10 @@ import ADSQLTestSupport
 import CSQLite
 import Testing
 
-/// M8 F6 (RFC 0010 §2.2-2.4, "F6" build-time denormalization) — the CORRECTNESS
+/// — the CORRECTNESS
 /// proof that the denormalized read query is a FAITHFUL rewrite of the §2.2 form.
 ///
-/// F6 trades per-match string/JSON work for cheap comparisons against precomputed
+/// trades per-match string/JSON work for cheap comparisons against precomputed
 /// columns: the tier `CASE` reads `title_lc`/`key_lc` vs a single bound `$raw_lc`
 /// (instead of `LOWER(d.title)`/`LOWER(d.key)`/`LOWER($raw)` per row), the `year`
 /// filter reads `year_num` (instead of `CAST(json_extract(…,'$.year') AS INTEGER)`),
@@ -31,7 +31,7 @@ import Testing
 /// `LOWER`/`CAST`/`json_extract`/`COALESCE` (see `AppleDocsFixture.buildFixture`)
 /// and then imported into ADSQL, byte-equality here transitively proves the denorm
 /// columns themselves are exact — the read query is reading provably-correct folds.
-@Suite("apple-docs F6 denorm-vs-original equivalence (RFC 0010 §2.2-2.4)")
+@Suite("apple-docs denorm-vs-original equivalence")
 struct SearchDenormEquivalenceTests {
     private static var probes: [(String, String)] { AppleDocsFixture.probes }
 
@@ -92,7 +92,7 @@ struct SearchDenormEquivalenceTests {
     }
 
     /// `deprecated_mode` — include/exclude/only over `is_deprecated` (a base-column
-    /// filter, unchanged by F6) through both forms, proving the denorm rewrite did
+    /// filter, unchanged by) through both forms, proving the denorm rewrite did
     /// not perturb the untouched predicates.
     @Test func deprecatedModeDenormEqualsOriginal() throws {
         try AppleDocsFixture.withImportedCorpus { db, _ in
@@ -159,10 +159,10 @@ struct SearchDenormEquivalenceTests {
 
     // MARK: - The denorm-vs-original diff (both on ADSQL)
 
-    /// Runs ``SearchQuery/sql`` (original §2.2) and ``SearchQuery/denormSQL`` (F6) for
+    /// Runs ``SearchQuery/sql`` (original §2.2) and ``SearchQuery/denormSQL`` for
     /// `params` against the SAME ADSQL database and asserts row-for-row, cell-for-cell
     /// equality: same row count, same order, every non-rank cell byte-identical, and
-    /// the bm25 `rank` (col 22) within 1e-9 relative. This is the F6 faithfulness
+    /// the bm25 `rank` (col 22) within 1e-9 relative. This is the faithfulness
     /// proof.
     private func expectDenormEquivalence(
         _ db: Database, _ params: SearchPagesParams, label: String

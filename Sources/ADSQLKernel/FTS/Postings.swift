@@ -1,14 +1,14 @@
-/// FTS postings (M5/F2). A term's posting list is the docid-ascending sequence
+/// FTS postings. A term's posting list is the docid-ascending sequence
 /// of documents containing it, each carrying per-field term frequencies (for
 /// bm25f) and per-field token positions (for phrase queries). The list is stored
-/// as fixed-size **blocks** so the ranked retrieval layer (F4) can skip blocks
+/// as fixed-size **blocks** so the ranked retrieval layer can skip blocks
 /// that cannot enter the top-k (block-max WAND, Ding & Suel 2011).
 ///
 /// Each block header carries `lastDocId` (the block's max docid, for galloping /
 /// skip) and `maxTotalTF` (the max Σ field-tf in the block — the corpus-stable
-/// component of a bm25 impact bound; F4 turns it into a score bound with the
+/// component of a bm25 impact bound; ranking turns it into a score bound with the
 /// live global stats). These are designed in now because the on-disk format is
-/// version-gated and F4 cannot add them retroactively.
+/// version-gated and ranking cannot add them retroactively.
 
 public struct FTSPosting: Equatable, Sendable {
     public var docid: Int64
@@ -33,17 +33,17 @@ public enum FTSPostings {
     public static let blockSize = 128
 
     /// Block layout, per block:
-    ///   varint docCount
-    ///   varint zigzag(firstDocId) || varint zigzag(lastDocId) || varint maxTotalTF
-    ///   FOR-packed docid gaps (F6g): varint gapBits, then the (docCount-1) gaps as
-    ///     fixed-width `gapBits`-bit fields, LSB-first, byte-aligned at the block end
-    ///     (gapBits == 0 when docCount == 1). doc[0] == firstDocId carries no gap.
-    ///   per doc: `columns` varint field-TFs; then (if positions) per column a
-    ///            varint position-count followed by that many varint position gaps
+    /// varint docCount
+    /// varint zigzag(firstDocId) || varint zigzag(lastDocId) || varint maxTotalTF
+    /// FOR-packed docid gaps: varint gapBits, then the (docCount-1) gaps as
+    /// fixed-width `gapBits`-bit fields, LSB-first, byte-aligned at the block end
+    /// (gapBits == 0 when docCount == 1). doc[0] == firstDocId carries no gap.
+    /// per doc: `columns` varint field-TFs; then (if positions) per column a
+    /// varint position-count followed by that many varint position gaps
     /// Value layout: varint blockCount || blocks.
     ///
     /// The docid gaps switched from per-value varint to **frame-of-reference**
-    /// fixed-bit-width packing (F6g): one bit width per block (the bits its max gap
+    /// fixed-bit-width packing: one bit width per block (the bits its max gap
     /// needs), so decode is a branchless bulk-unpack + prefix-sum — no per-value
     /// continuation-bit branching. Byte-alignment at the block end keeps the next
     /// block's header on a byte boundary. The per-doc TF/position payload stays
@@ -169,10 +169,10 @@ public enum FTSPostings {
         return result
     }
 
-    /// Docids only, from a SINGLE-block value (F6d block-per-key storage): reads the
+    /// Docids only, from a SINGLE-block value (block-per-key storage): reads the
     /// block header + docid gaps and STOPS, skipping the per-doc field-TF/position
     /// payload entirely. For membership (`MATCH`) where only docids are needed — the
-    /// skipped payload is the bulk of a long list's bytes (F6e).
+    /// skipped payload is the bulk of a long list's bytes.
     public static func decodeDocids(singleBlock bytes: [UInt8]) throws(DBError) -> [Int64] {
         var offset = 0
         guard Varint.read(bytes, &offset) == 1 else {
@@ -201,7 +201,7 @@ public enum FTSPostings {
 }
 
 /// Frame-of-reference fixed-bit-width packing for a posting block's docid gaps
-/// (F6g). One bit width per block — the bits its single largest gap needs — then
+/// One bit width per block — the bits its single largest gap needs — then
 /// the `(docCount-1)` gaps as that-many-bit fields, LSB-first in a little-endian
 /// bit stream, padded to a byte boundary at the block end (so the next block's
 /// varint header stays byte-aligned). Decode is branchless: a fixed-width field

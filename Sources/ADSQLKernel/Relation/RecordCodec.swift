@@ -3,12 +3,12 @@
 /// column count read missing trailing columns as DEFAULT/NULL, which makes
 /// a future ADD COLUMN free.
 ///
-///   record = varint count || cell*
-///   cell   = 00                       NULL
-///          | 01 || zigzag varint      INTEGER
-///          | 02 || 8B LE bitPattern   REAL
-///          | 03 || varint len || utf8 TEXT
-///          | 04 || varint len || raw  BLOB
+/// record = varint count || cell*
+/// cell = 00 NULL
+/// | 01 || zigzag varint INTEGER
+/// | 02 || 8B LE bitPattern REAL
+/// | 03 || varint len || utf8 TEXT
+/// | 04 || varint len || raw BLOB
 package enum RecordCodec {
     enum CellTag {
         static let null: UInt8 = 0

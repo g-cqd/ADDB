@@ -1,4 +1,4 @@
-/// Join execution for `SelectExecutor` (RFC 0009 H2/R4 — split from the
+/// Join execution for `SelectExecutor` (split from the
 /// 1551-line Executor.swift). The right-recursive nested-loop driver
 /// (`forEachFilteredRow`/`runJoin`) with LEFT null-extension and ON/WHERE
 /// placement, plus the hash and merge equi-join fast paths and their
@@ -33,7 +33,7 @@ extension SelectExecutor {
         guard plan.isJoin else {
             let source = try resolveSource(
                 plan, table: tables[0], index: index, ftsRecords: ftsRecords, env: paramsEnv)
-            // F4 index-only: when the source is a covering scan, decode slot 0 through
+            // index-only: when the source is a covering scan, decode slot 0 through
             // the INCLUDE layout. Currently the binder only marks non-aggregated single-
             // table plans covering (those run via `SelectExecutor.run`, not here), so
             // this stays nil on the aggregate path that reaches `forEachFilteredRow`;
@@ -198,7 +198,7 @@ extension SelectExecutor {
             do throws(DBError) {
                 _ = unsafe try cursor.seek(raw)
                 guard cursor.isValid else { return }
-                // A4: stored index keys are `columns ++ 8-byte rowid`, so `seek` never
+                // stored index keys are `columns ++ 8-byte rowid`, so `seek` never
                 // reports an exact hit on the column prefix — verify the entry's prefix
                 // equals the probe (UNIQUE ⇒ at most one such entry).
                 outcome = .success(
@@ -375,7 +375,7 @@ extension SelectExecutor {
         return true
     }
 
-    /// Merge-join existence/COUNT fast path (RFC 0009 H4/R2). A 2-table INNER
+    /// Merge-join existence/COUNT fast path. A 2-table INNER
     /// existence equi-join whose join-key columns each have a UNIQUE, NOT-NULL,
     /// single-column index (the binder's `mergePlan`; indexes resolved into
     /// `context.mergeIndexes`) needs no per-outer probe: lock-step the two sorted
@@ -420,7 +420,7 @@ extension SelectExecutor {
     }
 
     /// Compares the two cursors' current index keys by their column prefix — the
-    /// bytes before the 8-byte rowid suffix (A4). Both cursors are valid.
+    /// bytes before the 8-byte rowid suffix. Both cursors are valid.
     private static func compareMergeKeyPrefixes<R: PageResolver>(
         _ outer: inout Cursor<R>, _ inner: inout Cursor<R>
     ) throws(DBError) -> Int {
@@ -506,7 +506,7 @@ extension SelectExecutor {
         // `offset+limit` rows in a sorted buffer during the scan instead of
         // materializing and sorting every matched row — and projects the full output
         // tuple ONLY for rows that make the cut (the dominant cost on the apple-docs
-        // `/search` join, RFC 0010: thousands of FTS matches but LIMIT 20). The keep
+        // `/search` join, thousands of FTS matches but LIMIT 20). The keep
         // rule, tie-break (insert-after-equal ⇒ scan order), and final slice are
         // byte-identical to the collect-all + `sortedOrder` + `sliceBounds` path below
         // (`sortedOrder` is stable on `lhs < rhs`, and the FTS docid set arrives in
@@ -578,7 +578,7 @@ extension SelectExecutor {
 /// A fixed-capacity ascending top-N buffer for the join path: holds the best
 /// `capacity` rows seen so far, ordered by `terms`/`collations`. The keep rule,
 /// the insert-after-equal tie-break (so an equal-key run keeps scan order), and
-/// the eventual `sortedRows()` order are identical to the single-table
+/// the eventual `sortedRows` order are identical to the single-table
 /// `SelectExecutor.Accumulator` top-N and the collect-all `sortedOrder` path — so
 /// substituting it never changes results, only how many rows are projected/kept.
 struct TopNBuffer {

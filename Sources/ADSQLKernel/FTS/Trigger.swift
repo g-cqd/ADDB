@@ -1,4 +1,4 @@
-/// Row-trigger firing (M5/F5). After a base-table INSERT/UPDATE/DELETE writes a
+/// Row-trigger firing. After a base-table INSERT/UPDATE/DELETE writes a
 /// row (and its secondary-index entries), the DML path calls `TriggerEngine.fire`
 /// with the affected row(s). The engine looks up the table's AFTER triggers for
 /// that event, evaluates each `WHEN`, and runs the body INSERT/DELETE/UPDATE

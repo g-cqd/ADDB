@@ -11,7 +11,7 @@ import Synchronization
     import Glibc
 #endif
 
-/// RFC 0010 §1 — the apple-docs `/search` "beat SQLite" measurement.
+/// — the apple-docs `/search` "beat SQLite" measurement.
 ///
 /// The apple-docs read engine ceilings at ~32 req/s under 8-way concurrency: a
 /// ~28 ms `/search` query inflates ~4× under load on only ~4 of 8 cores — the
@@ -25,12 +25,12 @@ import Synchronization
 /// doing framing-equivalent work (step every row, read all 24 projected columns
 /// into bytes) — apples-to-apples end to end, not just MATCH. It measures:
 ///
-///   1. single-thread per-request latency (p50/p99) for ADSQL vs SQLite,
-///   2. concurrency scaling — throughput (req/s) + p99 at 1/2/4/8 reader threads
-///      (ADSQL: one shared `Database`, each thread calls `searchPagesFramed`, which
-///      opens its OWN wait-free MVCC `ReadTxn` snapshot per request — no shared
-///      reader/statement to contend on; SQLite: one read-only connection per thread,
-///      WAL) — does ADSQL scale ~linearly while SQLite flattens?
+/// 1. single-thread per-request latency (p50/p99) for ADSQL vs SQLite,
+/// 2. concurrency scaling — throughput (req/s) + p99 at 1/2/4/8 reader threads
+/// (ADSQL: one shared `Database`, each thread calls `searchPagesFramed`, which
+/// opens its OWN wait-free MVCC `ReadTxn` snapshot per request — no shared
+/// reader/statement to contend on; SQLite: one read-only connection per thread,
+/// WAL) — does ADSQL scale ~linearly while SQLite flattens?
 ///
 /// Both engines query byte-identical data (the same deterministic corpus stream).
 /// NOTE: the apple-docs ceiling is at a 4 GB corpus; this synthetic corpus is
@@ -59,7 +59,7 @@ enum SearchPagesScenario {
     /// and keep the whole run to a couple of minutes.
     static let realSingleThreadIterations = 25
 
-    /// Reader-thread counts for the scaling sweep (the RFC 0010 §1 axis).
+    /// Reader-thread counts for the scaling sweep (the axis).
     static let readerCounts = [1, 2, 4, 8]
 
     /// Wall-clock window each scaling step runs (per thread, concurrently).
@@ -76,10 +76,10 @@ enum SearchPagesScenario {
     static func run(engines: [String], dir: String, config: BenchConfig) throws {
         // REAL-CORPUS mode: both `--corpus` and `--sqlite` given ⇒ skip synthetic
         // generation entirely and measure against the pre-built 4 GB databases (the
-        // definitive RFC 0010 §1 measurement). The original §2.2 `searchPagesFramed`
-        // is the always-present arm; `--corpus-denorm` (an ADSQL corpus with the F6
+        // definitive measurement). The original §2.2 `searchPagesFramed`
+        // is the always-present arm; `--corpus-denorm` (an ADSQL corpus with the
         // denorm columns) adds the `searchPagesFramedDenorm` arm — the decisive
-        // "does F6 cross SQLite at real scale" measurement.
+        // "does cross SQLite at real scale" measurement.
         if let adsqlPath = config.realADSQLPath, let sqlitePath = config.realSQLitePath {
             try runRealCorpus(
                 adsqlPath: adsqlPath, sqlitePath: sqlitePath, denormPath: config.realDenormPath)
@@ -115,7 +115,7 @@ enum SearchPagesScenario {
         }
 
         // 1. Single-thread per-request latency (p50/p99), per engine. The ADSQL arm
-        // runs BOTH the original §2.2 framed path and the F6 DENORM framed path
+        // runs BOTH the original §2.2 framed path and the DENORM framed path
         // (`searchPagesFramedDenorm`) so the perf gate shows the before/after on the
         // same corpus alongside the SQLite baseline.
         print("\n  -- single-thread latency (per request) --")
@@ -130,18 +130,18 @@ enum SearchPagesScenario {
         if let sqlitePath { try scaleSQLite(path: sqlitePath, rows: rows) }
     }
 
-    // MARK: - Real-corpus mode (RFC 0010 §1 — the 4 GB apple-docs measurement)
+    // MARK: - Real-corpus mode (the 4 GB apple-docs measurement)
 
     /// The definitive `/search` measurement against the pre-built 4 GB corpora:
     /// ADSQL opens `adsqlPath` (read-only, wait-free MVCC), SQLite opens `sqlitePath`
     /// (read-only, one connection per worker). No synthetic generation — both engines
     /// query the SAME imported apple-docs data, so the compare is real end to end.
     /// The ORIGINAL §2.2 `searchPagesFramed` is the always-present arm; when
-    /// `denormPath` is given (an ADSQL corpus carrying the F6 denorm columns), the
+    /// `denormPath` is given (an ADSQL corpus carrying the denorm columns), the
     /// `searchPagesFramedDenorm` arm runs too. The workload is `SearchWorkload.params`
     /// whose terms (swiftui/view/render/model/…) are real apple-docs API terms.
     static func runRealCorpus(adsqlPath: String, sqlitePath: String, denormPath: String?) throws {
-        print("  REAL-CORPUS mode (RFC 0010 §1 — the definitive 4 GB measurement)")
+        print("  REAL-CORPUS mode (the definitive 4 GB measurement)")
         print("    adsql:        \(adsqlPath)")
         if let denormPath { print("    adsql-denorm: \(denormPath)") }
         print("    sqlite:       \(sqlitePath)")
@@ -180,7 +180,7 @@ enum SearchPagesScenario {
         try scaleRealSQLite(path: sqlitePath)
     }
 
-    /// Cross-corpus DENORM equivalence (RFC 0010 §2.2-2.4 "F6"): proves the denorm
+    /// Cross-corpus DENORM equivalence: proves the denorm
     /// SOURCE was built faithfully by checking, per workload query, that
     /// `searchPagesFramedDenorm` over the denorm corpus and `searchPagesFramed` over
     /// the ORIGINAL corpus agree on (a) the framed row count and (b) the ordered list
@@ -315,7 +315,7 @@ enum SearchPagesScenario {
         print("  [sqlite] SearchQuery.sql + frame  \(histogram.summary())")
     }
 
-    /// Single-thread latency for the F6 DENORM path (`searchPagesFramedDenorm`) on the
+    /// Single-thread latency for the DENORM path (`searchPagesFramedDenorm`) on the
     /// denorm corpus. Same battery as ``singleThreadRealADSQL(path:)`` so the per-query
     /// before/after is directly comparable.
     static func singleThreadRealADSQLDenorm(path: String) throws {
@@ -394,7 +394,7 @@ enum SearchPagesScenario {
         }
     }
 
-    /// Concurrency scaling for the F6 DENORM path on the denorm corpus — the same
+    /// Concurrency scaling for the DENORM path on the denorm corpus — the same
     /// 1/2/4/8 sweep as ``scaleRealADSQL(path:)`` but calling `searchPagesFramedDenorm`,
     /// so the throughput table shows ADSQL(denorm) alongside ADSQL(original) + SQLite.
     static func scaleRealADSQLDenorm(path: String) throws {
@@ -524,7 +524,7 @@ enum SearchPagesScenario {
             options: DatabaseOptions(durability: .none, maxMapSize: 32 << 30, readOnly: true))
         defer { db.close() }
         // Warm: prove the workload hits non-empty results (the framing path is real)
-        // AND that the F6 denorm path returns BYTE-IDENTICAL bytes to the original —
+        // AND that the denorm path returns BYTE-IDENTICAL bytes to the original —
         // a per-run guard that the denorm arm is not silently diverging.
         var warmRows = 0
         for params in SearchWorkload.params {
@@ -555,7 +555,7 @@ enum SearchPagesScenario {
         }
         print("  [adsql]  searchPagesFramed        \(original.summary())")
 
-        // F6 denorm framed path (`searchPagesFramedDenorm`) — the before/after arm.
+        // denorm framed path (`searchPagesFramedDenorm`) — the before/after arm.
         var denorm = LatencyHistogram()
         denorm.reserve(SearchWorkload.params.count * iters)
         for _ in 0..<iters {
@@ -618,7 +618,7 @@ enum SearchPagesScenario {
             }
             printScaling("adsql", threads: threads, result: result, baseline: &baseline)
         }
-        // F6 denorm framed path — the same scaling axis for the before/after compare.
+        // denorm framed path — the same scaling axis for the before/after compare.
         var denormBaseline: Double = 0
         for threads in readerCounts {
             let result = runScaling(threads: threads) { stop, histogram in
@@ -846,7 +846,7 @@ enum RealCorpusError: Error, CustomStringConvertible {
     case brokenFTSImport(terms: [String])
     /// `searchPagesFramedDenorm` on the denorm corpus disagreed with
     /// `searchPagesFramed` on the original corpus for `query` — the denorm SOURCE
-    /// was built wrong (a `LOWER`/`json`/COALESCE mismatch in an F6 column).
+    /// was built wrong (a `LOWER`/`json`/COALESCE mismatch in an column).
     case denormDiverged(
         query: String, originalCount: Int, denormCount: Int,
         originalDocs: [String], denormDocs: [String])

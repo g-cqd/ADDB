@@ -10,7 +10,7 @@ import Foundation
 
 /// SQL-vs-SQL benchmark on the apple-docs `documents` shape: the same DDL,
 /// batched INSERT, point SELECT by unique key, and filtered search-shaped
-/// SELECT issued through each engine's SQL surface — re-measuring the M3
+/// SELECT issued through each engine's SQL surface — re-measuring the
 /// scan/insert gaps now that they flow through lazy rows and the planner.
 enum SQLScenario {
     static let frameworks = ["swiftui", "foundation", "uikit", "appkit", "metal", "swift"]
