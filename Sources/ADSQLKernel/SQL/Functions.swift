@@ -45,7 +45,10 @@ enum SQLFunctions {
                 }
             }
         }
-        precondition(result > 0)
+        // `vsnprintf` returns < 0 only on an encoding error, which cannot happen for a
+        // finite `d` and a `%g` format (callers already handle NaN/Inf). Fall back to
+        // the standard-library rendering rather than crash if it ever does.
+        guard result > 0 else { return String(d) }
         let written = buffer.prefix(while: { $0 != 0 }).map { UInt8(bitPattern: $0) }
         return String(decoding: written, as: UTF8.self)
     }
