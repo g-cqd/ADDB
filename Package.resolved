@@ -1,12 +1,11 @@
 {
-  "originHash" : "8eb2461e3cbb46b8c5e6adbb61d8426c7c1843940dffbc12bdcdf0c2c276f83e",
+  "originHash" : "74b43a7e442e28676656b68f6b5ae5837a9d40629dd4f8052bc8ad52723400a5",
   "pins" : [
     {
       "identity" : "adjson",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/g-cqd/ADJSON.git",
       "state" : {
-        "branch" : "main",
         "revision" : "82d516584d72a404b5fef0d6b0ccd295e139f156"
       }
     },

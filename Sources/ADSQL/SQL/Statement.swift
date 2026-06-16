@@ -247,7 +247,7 @@ public final class Statement: Sendable {
 
     /// Combines a compound (UNION / UNION ALL) by running each arm and applying the
     /// compound's dedup/ORDER BY/LIMIT — always materialized (the dedup/sort spans arms).
-    private static func runCompound(
+    static func runCompound(
         _ compound: BoundCompound, txn: borrowing ReadTxn, params: SQLParameters,
         execution: ExecutionOptions
     ) throws(DBError) -> [SQLRow] {
@@ -268,7 +268,7 @@ public final class Statement: Sendable {
         return try SelectExecutor.finishCompound(combined, compound: compound, params: params)
     }
 
-    private static func runSelect(
+    static func runSelect(
         _ plan: BoundSelect, txn: borrowing ReadTxn, params: SQLParameters,
         execution: ExecutionOptions = .default,
         sink: (([Value]) throws(DBError) -> Bool)? = nil
