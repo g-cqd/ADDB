@@ -116,4 +116,31 @@ struct SQLStrategyMatrixTests {
             }
         }
     }
+
+    /// A deep WHERE chain exercises the whole pipeline (binder ref-walks, planner
+    /// conjunct split, invariant folding, and both evaluators) iteratively. Within
+    /// the depth bound it runs and agrees across evaluators; past the bound it is
+    /// rejected at prepare under every evaluator — never overflowing a consumer or
+    /// the recursive `indirect enum` teardown.
+    @Test func deepWhereChainUnderEveryEvaluator() throws {
+        let dir = TempDir()
+        defer { dir.cleanup() }
+        let within = Array(repeating: "id >= 1", count: 250).joined(separator: " AND ")
+        let overlong = Array(repeating: "id >= 1", count: 5000).joined(separator: " AND ")
+        var reference: [[Value]]?
+        for evaluator in Self.evaluators {
+            let db = try MatrixFixture.make(dir, evaluator: evaluator)
+            defer { db.close() }
+            let rows = try db.prepare("SELECT count(*) FROM t WHERE \(within)").all().map(\.values)
+            if let reference {
+                #expect(rowsMatch(rows, reference, ordered: false), "\(evaluator)")
+            } else {
+                reference = rows
+            }
+            var threw = false
+            do { _ = try db.prepare("SELECT count(*) FROM t WHERE \(overlong)") } catch { threw = true }
+            #expect(threw, "\(evaluator) should reject the overlong WHERE")
+        }
+        #expect(reference == [[.integer(25)]])  // all 25 rows match the within-limit chain
+    }
 }

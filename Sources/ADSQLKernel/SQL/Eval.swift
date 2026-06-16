@@ -241,7 +241,12 @@ enum SQLEval {
             let isNull = try evaluate(inner, env).isNull
             return .integer((isNull != negated) ? 1 : 0)
         case .binary(.and, let l, let r):
-            // Short circuit per 3VL: false AND x = false.
+            // Short circuit per 3VL: false AND x = false. A left-leaning chain (l is
+            // itself AND) is flattened to a loop so `a AND b AND … (N)` cannot
+            // overflow; the common non-chained case stays allocation-free here.
+            if case .binary(.and, _, _) = l {
+                return try evaluateBooleanChain(expr, env, op: .and)
+            }
             let lt = try truthOf(l, env)
             if lt == .no { return .integer(0) }
             let rt = try truthOf(r, env)
@@ -249,6 +254,9 @@ enum SQLEval {
             if lt == .yes && rt == .yes { return .integer(1) }
             return .null
         case .binary(.or, let l, let r):
+            if case .binary(.or, _, _) = l {
+                return try evaluateBooleanChain(expr, env, op: .or)
+            }
             let lt = try truthOf(l, env)
             if lt == .yes { return .integer(1) }
             let rt = try truthOf(r, env)
@@ -355,6 +363,38 @@ enum SQLEval {
         truth(try evaluate(expr, env))
     }
 
+    /// Evaluates a left-leaning `AND`/`OR` chain iteratively: flatten the spine to
+    /// operands, then short-circuit left to right under three-valued logic — `.no`
+    /// ends an `AND` with 0, `.yes` ends an `OR` with 1; otherwise a NULL with no
+    /// decisive operand yields NULL, else the unit (1 for AND, 0 for OR). Identical
+    /// to the recursive 2-operand form (each spine node evaluates its left subtree
+    /// then its right, short-circuiting on its left), so evaluation order, NULL
+    /// handling, and which operands run on a short circuit are all preserved — but a
+    /// chain of any length runs in a loop instead of overflowing the stack.
+    private static func evaluateBooleanChain(
+        _ expr: SQLExpr, _ env: SQLEvalEnv, op: SQLBinaryOp
+    ) throws(DBError) -> Value {
+        var operands: [SQLExpr] = []
+        var node = expr
+        while case .binary(let o, let l, let r) = node, o == op {
+            operands.append(r)
+            node = l
+        }
+        operands.append(node)  // leftmost (deepest) operand
+        var sawNull = false
+        for operand in operands.reversed() {
+            let t = try truthOf(operand, env)
+            if op == .and {
+                if t == .no { return .integer(0) }
+            } else if t == .yes {
+                return .integer(1)
+            }
+            if t == .unknown { sawNull = true }
+        }
+        if op == .and { return sawNull ? .null : .integer(1) }
+        return sawNull ? .null : .integer(0)
+    }
+
     static func predicate(of truth: Truth) -> Value {
         truth.asValue
     }
@@ -381,39 +421,50 @@ enum SQLEval {
     /// `MATCH` (an access path that throws if row-evaluated). Mirrors the binder's
     /// `collectTableRefs`/`referencesOnlyBelow` walks so it cannot miss a case.
     static func isInvariant(_ expr: SQLExpr) -> Bool {
-        switch expr {
-        case .literal, .parameter:
-            return true
-        case .column, .boundColumn, .aggregateResult, .scalarSubquery:
-            // Row value / aggregate group value / per-row subquery result: never
-            // constant across the rows (or the database state) of one execution.
-            return false
-        case .binary(.match, _, _):
-            // An access path the planner consumes; row-evaluating it is an error.
-            return false
-        case .function(let name, let args, _, _):
-            if nonDeterministicFunctions.contains(name.uppercased()) { return false }
-            return args.allSatisfy(isInvariant)
-        case .binary(_, let l, let r):
-            return isInvariant(l) && isInvariant(r)
-        case .unary(_, let inner), .cast(let inner, _), .collate(let inner, _):
-            return isInvariant(inner)
-        case .isNull(let inner, _):
-            return isInvariant(inner)
-        case .like(let subject, let pattern, _):
-            return isInvariant(subject) && isInvariant(pattern)
-        case .inList(let subject, let items, _):
-            return isInvariant(subject) && items.allSatisfy(isInvariant)
-        case .inJSONEach(let subject, let source, _):
-            return isInvariant(subject) && isInvariant(source)
-        case .caseWhen(let operand, let whens, let elseExpr):
-            if let operand, !isInvariant(operand) { return false }
-            for when in whens where !isInvariant(when.condition) || !isInvariant(when.result) {
+        // Iterative worklist: any row/aggregate/subquery reference, `MATCH`, or
+        // non-deterministic function disqualifies the whole expression. Order is
+        // irrelevant (logical AND over every subnode), so a deep chain is safe.
+        var stack: [SQLExpr] = [expr]
+        while let e = stack.popLast() {
+            switch e {
+            case .literal, .parameter:
+                break
+            case .column, .boundColumn, .aggregateResult, .scalarSubquery:
+                // Row value / aggregate group value / per-row subquery result: never
+                // constant across the rows (or the database state) of one execution.
                 return false
+            case .binary(.match, _, _):
+                // An access path the planner consumes; row-evaluating it is an error.
+                return false
+            case .function(let name, let args, _, _):
+                if nonDeterministicFunctions.contains(name.uppercased()) { return false }
+                stack.append(contentsOf: args)
+            case .binary(_, let l, let r):
+                stack.append(l)
+                stack.append(r)
+            case .unary(_, let inner), .cast(let inner, _), .collate(let inner, _):
+                stack.append(inner)
+            case .isNull(let inner, _):
+                stack.append(inner)
+            case .like(let subject, let pattern, _):
+                stack.append(subject)
+                stack.append(pattern)
+            case .inList(let subject, let items, _):
+                stack.append(subject)
+                stack.append(contentsOf: items)
+            case .inJSONEach(let subject, let source, _):
+                stack.append(subject)
+                stack.append(source)
+            case .caseWhen(let operand, let whens, let elseExpr):
+                if let operand { stack.append(operand) }
+                for when in whens {
+                    stack.append(when.condition)
+                    stack.append(when.result)
+                }
+                if let elseExpr { stack.append(elseExpr) }
             }
-            if let elseExpr, !isInvariant(elseExpr) { return false }
-            return true
         }
+        return true
     }
 
     /// Query-invariant subexpression hoisting (constant folding with bound
@@ -475,11 +526,23 @@ enum SQLEval {
             return .binary(
                 op, try foldInvariant(l, env, affinityCritical: true),
                 try foldInvariant(r, env, affinityCritical: true))
-        case .binary(let op, let l, let r):
+        case .binary:
             // Non-comparison (AND/OR/concat/arithmetic/json/MATCH): operands are not
-            // affinity-critical. `.match` reaches here too (never invariant); its
-            // operands are an FTS ref + query, so folding them is a correct no-op.
-            return .binary(op, try foldInvariant(l, env), try foldInvariant(r, env))
+            // affinity-critical. Flatten the left-leaning spine iteratively so a long
+            // chain (notably AND/OR) cannot overflow, folding each right operand and the
+            // base, then rebuild the identical left-leaning tree. `.match` reaches here
+            // too (never invariant); folding its FTS-ref/query operands is a no-op.
+            var rights: [(SQLBinaryOp, SQLExpr)] = []
+            var node = expr
+            while case .binary(let op, let l, let r) = node, !op.isComparison {
+                rights.append((op, r))
+                node = l
+            }
+            var acc = try foldInvariant(node, env)
+            for (op, r) in rights.reversed() {
+                acc = .binary(op, acc, try foldInvariant(r, env))
+            }
+            return acc
         case .unary(let op, let inner):
             return .unary(op, try foldInvariant(inner, env))
         case .cast(let inner, let type):

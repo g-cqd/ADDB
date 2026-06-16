@@ -325,6 +325,48 @@ struct SQLEvalSemanticsTests {
         }
     }
 
+    // MARK: - Operator-chain depth (iterative, no recursion or teardown overflow)
+
+    @Test func booleanChainsWithinLimitEvaluateAndShortCircuit() throws {
+        // A chain within the depth bound evaluates via the iterative AND/OR path and
+        // short-circuits left to right under three-valued logic.
+        let n = 250
+        let allTrue = Array(repeating: "1=1", count: n).joined(separator: " AND ")
+        #expect(try adsqlEval(allTrue) == .integer(1))
+        #expect(try adsqlEval(allTrue + " AND 1=0") == .integer(0))  // a false ends it
+        #expect(try adsqlEval(allTrue + " AND NULL") == .null)  // 3VL: NULL, no decisive operand
+        let allFalse = Array(repeating: "1=0", count: n).joined(separator: " OR ")
+        #expect(try adsqlEval(allFalse) == .integer(0))
+        #expect(try adsqlEval(allFalse + " OR 1=1") == .integer(1))  // a true ends it
+        #expect(try adsqlEval(allFalse + " OR NULL") == .null)
+    }
+
+    @Test func booleanChainWithinLimitMatchesSQLite() throws {
+        // A moderately deep chain must match the oracle exactly (value + 3VL).
+        let sqlite = SQLiteScratch()
+        let and = Array(repeating: "1=1", count: 200).joined(separator: " AND ") + " AND 1=0"
+        let or = Array(repeating: "1=0", count: 200).joined(separator: " OR ") + " OR NULL"
+        #expect(try adsqlEval(and) == (try sqlite.eval(and)))
+        #expect(try adsqlEval(or) == (try sqlite.eval(or)))
+    }
+
+    @Test func overlongChainsRejectedNotOverflow() throws {
+        // Past the depth bound, every operator family (AND/OR, comparison, arithmetic)
+        // must fail with a syntax error during parsing — before a deep node graph
+        // exists — never overflowing a consumer or the recursive ARC teardown. Manual
+        // do/catch (the Swift 6.4 typed-throws cast miscompile breaks `#expect(throws:)`).
+        func rejects(_ expr: String) -> Bool {
+            do {
+                _ = try adsqlEval(expr)
+                return false
+            } catch { return true }
+        }
+        #expect(rejects(Array(repeating: "1=1", count: 5000).joined(separator: " AND ")))
+        #expect(rejects(Array(repeating: "1=0", count: 5000).joined(separator: " OR ")))
+        #expect(rejects(Array(repeating: "1", count: 5000).joined(separator: "=")))  // 1=1=…=1
+        #expect(rejects(Array(repeating: "1", count: 5000).joined(separator: "+")))  // 1+1+…+1
+    }
+
     @Test func intFloatCompareEdges() {
         // (Int64, Double, expected sign)
         let cases: [(Int64, Double, Int)] = [

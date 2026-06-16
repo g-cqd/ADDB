@@ -305,10 +305,7 @@ enum Planner {
     // MARK: - Conjunct classification
 
     private static func conjuncts(_ expr: SQLExpr) -> [SQLExpr] {
-        if case .binary(.and, let lhs, let rhs) = expr {
-            return conjuncts(lhs) + conjuncts(rhs)
-        }
-        return [expr]
+        expr.andConjuncts()
     }
 
     /// The MATCH conjunct constraining FTS table `source`, as

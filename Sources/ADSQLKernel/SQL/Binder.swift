@@ -463,38 +463,43 @@ enum Binder {
     private static func collectTableRefs(
         _ expr: SQLExpr, into refs: inout Set<Int>, unknown: inout Bool
     ) {
-        switch expr {
-        case .boundColumn(let table, _):
-            refs.insert(table)
-        case .column, .scalarSubquery:
-            unknown = true
-        case .literal, .parameter, .aggregateResult:
-            break
-        case .binary(_, let l, let r):
-            collectTableRefs(l, into: &refs, unknown: &unknown)
-            collectTableRefs(r, into: &refs, unknown: &unknown)
-        case .unary(_, let i), .cast(let i, _), .collate(let i, _):
-            collectTableRefs(i, into: &refs, unknown: &unknown)
-        case .isNull(let i, _):
-            collectTableRefs(i, into: &refs, unknown: &unknown)
-        case .like(let s, let p, _):
-            collectTableRefs(s, into: &refs, unknown: &unknown)
-            collectTableRefs(p, into: &refs, unknown: &unknown)
-        case .inList(let s, let items, _):
-            collectTableRefs(s, into: &refs, unknown: &unknown)
-            for item in items { collectTableRefs(item, into: &refs, unknown: &unknown) }
-        case .inJSONEach(let s, let src, _):
-            collectTableRefs(s, into: &refs, unknown: &unknown)
-            collectTableRefs(src, into: &refs, unknown: &unknown)
-        case .caseWhen(let operand, let whens, let elseExpr):
-            if let operand { collectTableRefs(operand, into: &refs, unknown: &unknown) }
-            for when in whens {
-                collectTableRefs(when.condition, into: &refs, unknown: &unknown)
-                collectTableRefs(when.result, into: &refs, unknown: &unknown)
+        // Iterative worklist: a deep operator chain cannot overflow. Order is
+        // irrelevant — the result is set accumulation over every reachable leaf.
+        var stack: [SQLExpr] = [expr]
+        while let e = stack.popLast() {
+            switch e {
+            case .boundColumn(let table, _):
+                refs.insert(table)
+            case .column, .scalarSubquery:
+                unknown = true
+            case .literal, .parameter, .aggregateResult:
+                break
+            case .binary(_, let l, let r):
+                stack.append(l)
+                stack.append(r)
+            case .unary(_, let i), .cast(let i, _), .collate(let i, _):
+                stack.append(i)
+            case .isNull(let i, _):
+                stack.append(i)
+            case .like(let s, let p, _):
+                stack.append(s)
+                stack.append(p)
+            case .inList(let s, let items, _):
+                stack.append(s)
+                stack.append(contentsOf: items)
+            case .inJSONEach(let s, let src, _):
+                stack.append(s)
+                stack.append(src)
+            case .caseWhen(let operand, let whens, let elseExpr):
+                if let operand { stack.append(operand) }
+                for when in whens {
+                    stack.append(when.condition)
+                    stack.append(when.result)
+                }
+                if let elseExpr { stack.append(elseExpr) }
+            case .function(_, let args, _, _):
+                stack.append(contentsOf: args)
             }
-            if let elseExpr { collectTableRefs(elseExpr, into: &refs, unknown: &unknown) }
-        case .function(_, let args, _, _):
-            for arg in args { collectTableRefs(arg, into: &refs, unknown: &unknown) }
         }
     }
 
@@ -531,38 +536,44 @@ enum Binder {
     private static func collectColumnRefs(
         _ expr: SQLExpr, table: Int, into columns: inout Set<Int>, unknown: inout Bool
     ) {
-        switch expr {
-        case .boundColumn(let t, let c):
-            if t == table { columns.insert(c) }
-        case .column, .scalarSubquery:
-            unknown = true
-        case .literal, .parameter, .aggregateResult:
-            break
-        case .binary(_, let l, let r):
-            collectColumnRefs(l, table: table, into: &columns, unknown: &unknown)
-            collectColumnRefs(r, table: table, into: &columns, unknown: &unknown)
-        case .unary(_, let i), .cast(let i, _), .collate(let i, _):
-            collectColumnRefs(i, table: table, into: &columns, unknown: &unknown)
-        case .isNull(let i, _):
-            collectColumnRefs(i, table: table, into: &columns, unknown: &unknown)
-        case .like(let s, let p, _):
-            collectColumnRefs(s, table: table, into: &columns, unknown: &unknown)
-            collectColumnRefs(p, table: table, into: &columns, unknown: &unknown)
-        case .inList(let s, let items, _):
-            collectColumnRefs(s, table: table, into: &columns, unknown: &unknown)
-            for item in items { collectColumnRefs(item, table: table, into: &columns, unknown: &unknown) }
-        case .inJSONEach(let s, let src, _):
-            collectColumnRefs(s, table: table, into: &columns, unknown: &unknown)
-            collectColumnRefs(src, table: table, into: &columns, unknown: &unknown)
-        case .caseWhen(let operand, let whens, let elseExpr):
-            if let operand { collectColumnRefs(operand, table: table, into: &columns, unknown: &unknown) }
-            for when in whens {
-                collectColumnRefs(when.condition, table: table, into: &columns, unknown: &unknown)
-                collectColumnRefs(when.result, table: table, into: &columns, unknown: &unknown)
+        // Iterative worklist mirroring `collectTableRefs`: a deep operator chain
+        // cannot overflow, and it still visits every reachable leaf (no early-out),
+        // so index-only covering analysis can never under-count a column reference.
+        var stack: [SQLExpr] = [expr]
+        while let e = stack.popLast() {
+            switch e {
+            case .boundColumn(let t, let c):
+                if t == table { columns.insert(c) }
+            case .column, .scalarSubquery:
+                unknown = true
+            case .literal, .parameter, .aggregateResult:
+                break
+            case .binary(_, let l, let r):
+                stack.append(l)
+                stack.append(r)
+            case .unary(_, let i), .cast(let i, _), .collate(let i, _):
+                stack.append(i)
+            case .isNull(let i, _):
+                stack.append(i)
+            case .like(let s, let p, _):
+                stack.append(s)
+                stack.append(p)
+            case .inList(let s, let items, _):
+                stack.append(s)
+                stack.append(contentsOf: items)
+            case .inJSONEach(let s, let src, _):
+                stack.append(s)
+                stack.append(src)
+            case .caseWhen(let operand, let whens, let elseExpr):
+                if let operand { stack.append(operand) }
+                for when in whens {
+                    stack.append(when.condition)
+                    stack.append(when.result)
+                }
+                if let elseExpr { stack.append(elseExpr) }
+            case .function(_, let args, _, _):
+                stack.append(contentsOf: args)
             }
-            if let elseExpr { collectColumnRefs(elseExpr, table: table, into: &columns, unknown: &unknown) }
-        case .function(_, let args, _, _):
-            for arg in args { collectColumnRefs(arg, table: table, into: &columns, unknown: &unknown) }
         }
     }
 

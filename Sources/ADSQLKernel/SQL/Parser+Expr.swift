@@ -8,7 +8,7 @@ extension SQLParser {
     /// operand currently being parsed completes. Replaces a recursive-descent call
     /// frame, so nesting depth lives on the heap, not the call stack.
     enum ExprPending {
-        case binary(SQLBinaryOp, lhs: SQLExpr, resumeBP: Int)
+        case binary(SQLBinaryOp, lhs: SQLExpr, lhsDepth: Int, resumeBP: Int)
         case unary(SQLUnaryOp, resumeBP: Int)
         case group(resumeBP: Int)
     }
@@ -36,6 +36,21 @@ extension SQLParser {
                 throw DBError.sqlSyntax(message: "expression nesting too deep", offset: current.offset)
             }
             pending.append(frame)
+        }
+        // Depth of the subtree currently held in `value`. Bounded incrementally as the
+        // tree is *built* (not after), so a crafted operator chain — `1=1=…`, `1+1+…`,
+        // and `AND`/`OR` chains — is rejected with a syntax error before a deep
+        // `indirect enum` node graph exists to recurse a consumer (or the recursive
+        // ARC teardown) into a stack overflow. Re-entrant sub-expressions (equality
+        // RHS, CASE/CAST/call/subquery operands) count as a leaf here but are bounded
+        // by their own `climb`, so the true height stays within a small multiple of
+        // the cap.
+        var valueDepth = 1
+        func deepen() throws(DBError) {
+            valueDepth += 1
+            guard valueDepth <= Self.maxExpressionTreeDepth else {
+                throw DBError.sqlSyntax(message: "expression is too deeply nested", offset: current.offset)
+            }
         }
         operand: while true {
             // Operand position: consume a prefix run, then a primary (or open a group).
@@ -82,27 +97,30 @@ extension SQLParser {
                 break prefix
             }
             // Operator position: run the infix loop at `minBP`, then settle one frame.
+            valueDepth = 1  // a freshly parsed primary/prefix operand is a leaf
             infix: while true {
                 if let bp = infixBP(), bp >= minBP {
                     switch bp {
                     case Self.bpCollate:
                         _ = matchKeyword("COLLATE")
                         value = .collate(value, try collationName())
+                        try deepen()
                     case Self.bpEquality:
                         value = try equalitySuffix(value)
+                        try deepen()
                     case Self.bpAnd:
                         _ = matchKeyword("AND")
-                        try push(.binary(.and, lhs: value, resumeBP: minBP))
+                        try push(.binary(.and, lhs: value, lhsDepth: valueDepth, resumeBP: minBP))
                         minBP = Self.bpAnd + 1
                         continue operand
                     case Self.bpOr:
                         _ = matchKeyword("OR")
-                        try push(.binary(.or, lhs: value, resumeBP: minBP))
+                        try push(.binary(.or, lhs: value, lhsDepth: valueDepth, resumeBP: minBP))
                         minBP = Self.bpOr + 1
                         continue operand
                     default:
                         let op = try consumeSimpleBinary()
-                        try push(.binary(op, lhs: value, resumeBP: minBP))
+                        try push(.binary(op, lhs: value, lhsDepth: valueDepth, resumeBP: minBP))
                         minBP = bp + 1
                         continue operand
                     }
@@ -110,11 +128,17 @@ extension SQLParser {
                 }
                 guard let top = pending.popLast() else { return value }
                 switch top {
-                case .binary(let op, let lhs, let resumeBP):
+                case .binary(let op, let lhs, let lhsDepth, let resumeBP):
                     value = .binary(op, lhs, value)
+                    valueDepth = max(lhsDepth, valueDepth) + 1
+                    guard valueDepth <= Self.maxExpressionTreeDepth else {
+                        throw DBError.sqlSyntax(
+                            message: "expression is too deeply nested", offset: current.offset)
+                    }
                     minBP = resumeBP
                 case .unary(let op, let resumeBP):
                     value = .unary(op, value)
+                    try deepen()
                     minBP = resumeBP
                 case .group(let resumeBP):
                     try expectSymbol(")")

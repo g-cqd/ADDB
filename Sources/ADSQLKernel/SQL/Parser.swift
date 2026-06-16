@@ -13,6 +13,17 @@ struct SQLParser {
     /// (512 KiB Dispatch-thread) debug stack while comfortably exceeding any real
     /// query's nesting.
     static let maxExprDepth = 48
+    /// Bound on an expression's operator-nesting depth, enforced *incrementally* as
+    /// the tree is built in `climb` (not post-parse), so a crafted chain — `1=1=…=1`,
+    /// `1+1+…`, or a long `AND`/`OR` run — is rejected with a syntax error before a
+    /// deep `indirect enum SQLExpr` graph exists. That graph is the real hazard: even
+    /// with iterative consumers, the compiler-generated recursive ARC teardown of a
+    /// many-thousand-deep node graph overflows the stack on release. Re-entrant
+    /// sub-expressions (equality RHS, CASE/CAST/call operands) are each bounded by
+    /// their own `climb`, so the true height stays within a small multiple of this
+    /// value — chosen generously versus any real query yet far below the teardown
+    /// limit even on a small (512 KiB) stack.
+    static let maxExpressionTreeDepth = 256
 
     mutating func enterExprNesting() throws(DBError) {
         exprDepth += 1

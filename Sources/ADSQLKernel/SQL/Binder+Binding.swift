@@ -64,11 +64,7 @@ extension Binder {
     /// matches them.
     static func removeCovered(_ expr: SQLExpr?, _ covered: [SQLExpr]) -> SQLExpr? {
         guard let expr, !covered.isEmpty else { return expr }
-        func conjuncts(_ e: SQLExpr) -> [SQLExpr] {
-            if case .binary(.and, let lhs, let rhs) = e { return conjuncts(lhs) + conjuncts(rhs) }
-            return [e]
-        }
-        let kept = conjuncts(expr).filter { conjunct in !covered.contains { $0 == conjunct } }
+        let kept = expr.andConjuncts().filter { conjunct in !covered.contains { $0 == conjunct } }
         guard let first = kept.first else { return nil }
         return kept.dropFirst().reduce(first) { .binary(.and, $0, $1) }
     }
@@ -80,12 +76,8 @@ extension Binder {
     static func joinEqualities(
         _ on: SQLExpr, binding: QueryBinding, innerDepth: Int
     ) -> [(column: Int, value: SQLExpr, source: SQLExpr)] {
-        func conj(_ e: SQLExpr) -> [SQLExpr] {
-            if case .binary(.and, let l, let r) = e { return conj(l) + conj(r) }
-            return [e]
-        }
         var out: [(column: Int, value: SQLExpr, source: SQLExpr)] = []
-        for clause in conj(on) {
+        for clause in on.andConjuncts() {
             guard case .binary(.eq, let lhs, let rhs) = clause else { continue }
             if let column = innerColumn(lhs, binding: binding, depth: innerDepth),
                 referencesOnlyBelow(rhs, depth: innerDepth, binding: binding)
@@ -114,34 +106,45 @@ extension Binder {
     private static func referencesOnlyBelow(
         _ expr: SQLExpr, depth: Int, binding: QueryBinding
     ) -> Bool {
-        func below(_ e: SQLExpr) -> Bool { referencesOnlyBelow(e, depth: depth, binding: binding) }
-        switch expr {
-        case .literal, .parameter:
-            return true
-        case .column(let qualifier, let name, _):
-            guard let (table, _) = binding.resolve(qualifier: qualifier, name: name) else { return false }
-            return table < depth
-        case .boundColumn(let table, _):
-            return table < depth
-        case .scalarSubquery, .inJSONEach, .aggregateResult:
-            return false
-        case .collate(let inner, _), .cast(let inner, _), .unary(_, let inner):
-            return below(inner)
-        case .isNull(let inner, _):
-            return below(inner)
-        case .binary(_, let lhs, let rhs):
-            return below(lhs) && below(rhs)
-        case .like(let subject, let pattern, _):
-            return below(subject) && below(pattern)
-        case .inList(let subject, let items, _):
-            return below(subject) && items.allSatisfy(below)
-        case .caseWhen(let operand, let whens, let elseExpr):
-            return (operand.map(below) ?? true)
-                && whens.allSatisfy { below($0.condition) && below($0.result) }
-                && (elseExpr.map(below) ?? true)
-        case .function(_, let args, _, _):
-            return args.allSatisfy(below)
+        // Iterative worklist: a deep operator chain cannot overflow. Any reference
+        // at/above `depth`, or any subquery/aggregate, fails the whole expression.
+        var stack: [SQLExpr] = [expr]
+        while let e = stack.popLast() {
+            switch e {
+            case .literal, .parameter:
+                break
+            case .column(let qualifier, let name, _):
+                guard let (table, _) = binding.resolve(qualifier: qualifier, name: name), table < depth
+                else { return false }
+            case .boundColumn(let table, _):
+                guard table < depth else { return false }
+            case .scalarSubquery, .inJSONEach, .aggregateResult:
+                return false
+            case .collate(let inner, _), .cast(let inner, _), .unary(_, let inner):
+                stack.append(inner)
+            case .isNull(let inner, _):
+                stack.append(inner)
+            case .binary(_, let lhs, let rhs):
+                stack.append(lhs)
+                stack.append(rhs)
+            case .like(let subject, let pattern, _):
+                stack.append(subject)
+                stack.append(pattern)
+            case .inList(let subject, let items, _):
+                stack.append(subject)
+                stack.append(contentsOf: items)
+            case .caseWhen(let operand, let whens, let elseExpr):
+                if let operand { stack.append(operand) }
+                for w in whens {
+                    stack.append(w.condition)
+                    stack.append(w.result)
+                }
+                if let elseExpr { stack.append(elseExpr) }
+            case .function(_, let args, _, _):
+                stack.append(contentsOf: args)
+            }
         }
+        return true
     }
 
     static func appendAllColumns(_ table: TableBinding, to outputs: inout [BoundOutput]) {

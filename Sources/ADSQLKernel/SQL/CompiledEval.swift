@@ -44,23 +44,50 @@ enum CompiledEval {
         case .isNull(let inner, let negated):
             guard let inner = sub(inner) else { return nil }
             return { () throws(DBError) -> Value in .integer((try inner().isNull != negated) ? 1 : 0) }
-        case .binary(.and, let l, let r):
-            guard let cl = sub(l), let cr = sub(r) else { return nil }
-            return { () throws(DBError) -> Value in
-                let lt = SQLEval.truth(try cl())
-                if lt == .no { return .integer(0) }
-                let rt = SQLEval.truth(try cr())
-                if rt == .no { return .integer(0) }
-                return (lt == .yes && rt == .yes) ? .integer(1) : .null
+        case .binary(.and, _, _), .binary(.or, _, _):
+            // Flatten the left-leaning AND/OR spine into operand thunks and emit ONE
+            // looping closure, so neither compilation (`sub`) nor per-row evaluation
+            // recurses down the chain — `a AND b AND … (N)` is safe, and the per-row
+            // path is allocation-free (the thunk array is built once at compile time).
+            // Short-circuit + 3VL match the recursive 2-operand form exactly.
+            guard case .binary(let chainOp, _, _) = expr else { return nil }
+            var operands: [SQLExpr] = []
+            var node = expr
+            while case .binary(let o, let l, let r) = node, o == chainOp {
+                operands.append(r)
+                node = l
             }
-        case .binary(.or, let l, let r):
-            guard let cl = sub(l), let cr = sub(r) else { return nil }
+            operands.append(node)  // leftmost (deepest) operand
+            operands.reverse()  // left-to-right
+            var thunks: [Thunk] = []
+            thunks.reserveCapacity(operands.count)
+            for operand in operands {
+                guard let t = sub(operand) else { return nil }
+                thunks.append(t)
+            }
+            if chainOp == .and {
+                return { () throws(DBError) -> Value in
+                    var sawNull = false
+                    for t in thunks {
+                        switch SQLEval.truth(try t()) {
+                        case .no: return .integer(0)
+                        case .unknown: sawNull = true
+                        case .yes: break
+                        }
+                    }
+                    return sawNull ? .null : .integer(1)
+                }
+            }
             return { () throws(DBError) -> Value in
-                let lt = SQLEval.truth(try cl())
-                if lt == .yes { return .integer(1) }
-                let rt = SQLEval.truth(try cr())
-                if rt == .yes { return .integer(1) }
-                return (lt == .no && rt == .no) ? .integer(0) : .null
+                var sawNull = false
+                for t in thunks {
+                    switch SQLEval.truth(try t()) {
+                    case .yes: return .integer(1)
+                    case .unknown: sawNull = true
+                    case .no: break
+                    }
+                }
+                return sawNull ? .null : .integer(0)
             }
         case .binary(let op, let l, let r) where op.isComparison:
             guard let cl = sub(l), let cr = sub(r) else { return nil }

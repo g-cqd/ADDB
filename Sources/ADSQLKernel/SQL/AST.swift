@@ -33,6 +33,25 @@ public struct SQLWhen: Equatable, Sendable {
     public var result: SQLExpr
 }
 
+extension SQLExpr {
+    /// The top-level `AND` conjuncts, left to right, flattening a chain of any
+    /// depth iteratively — so `a AND b AND … (N)` cannot overflow the stack. A
+    /// non-`AND` expression yields `[self]`.
+    func andConjuncts() -> [SQLExpr] {
+        var out: [SQLExpr] = []
+        var stack: [SQLExpr] = [self]
+        while let node = stack.popLast() {
+            if case .binary(.and, let lhs, let rhs) = node {
+                stack.append(rhs)
+                stack.append(lhs)
+            } else {
+                out.append(node)
+            }
+        }
+        return out
+    }
+}
+
 public enum SQLBinaryOp: String, Equatable, Sendable {
     case eq = "="
     case ne = "!="
