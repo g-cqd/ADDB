@@ -3,7 +3,9 @@
 .swiftpm/
 *.xcodeproj
 *.xcworkspace
-Package.resolved
+# Package.resolved is committed: it pins ADJSON's transitive graph (swift-collections,
+# swift-syntax) so dev/CI builds are reproducible. The ones SwiftPM writes under .build/ and
+# .swiftpm/ stay ignored via those entries above.
 DerivedData/
 .derivedData/
 xcuserdata/

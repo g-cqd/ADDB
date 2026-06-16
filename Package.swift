@@ -50,8 +50,15 @@ let isDev = Context.environment["ADSQL_DEV"] != nil
 // swift-syntax-free `ADJSONCore` product, which backs the SQL JSON functions (tape parser +
 // SQLite-dialect path evaluator). The DocC plugin that builds the documentation site is dev/CI-only
 // (gated behind ADSQL_DEV), so packages that depend on ADSQL never resolve it.
+//
+// Pinned to an exact revision (ADJSON publishes no version tags and tracks `main`): a floating
+// branch would let an upstream change silently alter ADSQL between builds. The committed
+// `Package.resolved` locks this revision and the transitive graph (swift-collections, swift-syntax)
+// so dev/CI builds are reproducible; consumers that depend on ADSQL still resolve their own graph.
 var packageDependencies: [Package.Dependency] = [
-    .package(url: "https://github.com/g-cqd/ADJSON.git", branch: "main")
+    .package(
+        url: "https://github.com/g-cqd/ADJSON.git",
+        revision: "82d516584d72a404b5fef0d6b0ccd295e139f156")
 ]
 if isDev {
     packageDependencies.append(
