@@ -118,6 +118,22 @@ public final class Database: Sendable {
         triggerEngineBox.withLock { if $0 == nil { $0 = engine } }
     }
 
+    /// The full-text-search query evaluator, installed by the `ADSQLFullTextSearch`
+    /// module via `enableFullTextSearch()`. Held behind the storage-defined
+    /// `FTSEvaluation` protocol so this layer never references a query-language
+    /// type, and copied onto each read/write transaction so MATCH resolves
+    /// uniformly. Stays nil until the module is enabled — a MATCH row source then
+    /// throws a clear error instead.
+    let ftsEvaluatorBox = Mutex<(any FTSEvaluation)?>(nil)
+
+    /// Installs the FTS query evaluator (idempotent, one-way). Unlike the trigger
+    /// engine — which the SQL layer self-installs on `prepare` — the evaluator
+    /// lives *above* the SQL engine, so the `ADSQLFullTextSearch` module installs
+    /// it explicitly (`Database.enableFullTextSearch()`).
+    package func installFTSEvaluator(_ evaluator: any FTSEvaluation) {
+        ftsEvaluatorBox.withLock { if $0 == nil { $0 = evaluator } }
+    }
+
     private init(
         path: String, channel: FileChannel, pager: Pager, options: DatabaseOptions,
         readerTable: ReaderTable, meta: Meta
@@ -220,7 +236,8 @@ public final class Database: Sendable {
             let txn = ReadTxn(
                 resolver: CommittedResolver(
                     source: pager, pageCount: meta.pageCount,
-                    verifyChecksums: options.verifyChecksumsOnRead),
+                    verifyChecksums: options.verifyChecksumsOnRead,
+                    ftsEvaluator: ftsEvaluatorBox.withLock { $0 }),
                 meta: meta, schemaCache: relationSchemaCache)
             return try body(txn)
         }
@@ -310,6 +327,7 @@ public final class Database: Sendable {
         ctx.appendCursorEnabled = options.execution.insert == .appendCursor
         ctx.insertHoistEnabled = options.execution.insert == .hoisted
         ctx.triggerEngine = triggerEngineBox.withLock { $0 }
+        ctx.ftsEvaluator = ftsEvaluatorBox.withLock { $0 }
         try FreeList.harvest(ctx: ctx, upTo: reclaimLimit)
         let baselineMain = ctx.meta.mainTree
 

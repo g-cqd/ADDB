@@ -244,7 +244,7 @@ package enum FTSIndex {
 
     // MARK: - Reads (tests + /)
 
-    static func postings(
+    package static func postings(
         _ resolver: some PageResolver, _ record: Catalog.FTSRecord, term: [UInt8]
     ) throws(DBError) -> [FTSPosting]? {
         guard let value = try postingsValue(resolver, record, term: term) else { return nil }
@@ -257,7 +257,7 @@ package enum FTSIndex {
     /// `FTSPostings` value, unioning its `0...lastNo` block-keys. nil when the term
     /// is absent. Readers (`postings`, MATCH, WAND, the scorer) consume this so
     /// they are oblivious to the block-per-key storage.
-    static func postingsValue(
+    package static func postingsValue(
         _ resolver: some PageResolver, _ record: Catalog.FTSRecord, term: [UInt8]
     ) throws(DBError) -> [UInt8]? {
         // One range scan over the term's block-keys, reassembled into the single
@@ -277,7 +277,7 @@ package enum FTSIndex {
     /// Docids only for `term` — unions the term's block-keys, decoding just docids
     /// from each block and skipping its TF/position payload (membership fast
     /// path). nil when the term is absent.
-    static func docids(
+    package static func docids(
         _ resolver: some PageResolver, _ record: Catalog.FTSRecord, term: [UInt8]
     ) throws(DBError) -> [Int64]? {
         var ids: [Int64] = []
@@ -289,7 +289,7 @@ package enum FTSIndex {
         return present ? ids : nil
     }
 
-    static func documentFrequency(
+    package static func documentFrequency(
         _ resolver: some PageResolver, _ record: Catalog.FTSRecord, term: [UInt8]
     ) throws(DBError) -> UInt64 {
         try documentFrequency(resolver, record.dict, term: term)
@@ -319,7 +319,7 @@ package enum FTSIndex {
     /// ONLY the leading field-length varints (never the doc's term list), zero-copy.
     /// nil when the doc has no stats row (absent/removed). Bit-identical `D` to the
     /// prior point read. Hot path: one call per scored document.
-    static func docLength<R: PageResolver>(
+    package static func docLength<R: PageResolver>(
         _ statsCursor: inout Cursor<R>, docid: Int64
     ) throws(DBError) -> Double? {
         let key = KeyCodec.rowKey(docid)
@@ -346,7 +346,7 @@ package enum FTSIndex {
     /// Every dictionary term that starts with `prefix` (for `foo*` queries). The
     /// dict tree is keyed by raw term bytes, so a seek + ascending walk while the
     /// key still carries the prefix enumerates the range.
-    static func termsMatchingPrefix(
+    package static func termsMatchingPrefix(
         _ resolver: some PageResolver, _ record: Catalog.FTSRecord, prefix: [UInt8]
     ) throws(DBError) -> [[UInt8]] {
         var terms: [[UInt8]] = []

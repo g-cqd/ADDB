@@ -7,6 +7,11 @@ package protocol PageResolver {
     /// Configured scan readahead window in pages a cursor should keep in flight
     /// (0 disables). Forward scans read this once at creation.
     var prefetchWindow: Int { get }
+    /// The full-text-search query evaluator for this transaction, copied from the
+    /// database when `Database.enableFullTextSearch()` has installed one (nil
+    /// otherwise). The executor's MATCH row source reads it here so both the read
+    /// (committed) and write (overlay) paths reach the same evaluator.
+    var ftsEvaluator: (any FTSEvaluation)? { get }
 }
 
 extension PageResolver {
@@ -16,6 +21,11 @@ extension PageResolver {
     package func prefetch(fromPage: UInt64, count: Int) {}
     @inline(__always)
     package var prefetchWindow: Int { 0 }
+    /// Default: no FTS query evaluator (raw key/value resolvers and test resolvers
+    /// never run MATCH). `TxnContext`/`CommittedResolver` override with the value
+    /// copied from the database.
+    @inline(__always)
+    package var ftsEvaluator: (any FTSEvaluation)? { nil }
 }
 
 /// Committed-page reader (mmap in production, dictionaries in tests).
@@ -126,6 +136,12 @@ package final class TxnContext: PageResolver, OverflowPager {
     /// trigger definitions). Storage never inspects it; it dies with the txn, so a
     /// parsed definition cannot outlive its source text. Writer-confined → no lock.
     package var triggerCache: AnyObject?
+    /// The SQL-layer FTS query evaluator, installed by `ADSQLFullTextSearch` onto
+    /// the database and copied onto each write context at creation (mirroring
+    /// `triggerEngine`). nil when full-text search is not enabled, so a write that
+    /// touches an FTS table's MATCH source on the overlay sees the same evaluator a
+    /// read would.
+    package var ftsEvaluator: (any FTSEvaluation)?
 
     /// Group-commit nesting: stacked micro-transactions bump the epoch; pages
     /// dirtied by earlier requests are cloned on first touch so a failing
@@ -278,11 +294,19 @@ package struct CommittedResolver: PageResolver {
     /// path). Catches the full corruption class — a tampered cellCount/keyLen
     /// changes the page bytes, so the stored XXH64 no longer matches.
     package let verifyChecksums: Bool
+    /// The FTS query evaluator for this read snapshot, copied from the database
+    /// (nil unless `Database.enableFullTextSearch()` installed one). See
+    /// ``PageResolver/ftsEvaluator``.
+    package let ftsEvaluator: (any FTSEvaluation)?
 
-    package init(source: any PageSource, pageCount: UInt64 = .max, verifyChecksums: Bool = false) {
+    package init(
+        source: any PageSource, pageCount: UInt64 = .max, verifyChecksums: Bool = false,
+        ftsEvaluator: (any FTSEvaluation)? = nil
+    ) {
         self.source = source
         self.pageCount = pageCount
         self.verifyChecksums = verifyChecksums
+        self.ftsEvaluator = ftsEvaluator
     }
     @inline(__always)
     package func resolvePage(_ pageNo: UInt64) throws(DBError) -> UnsafeRawBufferPointer {

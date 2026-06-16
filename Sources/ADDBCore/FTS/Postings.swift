@@ -215,7 +215,7 @@ public enum FTSPostings {
 /// branchless scalar reader the clean win. The packing stays on bounds-checked
 /// `[UInt8]` (matching the codec's existing safe `Varint.read([UInt8])` path), so
 /// no `unsafe` is needed under strict-memory-safety.
-enum ForPacking {
+package enum ForPacking {
     /// Appends `varint gapBits || packed gaps` (byte-aligned). `gapBits == 0` for an
     /// empty gap list (single-doc block), which writes just the `0` varint.
     /// Fields are written LSB-first at successive bit positions via byte-granular
@@ -256,7 +256,7 @@ enum ForPacking {
     /// Reads `varint gapBits` then the `(docCount-1)` packed gaps and prefix-sums
     /// them onto `firstDocId`, appending all `docCount` docids to `into`. Advances
     /// `offset` past the byte-aligned packed region. Returns false on truncation.
-    static func decodeDocids(
+    package static func decodeDocids(
         _ bytes: [UInt8], _ offset: inout Int, docCount: Int, firstDocId: Int64,
         into docids: inout [Int64]
     ) -> Bool {
@@ -323,7 +323,7 @@ enum ForPacking {
     /// Steps `offset` past a byte-aligned FOR gaps region without decoding it (used
     /// by the WAND cursor's header walk). Reads `gapBits`, computes the packed byte
     /// count for `gapCount` fields, and skips it. Returns false on truncation.
-    static func skipPackedGaps(
+    package static func skipPackedGaps(
         _ bytes: [UInt8], _ offset: inout Int, gapCount: Int
     ) -> Bool {
         guard let rawGapBits = Varint.read(bytes, &offset) else { return false }
