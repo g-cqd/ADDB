@@ -465,7 +465,7 @@ extension Relation {
 
         ctx.relation = state
         // AFTER INSERT row triggers: NEW = the inserted row (rowid filled in).
-        try TriggerEngine.fire(ctx, event: .insert, table: tableName, old: nil, new: row)
+        try ctx.fireTriggers(event: .insert, table: tableName, old: nil, new: row)
         return rowid
     }
 

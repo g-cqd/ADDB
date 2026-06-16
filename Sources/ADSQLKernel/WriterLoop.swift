@@ -85,6 +85,7 @@ extension Database {
             let ctx = TxnContext(source: pager, meta: meta)
             ctx.appendCursorEnabled = options.execution.insert == .appendCursor
             ctx.insertHoistEnabled = options.execution.insert == .hoisted
+            ctx.triggerEngine = triggerEngineBox.withLock { $0 }
             do throws(DBError) {
                 try FreeList.harvest(ctx: ctx, upTo: reclaimLimit)
             } catch {

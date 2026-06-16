@@ -114,10 +114,18 @@ package final class TxnContext: PageResolver, OverflowPager {
     /// Active NEW/OLD row frame while a trigger body executes. The write
     /// path consults it so trigger-body expressions can read `new.col`/`old.col`;
     /// nil outside a trigger. Stacked frames restore the prior frame on return.
-    var triggerFrame: TriggerFrame?
+    package var triggerFrame: TriggerFrame?
     /// Trigger recursion depth: bumped around each fired trigger body so a
     /// self-referential trigger errors instead of looping forever.
-    var triggerDepth: UInt32 = 0
+    package var triggerDepth: UInt32 = 0
+    /// The SQL-layer trigger engine, installed by the SQL layer onto the database
+    /// and copied onto each write context at creation. nil when no SQL layer is
+    /// wired (raw key/value use), so DML simply never fires triggers.
+    package var triggerEngine: (any TriggerFiring)?
+    /// Opaque per-transaction cache owned by the trigger engine (a box of parsed
+    /// trigger definitions). Storage never inspects it; it dies with the txn, so a
+    /// parsed definition cannot outlive its source text. Writer-confined → no lock.
+    package var triggerCache: AnyObject?
 
     /// Group-commit nesting: stacked micro-transactions bump the epoch; pages
     /// dirtied by earlier requests are cloned on first touch so a failing
@@ -233,6 +241,28 @@ package final class TxnContext: PageResolver, OverflowPager {
 
     package func freeOverflowPage(_ pageNo: UInt64) throws(DBError) {
         freePage(pageNo)
+    }
+}
+
+extension TxnContext {
+    /// Fires AFTER triggers for a row change through the installed engine; a
+    /// no-op when no engine is wired (so non-SQL writers pay nothing).
+    func fireTriggers(
+        event: TriggerEvent, table: String, old: [Value]?, new: [Value]?
+    ) throws(DBError) {
+        // Fast path: skip the engine (and its existential dispatch) entirely unless
+        // a trigger actually exists. The DML path always has `relation` loaded by
+        // the time it fires, so a trigger-free write pays only an optional + a
+        // dictionary-empty check per row — cheaper than the old static call.
+        guard let triggerEngine, let relation, !relation.triggerTexts.isEmpty else { return }
+        try triggerEngine.fire(self, event: event, table: table, old: old, new: new)
+    }
+
+    /// Names of triggers whose target is `table` (for DROP TABLE cascade); empty
+    /// when no engine is wired.
+    func triggerNamesTargeting(_ table: String) throws(DBError) -> [String] {
+        guard let triggerEngine else { return [] }
+        return try triggerEngine.triggerNames(targeting: table, in: self)
     }
 }
 

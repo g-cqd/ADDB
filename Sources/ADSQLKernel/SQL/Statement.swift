@@ -486,6 +486,7 @@ struct StatementCache {
 extension Database {
     /// Parses `sql` (reusing the parse cache) into a reusable `Statement`.
     public func prepare(_ sql: String) throws(DBError) -> Statement {
-        Statement(database: self, sql: sql, parsed: try parsedStatement(sql))
+        installTriggerEngine(SQLTriggerEngine.shared)
+        return Statement(database: self, sql: sql, parsed: try parsedStatement(sql))
     }
 }

@@ -74,15 +74,16 @@ enum Writer {
     static func createTrigger(
         _ create: SQLCreateTrigger, txn: borrowing WriteTxn
     ) throws(DBError) {
-        if try txn.schema().triggers[create.definition.name] != nil {
+        if try txn.schema().triggerTexts[create.definition.name] != nil {
             if create.ifNotExists { return }
             throw DBError.triggerExists(create.definition.name)
         }
-        try txn.createTrigger(create.definition)
+        try txn.createTrigger(
+            name: create.definition.name, table: create.definition.table, sql: create.definition.sql)
     }
 
     static func dropTrigger(_ name: String, ifExists: Bool, txn: borrowing WriteTxn) throws(DBError) {
-        if try txn.schema().triggers[name] == nil {
+        if try txn.schema().triggerTexts[name] == nil {
             if ifExists { return }
             throw DBError.noSuchTrigger(name)
         }
@@ -467,7 +468,7 @@ enum Writer {
             parameter: { p throws(DBError) in try params.lookup(p) },
             column: { (qualifier, name, offset) throws(DBError) in
                 if let triggerCtx,
-                    let value = try TriggerEngine.triggerColumn(
+                    let value = try SQLTriggerEngine.triggerColumn(
                         triggerCtx, qualifier: qualifier, name: name, offset: offset)
                 {
                     return value
@@ -479,7 +480,7 @@ enum Writer {
             },
             collationOf: { (qualifier, name) in
                 if let triggerCtx,
-                    let c = TriggerEngine.triggerCollation(triggerCtx, qualifier: qualifier, name: name)
+                    let c = SQLTriggerEngine.triggerCollation(triggerCtx, qualifier: qualifier, name: name)
                 {
                     return c
                 }
@@ -487,7 +488,7 @@ enum Writer {
             },
             columnTypeOf: { (qualifier, name) in
                 if let triggerCtx,
-                    let t = TriggerEngine.triggerColumnType(triggerCtx, qualifier: qualifier, name: name)
+                    let t = SQLTriggerEngine.triggerColumnType(triggerCtx, qualifier: qualifier, name: name)
                 {
                     return t
                 }
@@ -507,6 +508,6 @@ enum Writer {
         guard ctx.triggerFrame != nil else {
             return SQLEvalEnv.parametersOnly { p throws(DBError) in try params.lookup(p) }
         }
-        return TriggerEngine.bodyEnv(ctx, params: params)
+        return SQLTriggerEngine.bodyEnv(ctx, params: params)
     }
 }

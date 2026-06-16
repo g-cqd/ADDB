@@ -85,6 +85,18 @@ public final class Database: Sendable {
     /// `prepare`). Bound plans live on each `Statement`, keyed by catalog
     /// version.
     let statementCache = Mutex<StatementCache>(StatementCache(capacity: 128))
+    /// The SQL-layer trigger engine, installed lazily by the SQL layer on first
+    /// `prepare`/`transaction`. Held behind the storage-defined `TriggerFiring`
+    /// protocol so this layer never references the SQL engine type. Copied onto
+    /// every write context, so all write paths fire triggers uniformly.
+    let triggerEngineBox = Mutex<(any TriggerFiring)?>(nil)
+
+    /// Installs the trigger engine (idempotent, one-way): the SQL layer calls this
+    /// before running any SQL, so a write context created afterward can fire
+    /// triggers. Stays nil for raw key/value databases that never touch SQL.
+    package func installTriggerEngine(_ engine: any TriggerFiring) {
+        triggerEngineBox.withLock { if $0 == nil { $0 = engine } }
+    }
 
     private init(
         path: String, channel: FileChannel, pager: Pager, options: DatabaseOptions,
@@ -277,6 +289,7 @@ public final class Database: Sendable {
         let ctx = TxnContext(source: pager, meta: meta)
         ctx.appendCursorEnabled = options.execution.insert == .appendCursor
         ctx.insertHoistEnabled = options.execution.insert == .hoisted
+        ctx.triggerEngine = triggerEngineBox.withLock { $0 }
         try FreeList.harvest(ctx: ctx, upTo: reclaimLimit)
         let baselineMain = ctx.meta.mainTree
 

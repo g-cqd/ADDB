@@ -164,7 +164,7 @@ struct FTSTriggerTests {
             try db.prepare(Self.auTrigger).run()
 
             let names = try db.writeSync { (txn) throws(DBError) in
-                try txn.schema().triggers.keys.sorted()
+                try txn.schema().triggerTexts.keys.sorted()
             }
             #expect(names == ["documents_ad", "documents_ai", "documents_au"])
         }
@@ -174,7 +174,7 @@ struct FTSTriggerTests {
             let db = try Database.open(at: path)
             defer { db.close() }
             let triggers = try db.writeSync { (txn) throws(DBError) -> [String: TriggerDefinition] in
-                try txn.schema().triggers
+                try txn.schema().triggers()
             }
             #expect(triggers.count == 3)
             #expect(triggers["documents_ai"]?.event == .insert)
@@ -223,7 +223,7 @@ struct FTSTriggerTests {
         }
         try db.prepare("DROP TRIGGER IF EXISTS missing").run()  // no-op
         try db.prepare("DROP TRIGGER t1").run()
-        let gone = try db.writeSync { (txn) throws(DBError) in try txn.schema().triggers["t1"] }
+        let gone = try db.writeSync { (txn) throws(DBError) in try txn.schema().triggerTexts["t1"] }
         #expect(gone == nil)
     }
 
@@ -237,9 +237,9 @@ struct FTSTriggerTests {
         try db.prepare(
             "CREATE TRIGGER t AFTER INSERT ON documents BEGIN INSERT INTO audit(item) VALUES(new.id); END"
         ).run()
-        #expect(try db.writeSync { (txn) throws(DBError) in try txn.schema().triggers.count } == 1)
+        #expect(try db.writeSync { (txn) throws(DBError) in try txn.schema().triggerTexts.count } == 1)
         try db.prepare("DROP TABLE documents").run()
-        #expect(try db.writeSync { (txn) throws(DBError) in try txn.schema().triggers.count } == 0)
+        #expect(try db.writeSync { (txn) throws(DBError) in try txn.schema().triggerTexts.count } == 0)
     }
 
     // MARK: - End-to-end FTS sync (the apple-docs shape)
@@ -486,7 +486,7 @@ struct FTSTriggerTests {
         let db = try Database.open(at: dir.file("deepchain.adsql"))
         defer { db.close() }
 
-        let depth = Int(TriggerEngine.maxDepth)
+        let depth = Int(SQLTriggerEngine.maxDepth)
         // `depth` chain triggers over `depth + 1` tables: chain_i AFTER INSERT ON
         // t_i inserts into t_{i+1}. The top-level INSERT into t1 fires chain1 at
         // triggerDepth 0, chain2 at 1, …, chain(depth) at triggerDepth depth-1 —

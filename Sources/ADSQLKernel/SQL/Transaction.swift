@@ -51,7 +51,8 @@ extension Database {
     public func transaction<R>(
         _ body: (SQLTransaction) throws(DBError) -> R
     ) throws(DBError) -> R {
-        try writeSync { (txn) throws(DBError) in
+        installTriggerEngine(SQLTriggerEngine.shared)
+        return try writeSync { (txn) throws(DBError) in
             try body(SQLTransaction(database: self, ctx: txn.ctx))
         }
     }

@@ -26,9 +26,10 @@ public struct RelationState: Sendable {
     /// (`serializeState`). Value-typed, so `TxnRestorePoint` snapshots/restores it
     /// for free on a group-commit rollback.
     var ftsBuffer: [String: [FTSIndex.PendingDoc]] = [:]
-    /// Parsed trigger definitions keyed by name (re-parsed from the stored raw
-    /// CREATE TRIGGER text at load time, like SQLite's `sqlite_schema`).
-    var triggerRecords: [String: TriggerDefinition] = [:]
+    /// Raw CREATE TRIGGER texts keyed by name, exactly as persisted — the catalog
+    /// stores only text (like SQLite's `sqlite_schema`) and the SQL layer parses
+    /// on demand. Value-typed, so `TxnRestorePoint` snapshots/restores it for free.
+    var triggerTexts: [String: String] = [:]
     /// Triggers added or dropped this transaction whose catalog row needs a
     /// write-back (value = the raw SQL text, or nil for a drop).
     var triggerWrites: [String: String?] = [:]
@@ -53,7 +54,7 @@ public struct RelationState: Sendable {
             tables: tableRecords.mapValues(\.definition),
             indexes: indexRecords.mapValues(\.definition),
             ftsTables: ftsRecords.mapValues(\.definition),
-            triggers: triggerRecords)
+            triggerTexts: triggerTexts)
     }
 
     func tableName(for id: UInt32) -> String? {
@@ -178,30 +179,13 @@ enum Relation {
             state.handleBaselines[.ftsPostings(record.ftsId)] = record.postings
             state.handleBaselines[.ftsStats(record.ftsId)] = record.stats
         }
-        // Triggers are stored as raw CREATE TRIGGER text and re-parsed here (like
-        // SQLite's sqlite_schema). A stored row that already round-tripped through
-        // the parser at create time re-parses cleanly; corruption surfaces as a
-        // catchable DBError, not a trap.
+        // Triggers are stored as raw CREATE TRIGGER text and kept opaque here (like
+        // SQLite's sqlite_schema). The SQL layer parses them on demand when they
+        // fire; the storage layer never interprets a trigger body.
         unsafe try scanKind(resolver, mainTree, kind: Catalog.kindTrigger) { name, valueBytes throws(DBError) in
-            let text = unsafe String(decoding: valueBytes, as: UTF8.self)
-            state.triggerRecords[name] = try parseTriggerText(text, expectedName: name)
+            state.triggerTexts[name] = unsafe String(decoding: valueBytes, as: UTF8.self)
         }
         return state
-    }
-
-    /// Re-parses a stored CREATE TRIGGER text into a `TriggerDefinition`,
-    /// verifying the name matches its catalog key.
-    static func parseTriggerText(
-        _ text: String, expectedName: String
-    ) throws(DBError) -> TriggerDefinition {
-        guard case .createTrigger(let create) = try SQLParser.parseOne(text) else {
-            throw DBError.integrityFailure("catalog: trigger \(expectedName) text is not CREATE TRIGGER")
-        }
-        guard create.definition.name == expectedName else {
-            throw DBError.integrityFailure(
-                "catalog: trigger name \(create.definition.name) ≠ key \(expectedName)")
-        }
-        return create.definition
     }
 
     private static func scanKind(
@@ -401,10 +385,10 @@ enum Relation {
         state.sequences.removeValue(forKey: record.tableId)
         state.sequenceBaselines.removeValue(forKey: record.tableId)
         state.maxRowidCache.removeValue(forKey: record.tableId)
-        // Triggers on this table go with it (SQLite drops dependent triggers).
-        for triggerName in state.triggerRecords.keys.sorted()
-        where state.triggerRecords[triggerName]!.table == name {
-            state.triggerRecords.removeValue(forKey: triggerName)
+        // Triggers on this table go with it (SQLite drops dependent triggers). The
+        // SQL engine reports which stored triggers target this table.
+        for triggerName in try ctx.triggerNamesTargeting(name) {
+            state.triggerTexts.removeValue(forKey: triggerName)
             state.triggerWrites[triggerName] = nil as String?
         }
         state.schemaDirty = true
@@ -438,38 +422,41 @@ enum Relation {
     /// fts/trigger namespace) and its target (an existing base table), then
     /// records it for write-back as raw CREATE TRIGGER text. No firing here —
     /// the DML path looks triggers up by (table, event) when rows change.
-    static func createTrigger(_ ctx: TxnContext, _ definition: TriggerDefinition) throws(DBError) {
+    static func createTrigger(
+        _ ctx: TxnContext, name: String, table: String, sql: String
+    ) throws(DBError) {
         var state = try ensureState(ctx)
-        guard definition.name.utf8.count <= 255 else {
+        guard name.utf8.count <= 255 else {
             throw DBError.invalidDefinition("trigger name too long")
         }
-        guard state.triggerRecords[definition.name] == nil else {
-            throw DBError.triggerExists(definition.name)
+        guard state.triggerTexts[name] == nil else {
+            throw DBError.triggerExists(name)
         }
         // Shared schema namespace (SQLite keeps triggers alongside tables/indexes).
-        guard state.tableRecords[definition.name] == nil,
-            state.indexRecords[definition.name] == nil,
-            state.ftsRecords[definition.name] == nil
+        guard state.tableRecords[name] == nil,
+            state.indexRecords[name] == nil,
+            state.ftsRecords[name] == nil
         else {
-            throw DBError.invalidDefinition(
-                "object named \(definition.name) already exists")
+            throw DBError.invalidDefinition("object named \(name) already exists")
         }
-        guard state.tableRecords[definition.table] != nil else {
-            if state.ftsRecords[definition.table] != nil {
-                throw DBError.invalidDefinition("cannot create trigger on virtual table \(definition.table)")
+        // The SQL layer supplies the already-parsed target table, so storage
+        // enforces "target exists / not a virtual table" without parsing.
+        guard state.tableRecords[table] != nil else {
+            if state.ftsRecords[table] != nil {
+                throw DBError.invalidDefinition("cannot create trigger on virtual table \(table)")
             }
-            throw DBError.noSuchTable(definition.table)
+            throw DBError.noSuchTable(table)
         }
-        state.triggerRecords[definition.name] = definition
-        state.triggerWrites[definition.name] = definition.sql
+        state.triggerTexts[name] = sql
+        state.triggerWrites[name] = sql
         state.schemaDirty = true
         ctx.relation = state
     }
 
     static func dropTrigger(_ ctx: TxnContext, name: String) throws(DBError) {
         var state = try ensureState(ctx)
-        guard state.triggerRecords[name] != nil else { throw DBError.noSuchTrigger(name) }
-        state.triggerRecords.removeValue(forKey: name)
+        guard state.triggerTexts[name] != nil else { throw DBError.noSuchTrigger(name) }
+        state.triggerTexts.removeValue(forKey: name)
         state.triggerWrites[name] = nil as String?
         state.schemaDirty = true
         ctx.relation = state

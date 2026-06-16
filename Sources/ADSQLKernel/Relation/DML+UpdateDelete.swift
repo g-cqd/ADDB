@@ -42,7 +42,7 @@ extension Relation {
         // AFTER DELETE row triggers: OLD = the removed row. Fires for direct
         // deletes, FK cascades, and OR REPLACE victims (all route through here),
         // matching SQLite.
-        try TriggerEngine.fire(ctx, event: .delete, table: tableName, old: row, new: nil)
+        try ctx.fireTriggers(event: .delete, table: tableName, old: row, new: nil)
         return true
     }
 
@@ -144,7 +144,7 @@ extension Relation {
         state.tableRecords[tableName] = table
         ctx.relation = state
         // AFTER UPDATE row triggers: OLD = pre-update row, NEW = post-update row.
-        try TriggerEngine.fire(ctx, event: .update, table: tableName, old: oldRow, new: newRow)
+        try ctx.fireTriggers(event: .update, table: tableName, old: oldRow, new: newRow)
         return true
     }
 }

@@ -23,11 +23,11 @@ import Synchronization
 /// * `sync` blocks the caller until the job has run *on the writer thread*.
 ///
 /// Why a dedicated thread instead of the Dispatch queue: write execution
-/// re-enters itself recursively (row triggers fire `Writer.execute`, whose DML
+/// re-enters itself recursively (row triggers fire write execution, whose DML
 /// fires more triggers). A Dispatch worker stack is only ~512 KiB, so deep
 /// trigger chains overflow it. This thread owns a `stackSize`-byte stack, so
 /// recursion depth is decoupled from the caller's stack and bounded only by a
-/// measured, generous budget (see `TriggerEngine.maxDepth`).
+/// measured, generous budget (the SQL layer's trigger-recursion cap).
 ///
 /// Memory cost: exactly one extra thread. `stackSize` is a *virtual* address
 /// reservation, lazily committed page-by-page; an idle writer thread (blocked
@@ -37,8 +37,8 @@ import Synchronization
 @safe final class WriterThread: Sendable {
     /// Reserved stack for the writer thread. Virtual, lazily committed — costs
     /// nothing until trigger recursion actually grows into it. Worst-case
-    /// per-level growth is ~33.7 KiB under ThreadSanitizer (measured; see
-    /// `TriggerEngine.maxDepth`), so `maxDepth = 100` peaks at ~3.3 MiB ≈ 20% of
+    /// per-level growth is ~33.7 KiB under ThreadSanitizer (measured; the SQL
+    /// layer caps trigger recursion at 100), so that peaks at ~3.3 MiB ≈ 20% of
     /// this 16 MiB — a ~4.9× margin (well inside the ≥2.5× budget). SQLite-parity
     /// recursion (1000) is reachable by raising this single constant (~128 MiB
     /// virtual); it remains a knob. `pthread_attr_setstacksize` requires a

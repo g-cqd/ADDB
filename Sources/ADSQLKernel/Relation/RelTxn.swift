@@ -387,9 +387,11 @@ extension WriteTxn {
         try Relation.dropIndex(ctx, name: name)
     }
 
-    /// Registers a row trigger; its body fires in the DML path.
-    public func createTrigger(_ definition: TriggerDefinition) throws(DBError) {
-        try Relation.createTrigger(ctx, definition)
+    /// Registers a row trigger from its name, already-parsed target table, and
+    /// verbatim CREATE TRIGGER text. The body is parsed on demand and fires in the
+    /// DML path. The SQL layer is the only caller (it supplies the parsed target).
+    package func createTrigger(name: String, table: String, sql: String) throws(DBError) {
+        try Relation.createTrigger(ctx, name: name, table: table, sql: sql)
     }
 
     public func dropTrigger(_ name: String) throws(DBError) {
