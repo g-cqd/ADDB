@@ -53,6 +53,13 @@ try await db.write { (txn) throws(DBError) in
 
 ## Topics
 
+### Guides
+
+- <doc:Concurrency>
+- <doc:Durability>
+- <doc:FullTextSearch>
+- <doc:ExecutionStrategies>
+
 ### Opening a database
 
 - ``Database``
