@@ -1,16 +1,41 @@
 // swift-tools-version: 6.3
 import PackageDescription
 
-// Maximum strictness, shared across every Swift target. Dependency-safe (no unsafe flags), so the
-// library can still be consumed via a version-pinned SwiftPM requirement. `.v6` language mode turns on
-// complete strict-concurrency checking; the upcoming features tighten existentials and import
-// visibility. Aligned with the sibling `../adjson` package.
-let strictSettings: [SwiftSetting] = [
-    .swiftLanguageMode(.v6),
-    .enableUpcomingFeature("ExistentialAny"),
-    .enableUpcomingFeature("InternalImportsByDefault"),
-    .enableUpcomingFeature("MemberImportVisibility"),
-]
+// Opt-in warnings-as-errors gate: set `ADSQL_WERROR=1` to compile every first-party target with
+// `-warnings-as-errors`. It is unsafe-flag-based, but folding it into `strictSettings` is still
+// dependency-safe: a consumer resolves this manifest with `ADSQL_WERROR` unset, so the array is empty
+// and the shipped library carries no unsafe flags (version resolution keeps working). Target-scoped
+// settings never reach ADJSON/swift-syntax/swift-collections, and the flag pulls in no extra
+// dependency, so the committed `Package.resolved` stays accurate. (Passing `-warnings-as-errors` on
+// the `swift build` CLI instead would also fail on dependency warnings outside our control.)
+//
+// `StrictMemorySafety` is carved back to a warning (`-Wwarning`): `.strictMemorySafety()` flags every
+// unmarked unsafe construct, and shrinking that surface (via `Span`/`MutableSpan`/`InlineArray`) is a
+// tracked, in-progress effort rather than a one-shot `unsafe`-annotation sweep. So the gate errors on
+// every *other* diagnostic group (deprecations, unused results, implicit Sendable, …) while the
+// memory-safety diagnostics stay visible as warnings until that migration lands.
+//
+// Not yet wired into CI: warning emission is toolchain-dependent — some toolchains additionally emit
+// spurious, group-less `will never be executed` SILGen diagnostics on the typed-throws/`Never`
+// patterns (`throwErrno` etc.), which `-Wwarning` cannot selectively downgrade. CI will set
+// `ADSQL_WERROR=1` once the toolchain is pinned to a release verified warning-clean (see the CI
+// toolchain-pinning work), so the gate is deterministic rather than a moving target.
+let werrorSettings: [SwiftSetting] =
+    Context.environment["ADSQL_WERROR"] != nil
+    ? [.unsafeFlags(["-warnings-as-errors", "-Wwarning", "StrictMemorySafety"])] : []
+
+// Maximum strictness, shared across every Swift target. Dependency-safe (no unsafe flags unless
+// `ADSQL_WERROR` is set, see above), so the library can still be consumed via a version-pinned
+// SwiftPM requirement. `.v6` language mode turns on complete strict-concurrency checking; the
+// upcoming features tighten existentials and import visibility. Aligned with the sibling
+// `../adjson` package.
+let strictSettings: [SwiftSetting] =
+    [
+        .swiftLanguageMode(.v6),
+        .enableUpcomingFeature("ExistentialAny"),
+        .enableUpcomingFeature("InternalImportsByDefault"),
+        .enableUpcomingFeature("MemberImportVisibility"),
+    ] + werrorSettings
 
 // The kernel's safety model, on top of `strictSettings`: SE-0458 strict memory safety (every unsafe
 // construct is explicitly `unsafe` or `@safe`-encapsulated, so any new unsafe use is compiler-flagged)
