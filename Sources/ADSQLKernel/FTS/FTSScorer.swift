@@ -366,9 +366,14 @@ enum FTSScorer {
                 guard usable else { continue }
                 for start in starts {
                     var matched = true
-                    for (offset, set) in followers.enumerated() where !set.contains(start + UInt32(offset + 1)) {
-                        matched = false
-                        break
+                    for (offset, set) in followers.enumerated() {
+                        // Overflow-safe: a position near UInt32.max must not trap the
+                        // checked `+`. An out-of-range expected position can't be present.
+                        let (next, overflow) = start.addingReportingOverflow(UInt32(offset + 1))
+                        if overflow || !set.contains(next) {
+                            matched = false
+                            break
+                        }
                     }
                     if matched { freqs[column] &+= 1 }
                 }
