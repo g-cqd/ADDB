@@ -1,9 +1,15 @@
 #!/bin/sh
-# ADSQL pre-commit hook — formatting gate (check-only).
+# ADSQL pre-commit hook — formatting + internal-tag gate (check-only).
 #
 # Enable once per clone:   git config core.hooksPath .githooks
 # Auto-fix formatting:     swift package --allow-writing-to-package-directory format
 #
 # Runs the same `lint` command plugin CI uses, so local and CI rules can't drift.
+set -e
 echo "pre-commit: swift package lint"
 swift package lint
+
+# Block newly added TODO/FIXME and internal provenance citations (RFC 00xx,
+# Review NNNN, milestone/finding tags). Diff-based, so it only flags regressions.
+echo "pre-commit: internal-tag check (staged)"
+"$(dirname "$0")/check-tags.sh" staged

@@ -47,6 +47,10 @@ jobs:
             spm-${{ runner.os }}-
       - name: Lint (formatting gate)
         run: swift package lint
+      - name: Lint (internal tags)
+        # TODO/FIXME must stay at zero; provenance-citation scanning activates once
+        # STRICT_TAGS=1 is set here (after the tree-wide strip lands).
+        run: ./.githooks/check-tags.sh all
       - name: Build
         run: swift build
       - name: Test (SQLite-differential suite)
