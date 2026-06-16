@@ -165,8 +165,11 @@ enum SQLCompare {
 }
 
 /// Evaluation environment: parameters plus row-column resolution (closures
-/// provided by the executor; column refs throw outside row contexts).
-struct SQLEvalEnv {
+/// provided by the executor; column refs throw outside row contexts). `package`
+/// so extension modules' registered function handlers can name it (the
+/// stored closures stay internal — extensions pass the env through to
+/// ``SQLEval/evaluate(_:_:)``, never construct or inspect it).
+package struct SQLEvalEnv {
     var parameter: (SQLParam) throws(DBError) -> Value
     var column: (_ table: String?, _ name: String, _ offset: Int) throws(DBError) -> Value
     var collationOf: (_ table: String?, _ name: String) -> Collation?

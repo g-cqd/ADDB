@@ -180,7 +180,46 @@ enum SQLFunctions {
 
     // MARK: - Scalar function dispatch
 
+    /// Dispatches a scalar function call by name through ``SQLFunctionRegistry``.
+    /// The compiled evaluator resolves the handler once at compile time (so the hot
+    /// path carries the captured handler, no per-row lookup); this per-call entry
+    /// serves the tree-walk evaluator. An unknown name (no core builtin, no enabled
+    /// extension) throws.
     static func call(
+        _ name: String, args: [SQLExpr], star: Bool, offset: Int, _ env: SQLEvalEnv
+    ) throws(DBError) -> Value {
+        guard let handler = SQLFunctionRegistry.handler(for: name) else {
+            throw DBError.sqlUnsupported("\(name)() function")
+        }
+        return try handler(args, star, offset, env)
+    }
+
+    /// Forces one-time registration of the core scalar builtins. Called by
+    /// ``SQLFunctionRegistry/handler(for:)`` so any lookup first sees the core set;
+    /// extension modules (``ADSQLJSON``, ``ADSQLTime``) register their functions on
+    /// top when enabled.
+    static func ensureBuiltinsRegistered() { _ = builtinsRegistered }
+
+    private static let builtinsRegistered: Void = {
+        for name in ["COALESCE", "LOWER", "UPPER", "LENGTH", "INSTR", "SUBSTR", "SUBSTRING"] {
+            SQLFunctionRegistry.register(name) { args, star, offset, env throws(DBError) in
+                try callCoreScalar(name, args: args, star: star, offset: offset, env)
+            }
+        }
+        registerJSONFunctions()
+        registerDateTimeFunctions()
+        // COUNT/SUM reach scalar dispatch only when misused outside GROUP BY; give
+        // the same diagnostic the aggregate binder would (valid use never gets here).
+        for name in ["COUNT", "SUM"] {
+            SQLFunctionRegistry.register(name) { _, _, _, _ throws(DBError) in
+                throw DBError.sqlBind("\(name)() is an aggregate and needs GROUP BY context")
+            }
+        }
+    }()
+
+    /// The core scalar builtins (string/coercion), kept in one switch the registry
+    /// fans out per name.
+    static func callCoreScalar(
         _ name: String, args: [SQLExpr], star: Bool, offset: Int, _ env: SQLEvalEnv
     ) throws(DBError) -> Value {
         func arg(_ i: Int) throws(DBError) -> Value {
@@ -274,12 +313,40 @@ enum SQLFunctions {
             guard from < chars.count, from >= 0 else { return .text("") }
             let to = min(chars.count, from + Int(length))
             return .text(String(chars[from..<max(from, to)]))
-        case "DATETIME":
-            try requireArgs(1...1)
-            guard case .text("now") = try arg(0) else {
-                throw DBError.sqlUnsupported("datetime() arguments other than 'now'")
+        default:
+            throw DBError.sqlUnsupported("\(name)() function")
+        }
+    }
+
+    /// Registers the JSON scalar family. Kept as one entry so the whole family —
+    /// and `callJSON` — moves to ``ADSQLJSON`` together; until then ADSQL registers
+    /// it so json1 works without an extra module.
+    static func registerJSONFunctions() {
+        for name in [
+            "JSON_EXTRACT", "JSON_TYPE", "JSON_VALID", "JSON_ARRAY_LENGTH", "JSON_QUOTE", "JSON",
+            "JSON_ARRAY", "JSON_OBJECT", "JSON_SET", "JSON_INSERT", "JSON_REPLACE", "JSON_REMOVE",
+            "JSON_PATCH",
+        ] {
+            SQLFunctionRegistry.register(name) { args, star, offset, env throws(DBError) in
+                try callJSON(name, args: args, star: star, offset: offset, env)
             }
-            return .text(CivilTime.utcNowString())
+        }
+    }
+
+    /// The SQLite json1 scalar surface, kept in one switch the registry fans out.
+    static func callJSON(
+        _ name: String, args: [SQLExpr], star: Bool, offset: Int, _ env: SQLEvalEnv
+    ) throws(DBError) -> Value {
+        func arg(_ i: Int) throws(DBError) -> Value {
+            try SQLEval.evaluate(args[i], env)
+        }
+        func requireArgs(_ counts: ClosedRange<Int>) throws(DBError) {
+            guard !star, counts.contains(args.count) else {
+                throw DBError.sqlBind("\(name)() takes \(counts) arguments")
+            }
+        }
+
+        switch name {
         case "JSON_EXTRACT":
             guard !star, args.count >= 2 else {
                 throw DBError.sqlBind("json_extract() takes at least 2 arguments")
@@ -387,8 +454,35 @@ enum SQLFunctions {
             let patch = try arg(1)
             if target.isNull || patch.isNull { return .null }
             return try SQLJSON.patch(SQLFunctions.textify(target), with: SQLFunctions.textify(patch))
-        case "COUNT", "SUM":
-            throw DBError.sqlBind("\(name)() is an aggregate and needs GROUP BY context")
+        default:
+            throw DBError.sqlUnsupported("\(name)() function")
+        }
+    }
+
+    /// Registers the datetime functions. Moves to ``ADSQLTime`` later; until then
+    /// ADSQL registers it.
+    static func registerDateTimeFunctions() {
+        SQLFunctionRegistry.register("DATETIME") { args, star, offset, env throws(DBError) in
+            try callDateTime("DATETIME", args: args, star: star, offset: offset, env)
+        }
+    }
+
+    /// The datetime functions (currently `datetime('now')`).
+    static func callDateTime(
+        _ name: String, args: [SQLExpr], star: Bool, offset: Int, _ env: SQLEvalEnv
+    ) throws(DBError) -> Value {
+        func requireArgs(_ counts: ClosedRange<Int>) throws(DBError) {
+            guard !star, counts.contains(args.count) else {
+                throw DBError.sqlBind("\(name)() takes \(counts) arguments")
+            }
+        }
+        switch name {
+        case "DATETIME":
+            try requireArgs(1...1)
+            guard case .text("now") = try SQLEval.evaluate(args[0], env) else {
+                throw DBError.sqlUnsupported("datetime() arguments other than 'now'")
+            }
+            return .text(CivilTime.utcNowString())
         default:
             throw DBError.sqlUnsupported("\(name)() function")
         }

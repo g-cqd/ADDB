@@ -206,11 +206,16 @@ enum CompiledEval {
                 return .integer(negated ? 1 : 0)
             }
         case .function(let name, let args, let star, let offset):
-            // `SQLFunctions.call` evaluates its argument expressions through `env` (which
-            // is wired to the same row context), so compiling the call site does not
-            // compile the arguments — but it lets a scalar function participate in an
-            // otherwise-compiled expression (e.g. `upper(x) = ?`) instead of forcing the
-            // whole expression onto the tree-walk fallback. Identical semantics.
+            // The handler evaluates its argument expressions through `env` (wired to
+            // the same row context), so compiling the call site does not compile the
+            // arguments — but it lets a scalar function participate in an otherwise-
+            // compiled expression (e.g. `upper(x) = ?`) instead of forcing the whole
+            // expression onto the tree-walk fallback. Resolve the registry handler ONCE
+            // here so the per-row thunk carries it directly (no per-row lookup);
+            // identical semantics to `SQLFunctions.call`.
+            if let handler = SQLFunctionRegistry.handler(for: name) {
+                return { () throws(DBError) -> Value in try handler(args, star, offset, env) }
+            }
             return { () throws(DBError) -> Value in
                 try SQLFunctions.call(name, args: args, star: star, offset: offset, env)
             }
