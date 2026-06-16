@@ -76,15 +76,21 @@ let isDev = Context.environment["ADSQL_DEV"] != nil
 // SQLite-dialect path evaluator). The DocC plugin that builds the documentation site is dev/CI-only
 // (gated behind ADSQL_DEV), so packages that depend on ADSQL never resolve it.
 //
-// Pinned to an exact revision (ADJSON publishes no version tags and tracks `main`): a floating
-// branch would let an upstream change silently alter ADSQL between builds. The committed
-// `Package.resolved` locks this revision and the transitive graph (swift-collections, swift-syntax)
-// so dev/CI builds are reproducible; consumers that depend on ADSQL still resolve their own graph.
-var packageDependencies: [Package.Dependency] = [
-    .package(
+// Two sources, by environment:
+//   • Default — pinned to an exact revision (ADJSON publishes no version tags and tracks `main`):
+//     a floating branch would let an upstream change silently alter ADSQL between builds. The
+//     committed `Package.resolved` locks this revision and the transitive graph (swift-collections,
+//     swift-syntax), so dev/CI builds are reproducible and consumers resolve their own graph.
+//   • `ADSQL_LOCAL_ADJSON=1` — a local `../ADJSON` sibling checkout (path dependency), so the two
+//     packages can be edited together during development. A path dependency is unpinned, so it
+//     overrides `Package.resolved`; never set this in CI or a release build.
+let adjsonDependency: Package.Dependency =
+    Context.environment["ADSQL_LOCAL_ADJSON"] != nil
+    ? .package(path: "../ADJSON")
+    : .package(
         url: "https://github.com/g-cqd/ADJSON.git",
         revision: "82d516584d72a404b5fef0d6b0ccd295e139f156")
-]
+var packageDependencies: [Package.Dependency] = [adjsonDependency]
 if isDev {
     packageDependencies.append(
         .package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.0.0"))
