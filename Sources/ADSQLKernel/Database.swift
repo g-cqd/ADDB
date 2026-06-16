@@ -182,14 +182,16 @@ public final class Database: Sendable {
     public func read<R>(
         _ body: (borrowing ReadTxn) throws(DBError) -> R
     ) throws(DBError) -> R {
-        let meta = try beginRead()
-        defer { endRead(generation: meta.generation) }
-        let txn = ReadTxn(
-            resolver: CommittedResolver(
-                source: pager, pageCount: meta.pageCount,
-                verifyChecksums: options.verifyChecksumsOnRead),
-            meta: meta, schemaCache: relationSchemaCache)
-        return try body(txn)
+        try withReaderSignpost("read") { () throws(DBError) in
+            let meta = try beginRead()
+            defer { endRead(generation: meta.generation) }
+            let txn = ReadTxn(
+                resolver: CommittedResolver(
+                    source: pager, pageCount: meta.pageCount,
+                    verifyChecksums: options.verifyChecksumsOnRead),
+                meta: meta, schemaCache: relationSchemaCache)
+            return try body(txn)
+        }
     }
 
     func beginRead() throws(DBError) -> Meta {
@@ -251,7 +253,8 @@ public final class Database: Sendable {
         var result: Result<R, DBError>?
         writerThread.sync {
             do throws(DBError) {
-                result = .success(try performWrite(body))
+                result = .success(
+                    try withWriterSignpost("write") { () throws(DBError) in try performWrite(body) })
             } catch {
                 result = .failure(error)
             }

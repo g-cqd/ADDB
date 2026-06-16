@@ -37,6 +37,13 @@ let strictSettings: [SwiftSetting] =
         .enableUpcomingFeature("MemberImportVisibility"),
     ] + werrorSettings
 
+// Opt-in Instruments signposts: `ADSQL_SIGNPOSTS=1` defines the compile flag that activates the
+// (otherwise no-op) signpost helpers in `Signposts.swift`. Off by default, so shipping builds compile
+// them out entirely; `os` is a system framework, never a package dependency. A `.define` is a safe
+// setting (no unsafe flags), so it never affects version-based dependency resolution.
+let signpostSettings: [SwiftSetting] =
+    Context.environment["ADSQL_SIGNPOSTS"] != nil ? [.define("ADSQL_SIGNPOSTS")] : []
+
 // The kernel's safety model, on top of `strictSettings`: SE-0458 strict memory safety (every unsafe
 // construct is explicitly `unsafe` or `@safe`-encapsulated, so any new unsafe use is compiler-flagged)
 // plus experimental lifetime dependence (SE-0446/0456) — the scope-bounded page views are
@@ -46,7 +53,7 @@ let kernelSettings: [SwiftSetting] =
     strictSettings + [
         .strictMemorySafety(),
         .enableExperimentalFeature("Lifetimes"),
-    ]
+    ] + signpostSettings
 
 // Compile-time type-check timing warnings (flag slow expressions / function bodies). These use unsafe
 // flags, which would block version-based dependency resolution if placed on the shipped library, so
