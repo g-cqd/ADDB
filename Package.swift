@@ -1,4 +1,5 @@
 // swift-tools-version: 6.3
+import CompilerPluginSupport
 import PackageDescription
 
 // Opt-in warnings-as-errors gate: set `ADDB_WERROR=1` to compile every first-party target with
@@ -97,7 +98,14 @@ let adjsonDependency: Package.Dependency =
     : .package(
         url: "https://github.com/g-cqd/ADJSON.git",
         revision: "82d516584d72a404b5fef0d6b0ccd295e139f156")
-var packageDependencies: [Package.Dependency] = [adjsonDependency]
+// swift-syntax backs the `ADSQLMacros` compiler-plugin target (`@Table`, `#SQL`). It is a
+// build-time dependency only — pulled in to build the macro plugin with the host toolchain — and
+// resolves to the same version ADJSON already pins (`from: "603.0.0"`), so the committed
+// `Package.resolved` is unchanged. Version-based, so ADSQL stays resolvable via a pinned requirement.
+var packageDependencies: [Package.Dependency] = [
+    adjsonDependency,
+    .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "603.0.0"),
+]
 if isDev {
     packageDependencies.append(
         .package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.0.0"))
@@ -146,9 +154,28 @@ let package = Package(
         // query DSL. Re-exports the database surface so `import ADSQL` yields it all.
         .target(
             name: "ADSQL",
-            dependencies: ["ADDBCore", .product(name: "ADJSONCore", package: "ADJSON")],
+            dependencies: [
+                "ADDBCore", "ADSQLMacros", .product(name: "ADJSONCore", package: "ADJSON"),
+            ],
             swiftSettings: kernelSettings,
             plugins: isDev ? ["LintBuild"] : []),
+        // ADSQLMacros — the compiler-plugin target backing `@Table` (synthesizes a
+        // row type's TableDefinition + typed SQLRow initializer) and `#SQL`
+        // (lightweight compile-time validation of a SQL string literal). Runs in the
+        // compiler on swift-syntax only; it never links ADDBCore/ADSQL (it emits
+        // source that references their types by name), so the engine AST stays out of
+        // the plugin.
+        .macro(
+            name: "ADSQLMacros",
+            dependencies: [
+                .product(name: "SwiftSyntax", package: "swift-syntax"),
+                .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
+                .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
+                .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
+                .product(name: "SwiftDiagnostics", package: "swift-syntax"),
+                .product(name: "SwiftParser", package: "swift-syntax"),
+            ],
+            swiftSettings: strictSettings),
         // ADSQLFullTextSearch — the full-text-search *query* language as an opt-in
         // superset of ADSQL: MATCH parsing, bm25f scoring, and block-max WAND. It
         // implements ADDBCore's `FTSEvaluation` hook and installs it via
@@ -199,6 +226,17 @@ let package = Package(
         .testTarget(
             name: "ADSQLFullTextSearchTests",
             dependencies: ["ADDBCore", "ADSQL", "ADSQLFullTextSearch", "ADDBTestSupport", "CSQLite"],
+            swiftSettings: testSettings
+        ),
+        // Macro-expansion tests: drive `@Table` / `#SQL` through swift-syntax's
+        // generic test support (assert the expanded source / emitted diagnostics),
+        // so they need no runtime database.
+        .testTarget(
+            name: "ADSQLMacrosTests",
+            dependencies: [
+                "ADSQLMacros",
+                .product(name: "SwiftSyntaxMacrosGenericTestSupport", package: "swift-syntax"),
+            ],
             swiftSettings: testSettings
         ),
         .testTarget(
