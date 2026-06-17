@@ -23,7 +23,7 @@ extension Query {
 extension Database {
     /// Builds, runs, and decodes a query into `Row` in one call.
     public func fetch<Row: TableRow>(
-        _ type: Row.Type, @QueryBuilder _ build: () -> [QueryComponent]
+        _ type: Row.Type, @QueryBuilder _ build: () -> [any QueryComponent]
     ) throws(DBError) -> [Row] {
         try Query(components: build()).all(on: self, as: type)
     }

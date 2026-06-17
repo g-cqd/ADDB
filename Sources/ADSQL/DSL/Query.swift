@@ -5,24 +5,24 @@ import ADDBCore
 /// `if`/`switch`/`for` support.
 @resultBuilder
 public enum QueryBuilder {
-    public static func buildExpression(_ component: some QueryComponent) -> [QueryComponent] {
+    public static func buildExpression(_ component: some QueryComponent) -> [any QueryComponent] {
         [component]
     }
-    public static func buildPartialBlock(first: [QueryComponent]) -> [QueryComponent] { first }
+    public static func buildPartialBlock(first: [any QueryComponent]) -> [any QueryComponent] { first }
     public static func buildPartialBlock(
-        accumulated: [QueryComponent], next: [QueryComponent]
-    ) -> [QueryComponent] {
+        accumulated: [any QueryComponent], next: [any QueryComponent]
+    ) -> [any QueryComponent] {
         accumulated + next
     }
-    public static func buildOptional(_ component: [QueryComponent]?) -> [QueryComponent] {
+    public static func buildOptional(_ component: [any QueryComponent]?) -> [any QueryComponent] {
         component ?? []
     }
-    public static func buildEither(first: [QueryComponent]) -> [QueryComponent] { first }
-    public static func buildEither(second: [QueryComponent]) -> [QueryComponent] { second }
-    public static func buildArray(_ components: [[QueryComponent]]) -> [QueryComponent] {
+    public static func buildEither(first: [any QueryComponent]) -> [any QueryComponent] { first }
+    public static func buildEither(second: [any QueryComponent]) -> [any QueryComponent] { second }
+    public static func buildArray(_ components: [[any QueryComponent]]) -> [any QueryComponent] {
         components.flatMap { $0 }
     }
-    public static func buildLimitedAvailability(_ component: [QueryComponent]) -> [QueryComponent] {
+    public static func buildLimitedAvailability(_ component: [any QueryComponent]) -> [any QueryComponent] {
         component
     }
 }
@@ -42,10 +42,10 @@ public enum QueryBuilder {
 /// }.all(on: db)
 /// ```
 public struct Query: Sendable {
-    public let components: [QueryComponent]
+    public let components: [any QueryComponent]
 
-    public init(components: [QueryComponent]) { self.components = components }
-    public init(@QueryBuilder _ build: () -> [QueryComponent]) { components = build() }
+    public init(components: [any QueryComponent]) { self.components = components }
+    public init(@QueryBuilder _ build: () -> [any QueryComponent]) { components = build() }
 
     /// Lowers the clauses into a `SQLSelect` — the same AST the parser produces.
     /// An empty `SELECT` list defaults to `*`.
@@ -82,7 +82,7 @@ extension Query {
 
 extension Database {
     /// Builds and runs a query inline: `try db.fetch { Select(…); From(…); … }`.
-    public func fetch(@QueryBuilder _ build: () -> [QueryComponent]) throws(DBError) -> [SQLRow] {
+    public func fetch(@QueryBuilder _ build: () -> [any QueryComponent]) throws(DBError) -> [SQLRow] {
         try Query(components: build()).all(on: self)
     }
 }
