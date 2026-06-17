@@ -109,8 +109,8 @@ jobs:
       - name: Show toolchain
         run: swift --version
       # CSQLite (a system-library target) links libsqlite3; its dev headers back the SQLite-file
-      # importer, the benchmark harness, and the differential tests. The read-only engine
-      # (ADSQLKernel) does not link sqlite3, but `swift build` resolves the whole graph.
+      # importer, the benchmark harness, and the differential tests. The engine (ADDBCore) does
+      # not link sqlite3, but `swift build` resolves the whole graph.
       - name: Install libsqlite3-dev
         run: |
           apt-get update
@@ -281,9 +281,14 @@ jobs:
             spm-${{ runner.os }}-docs-${{ hashFiles('Package.swift') }}-
             spm-${{ runner.os }}-docs-
       - name: Build DocC site (static hosting)
+        # One combined archive over the engine, the SQL layer, and the opt-in
+        # supersets (each is its own product/catalog after the module split).
         run: |
           swift package --allow-writing-to-directory "$PWD/_site" \
-            generate-documentation --target ADSQL \
+            generate-documentation \
+            --enable-experimental-combined-documentation \
+            --target ADDBCore --target ADSQL \
+            --target ADSQLFullTextSearch --target ADSQLJSON \
             --disable-indexing \
             --transform-for-static-hosting \
             --hosting-base-path ADSQL \
@@ -330,9 +335,14 @@ jobs:
             spm-${{ runner.os }}-docs-${{ hashFiles('Package.swift') }}-
             spm-${{ runner.os }}-docs-
       - name: Build DocC (no deploy)
+        # Build every product catalog so a broken cross-module link in any of them
+        # fails the PR check, not just ADSQL's.
         run: |
           swift package --allow-writing-to-directory "$PWD/_docs-check" \
-            generate-documentation --target ADSQL \
+            generate-documentation \
+            --enable-experimental-combined-documentation \
+            --target ADDBCore --target ADSQL \
+            --target ADSQLFullTextSearch --target ADSQLJSON \
             --disable-indexing --output-path "$PWD/_docs-check"
 
   pr-thread-sanitizer:

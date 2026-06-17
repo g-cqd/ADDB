@@ -16,9 +16,12 @@ owner of SQLite-dialect JSON**: parse, `SQLiteJSONPath` walking, the `json_set`/
 > carry `RFC 000x` / `Review 000x` / milestone-finding citations — the technical content stands on
 > its own, and a lint gate (`.githooks/check-tags.sh`) keeps them out.
 
-**Modules:** `ADSQLKernel` (engine) · `ADSQL` (public façade, `@_exported`) · `ADSQLTool` (CLI) ·
-`ADSQLBench` (benchmarks vs system SQLite + FTS5) · `ADSQLTestSupport` (reference model store,
-seeded op generator, simulated disk for crash injection). Tests in `ADSQLKernelTests`.
+**Modules:** `ADDBCore` (engine) · `ADDB` (public engine façade, `@_exported import ADDBCore`) ·
+`ADSQL` (the SQL language: parser / planner / executor, the result-builder DSL, and the
+`@Table` / `#SQL` macros from `ADSQLMacros`) · `ADSQLFullTextSearch` / `ADSQLJSON` (opt-in query
+supersets that re-export ADSQL) · `ADSQLTool` (CLI) · `ADSQLBench` (benchmarks vs system SQLite +
+FTS5) · `ADDBTestSupport` (reference model store, seeded op generator, simulated disk for crash
+injection). Tests in `ADDBTests`.
 
 ---
 
@@ -82,7 +85,7 @@ seeded op generator, simulated disk for crash injection). Tests in `ADSQLKernelT
   `Definitions` (table/column/index), `DatabaseOptions`/`ExecutionOptions`/`DurabilityProfile`,
   `IntegrityReport` + `verifyIntegrity`. The **entire storage engine is `package`** (B-tree, pager,
   cursors, codecs, catalog, txn context) — invisible to external consumers, reachable in-package.
-- `ADSQLKernel` source is split into concern-scoped files; the few largest (the binder, the
+- `ADDBCore` and `ADSQL` source is split into concern-scoped files; the few largest (the binder, the
   evaluator, and the join/select executors) run ~600–730 lines, the rest well under.
 
 ---
