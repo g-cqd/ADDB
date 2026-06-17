@@ -1,16 +1,16 @@
 # Durability and crash safety
 
-Why a committed ADSQL database is recoverable after a crash or power loss, and how to choose a durability profile.
+Why a committed ADDB database is recoverable after a crash or power loss, and how to choose a durability profile.
 
 ## Overview
 
-ADSQL is **crash-safe by construction**, not by replaying a journal. Because a
+ADDB is **crash-safe by construction**, not by replaying a journal. Because a
 write only ever shadows pages into fresh locations and never overwrites a page a
 committed generation can see, the previous committed state stays intact on disk
 throughout a write. A commit becomes visible by atomically publishing a new root
 into one of two **meta pages**; each meta page is XXH64-checksummed.
 
-Recovery is therefore trivial and always available: on open, ADSQL picks the
+Recovery is therefore trivial and always available: on open, ADDB picks the
 **newest meta page whose checksum is valid**. A crash mid-commit can at worst
 leave a torn or stale meta page, which fails its checksum and is ignored — so the
 database opens at the last fully-committed generation. There is no journal to

@@ -1,17 +1,17 @@
 # ``ADSQL``
 
-A pure-Swift, SQLite-compatible embedded SQL database for Swift 6 — a crash-safe
-storage engine with a SQLite-grammar query layer and FTS5-style full-text search, in
-a focused package with a single runtime dependency.
+A SQLite-compatible SQL layer over the ADDB storage engine — a hand-written
+lexer / parser / planner and a result-builder Swift DSL, validated query-for-query
+against SQLite.
 
 ## Overview
 
-ADSQL stores data in a single file as a **copy-on-write B+tree over an `mmap`'d page
-heap** (16 KiB pages, XXH64-checksummed). Concurrency is **single-writer / wait-free
-reader MVCC**: readers observe an immutable committed generation and never block the
-writer, while writes are **group-committed** for durability without per-write `fsync`
-cost. The on-disk format is crash-safe by construction — a partially written
-generation is never observable.
+ADSQL adds a SQLite-grammar query engine on top of the `ADDB` storage engine: you
+`prepare` a ``Statement`` once, then bind and execute it against the
+transaction's schema. The supported surface covers SELECT / INSERT / UPDATE /
+DELETE, joins (nested-loop, hash, and merge), subqueries, aggregates, compound
+queries, upserts, and `RETURNING`, validated by a differential suite that runs every
+query against SQLite.
 
 ```swift
 import ADSQL
@@ -24,86 +24,82 @@ try db.prepare("INSERT INTO users(name) VALUES (?)").run(.text("Ada"))
 
 let rows = try db.prepare("SELECT id, name FROM users ORDER BY id").all()
 for row in rows {
-    print(row[0], row[1])   // .integer(1) .text("Ada")
+    print(row["id"], row["name"])   // .integer(1) .text("Ada")
 }
 ```
 
-Writes run through typed-throws transactions and are batched into durable group
-commits:
+The same query is also expressible through the type-safe **result-builder DSL**,
+which lowers to the same bound plan:
 
 ```swift
-try await db.write { (txn) throws(DBError) in
-    try txn.insert(into: "users", ["name": .text("Grace")])
-}
+let rows = try Query {
+    Select(Column("id"), Column("name"))
+    From("users")
+    Where(Column("name") == "Ada")
+    OrderBy("id")
+}.all(on: db)
 ```
 
-### Design highlights
+See <doc:QueryDSL> for the full builder surface (reads, writes, aggregates,
+validation, and the `@Table` / `#SQL` macros), and <doc:ExecutionStrategies> for
+how a statement is planned and evaluated.
 
-- **SQLite-compatible SQL** — a hand-written lexer/parser/planner covering the common
-  SELECT/INSERT/UPDATE/DELETE surface, joins (nested-loop, hash, and merge), subqueries,
-  aggregates, compound queries, upserts, `RETURNING`, and JSON functions, validated by a
-  differential suite that runs every query against SQLite.
-- **Full-text search** — an FTS5-compatible virtual table with `porter` / `unicode61` /
-  `trigram` tokenizers and BM25 ranking accelerated by a WAND top-k scorer.
-- **Strict memory safety** — the engine compiles under SE-0458 `.strictMemorySafety()`;
-  every `Unsafe*`/`RawSpan` page view is explicitly scoped and lifetime-checked.
-- **One runtime dependency** — the Swift standard library, `Synchronization`, and Darwin/Glibc,
-  plus ADJSONCore (ADJSON's Foundation- and swift-syntax-free JSON core) backing the SQL `json_*`
-  functions.
+The engine itself — storage, MVCC, transactions, schema definition, durability — is
+documented in the `ADDB` product (`import ADDB`); `import ADSQL` re-exports it, so a
+single import gives you both the engine and the SQL layer. Full-text search and JSON
+are opt-in supersets: `import ADSQLFullTextSearch` and `import ADSQLJSON`.
 
 ## Topics
 
 ### Guides
 
-- <doc:Concurrency>
-- <doc:Durability>
-- <doc:FullTextSearch>
+- <doc:QueryDSL>
 - <doc:ExecutionStrategies>
 
-### Opening a database
-
-- ``Database``
-- ``DatabaseOptions``
-- ``DurabilityProfile``
-
-### Statements and results
+### Preparing and running SQL
 
 - ``Statement``
-- ``Row``
-- ``RowView``
-- ``Value``
+- ``SQLRow``
 - ``RunResult``
 
-### Transactions
+### The Query DSL
 
-- ``ReadTxn``
-- ``WriteTxn``
+- ``Query``
+- ``Select``
+- ``From``
+- ``Join``
+- ``LeftJoin``
+- ``Where``
+- ``GroupBy``
+- ``Having``
+- ``OrderBy``
+- ``Limit``
+- ``Offset``
+- ``Distinct``
 
-### Defining schema
+### Writing rows
 
-- ``TableDefinition``
-- ``ColumnDefinition``
-- ``ColumnType``
-- ``PrimaryKey``
-- ``IndexDefinition``
-- ``ForeignKey``
+- ``Insert``
+- ``Update``
+- ``Delete``
 
-### Full-text search
+### DSL expressions
 
-- ``FTSDefinition``
-- ``PorterTokenizer``
-- ``Unicode61Tokenizer``
-- ``TrigramTokenizer``
+- ``Column(_:)``
+- ``Column(_:_:)``
+- ``Count()``
+- ``Count(_:)``
+- ``Sum(_:)``
+- ``Predicate``
+- ``SQLColumn``
+- ``SQLProjection``
 
-### Tuning execution
+### Typed rows and compile-time checks
 
-- ``ExecutionOptions``
-- ``ExecutionOptions/Evaluator``
-
-### Errors and integrity
-
-- ``DBError``
-- ``IntegrityReport``
+- ``TableRow``
+- ``Table(_:)``
+- ``SQL(_:)``
+- ``SQLBuildError``
 
 ### Version
 

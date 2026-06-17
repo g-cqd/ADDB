@@ -4,9 +4,9 @@ Create an FTS5-compatible virtual table, populate it, and run ranked `MATCH` que
 
 ## Overview
 
-ADSQL provides an FTS5-style full-text index as a virtual table, configured by
-`FTSDefinition`: the indexed columns, a tokenizer chain, a content mode, and
-optional prefix indexes and positional `detail`.
+ADSQLFullTextSearch exposes the engine's FTS5-style full-text index as a virtual
+table, configured by `FTSDefinition`: the indexed columns, a tokenizer chain, a
+content mode, and optional prefix indexes and positional `detail`.
 
 ### Tokenizers
 

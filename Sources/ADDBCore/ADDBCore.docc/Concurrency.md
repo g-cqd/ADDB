@@ -1,10 +1,10 @@
 # Concurrency and the MVCC model
 
-How ADSQL serves many concurrent readers and one writer without locks on the read path.
+How ADDB serves many concurrent readers and one writer without locks on the read path.
 
 ## Overview
 
-ADSQL is **single-writer / wait-free-reader**. At any instant there is at most
+ADDB is **single-writer / wait-free-reader**. At any instant there is at most
 one write transaction, while any number of read transactions run concurrently —
 and a reader never blocks the writer, nor the writer a reader.
 

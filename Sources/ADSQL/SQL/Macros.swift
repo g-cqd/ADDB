@@ -1,6 +1,6 @@
 public import ADDBCore
 
-/// A Swift type that maps to a SQL table: its schema (``TableDefinition``) and a
+/// A Swift type that maps to a SQL table: its schema (`TableDefinition`) and a
 /// way to materialize an instance from a result ``SQLRow``. `@Table` synthesizes
 /// the conformance from a struct's stored properties.
 public protocol TableRow {
@@ -13,7 +13,7 @@ public protocol TableRow {
     init(row: SQLRow) throws(DBError)
 }
 
-/// Synthesizes ``TableRow`` conformance for a struct: a ``TableDefinition`` whose
+/// Synthesizes ``TableRow`` conformance for a struct: a `TableDefinition` whose
 /// columns mirror the stored properties and an `init(row:)` that decodes a
 /// ``SQLRow``. The table name defaults to the type name; pass a string to override.
 ///
