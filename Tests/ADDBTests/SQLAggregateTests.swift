@@ -39,7 +39,7 @@ private enum AggFixture {
     }
 
     static func make(_ dir: TempDir, _ name: String) throws -> (Database, SQLiteMirror) {
-        let db = try Database.open(at: dir.file(name))
+        let db = try Database.openJSON(at: dir.file(name))
         try db.writeSync { (txn) throws(DBError) in try txn.createTable(definition) }
         let mirror = SQLiteMirror()
         try mirror.exec(sqliteDDL)
@@ -119,7 +119,7 @@ struct SQLAggregateTests {
     @Test func emptyTableAggregates() throws {
         let dir = TempDir()
         defer { dir.cleanup() }
-        let db = try Database.open(at: dir.file("empty.adsql"))
+        let db = try Database.openJSON(at: dir.file("empty.adsql"))
         defer { db.close() }
         try db.writeSync { (txn) throws(DBError) in try txn.createTable(AggFixture.definition) }
 
@@ -136,7 +136,7 @@ struct SQLAggregateTests {
     @Test func sumIntegerOverflowThrows() throws {
         let dir = TempDir()
         defer { dir.cleanup() }
-        let db = try Database.open(at: dir.file("overflow.adsql"))
+        let db = try Database.openJSON(at: dir.file("overflow.adsql"))
         defer { db.close() }
         let table = TableDefinition(
             "t", columns: [ColumnDefinition("v", .integer)])

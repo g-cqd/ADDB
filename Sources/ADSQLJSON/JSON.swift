@@ -1,5 +1,6 @@
-import ADDBCore
+package import ADDBCore
 import ADJSONCore
+import ADSQL
 
 /// SQLite-compatible JSON support, backed by ADJSON. ADJSON owns every SQLite-dialect
 /// detail: it parses text → an immutable lazy tape, `SQLiteJSONPath` walks it with SQLite
@@ -122,7 +123,7 @@ enum SQLJSON {
         case .blob(let bytes): return .integer(SQLiteJSON.valid(bytes) ? 1 : 0)
         case .text(let s): return .integer(SQLiteJSON.valid(s) ? 1 : 0)
         case .integer, .real:
-            return .integer(SQLiteJSON.valid(SQLFunctions.textify(value)) ? 1 : 0)
+            return .integer(SQLiteJSON.valid(Value.textify(value)) ? 1 : 0)
         }
     }
 
@@ -142,9 +143,9 @@ enum SQLJSON {
         case .integer(let n): path = "$[\(n)]"
         case .text(let s) where s.hasPrefix("$"): path = s
         case .text(let s): path = "$." + encode(.string(s))
-        default: path = "$." + encode(.string(SQLFunctions.textify(spec)))
+        default: path = "$." + encode(.string(Value.textify(spec)))
         }
-        let node = try parsePath(path).evaluate(try parse(SQLFunctions.textify(document)))
+        let node = try parsePath(path).evaluate(try parse(Value.textify(document)))
         if asJSON { return node.exists ? .text(encode(JSONValue(node))) : .null }
         return toSQL(node)
     }
@@ -168,7 +169,7 @@ enum SQLJSON {
     /// `json(X)`: validate and minify JSON text. NULL → NULL.
     static func minify(_ value: Value) throws(DBError) -> Value {
         if value.isNull { return .null }
-        return .text(encode(JSONValue(try parse(SQLFunctions.textify(value)))))
+        return .text(encode(JSONValue(try parse(Value.textify(value)))))
     }
 
     /// `json_array(v1, v2, …)`.

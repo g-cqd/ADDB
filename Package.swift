@@ -128,6 +128,7 @@ let package = Package(
         .library(name: "ADDB", targets: ["ADDB"]),
         .library(name: "ADSQL", targets: ["ADSQL"]),
         .library(name: "ADSQLFullTextSearch", targets: ["ADSQLFullTextSearch"]),
+        .library(name: "ADSQLJSON", targets: ["ADSQLJSON"]),
         .library(name: "ADSQLImport", targets: ["ADSQLImport"]),
         .library(name: "ADSQLSearch", targets: ["ADSQLSearch"]),
         .executable(name: "adsql", targets: ["ADSQLTool"]),
@@ -154,10 +155,18 @@ let package = Package(
         // query DSL. Re-exports the database surface so `import ADSQL` yields it all.
         .target(
             name: "ADSQL",
-            dependencies: [
-                "ADDBCore", "ADSQLMacros", .product(name: "ADJSONCore", package: "ADJSON"),
-            ],
+            dependencies: ["ADDBCore", "ADSQLMacros"],
             swiftSettings: kernelSettings,
+            plugins: isDev ? ["LintBuild"] : []),
+        // ADSQLJSON — the SQLite json1 surface as an opt-in superset of ADSQL: the
+        // json_* scalar functions, json_group_* aggregates, and the `->`/`->>` and
+        // `json_each` operators, all ADJSON-backed. It registers handlers via
+        // `Database.enableJSON()` into ADSQL's function/aggregate/operator registries,
+        // so ADSQL core is ADJSON-free. `@_exported import ADSQL` → SQL + JSON.
+        .target(
+            name: "ADSQLJSON",
+            dependencies: ["ADSQL", .product(name: "ADJSONCore", package: "ADJSON")],
+            swiftSettings: strictSettings,
             plugins: isDev ? ["LintBuild"] : []),
         // ADSQLMacros — the compiler-plugin target backing `@Table` (synthesizes a
         // row type's TableDefinition + typed SQLRow initializer) and `#SQL`
@@ -205,18 +214,18 @@ let package = Package(
         // system SQLite running the IDENTICAL `SearchQuery.sql` + `SearchQuery.bindings`.
         .executableTarget(
             name: "ADSQLBench",
-            dependencies: ["ADSQL", "ADSQLSearch", "ADSQLFullTextSearch", "CSQLite"],
+            dependencies: ["ADSQL", "ADSQLSearch", "ADSQLFullTextSearch", "ADSQLJSON", "CSQLite"],
             swiftSettings: benchSettings),
         .target(
             name: "ADDBTestSupport",
-            dependencies: ["ADDBCore", "CSQLite"],
+            dependencies: ["ADDBCore", "ADSQLJSON", "CSQLite"],
             path: "Tests/ADDBTestSupport",
             swiftSettings: testSettings
         ),
         .testTarget(
             name: "ADDBTests",
             dependencies: [
-                "ADDBCore", "ADSQL", "ADSQLFullTextSearch", "ADDBTestSupport", "CSQLite",
+                "ADDBCore", "ADSQL", "ADSQLFullTextSearch", "ADSQLJSON", "ADDBTestSupport", "CSQLite",
             ],
             swiftSettings: testSettings
         ),
@@ -242,7 +251,7 @@ let package = Package(
         .testTarget(
             name: "ADSQLImportTests",
             dependencies: [
-                "ADDBCore", "ADSQL", "ADSQLFullTextSearch", "ADSQLImport", "ADSQLSearch",
+                "ADDBCore", "ADSQL", "ADSQLFullTextSearch", "ADSQLJSON", "ADSQLImport", "ADSQLSearch",
                 "ADDBTestSupport", "CSQLite",
             ],
             swiftSettings: testSettings

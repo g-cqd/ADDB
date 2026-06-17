@@ -1,7 +1,8 @@
+import ADDBTestSupport
 import Testing
 
 @testable import ADDBCore
-@testable import ADSQL
+@testable import ADSQLJSON
 
 /// Unit coverage for the ADJSON-backed SQL JSON layer (parse → tape, SQLite-dialect
 /// path walk, SQL value mapping, and the scalar functions). End-to-end use is exercised
@@ -225,5 +226,30 @@ struct SQLJSONTests {
         let tooDeep = String(repeating: "[", count: 5000) + String(repeating: "]", count: 5000)
         #expect(SQLJSON.valid(.text(tooDeep)) == .integer(0))  // past the cap: rejected, not crashed
         #expect(throws: DBError.self) { try SQLJSON.extract(tooDeep, path: "$") }
+    }
+
+    @Test func jsonParserFuzzNeverCrashes() {
+        var rng = SplitMix64(seed: 0x150)
+        let seeds = [
+            "{\"a\": [1, 2.5, \"x\", null, true]}", "[]", "{}", "\"hi\\u00e9\"",
+            "{\"nested\": {\"deep\": [[[1]]]}}",
+        ]
+        for seed in seeds {
+            let bytes = Array(seed.utf8)
+            for _ in 0..<200 {
+                var mutated = bytes
+                let op = rng.next() % 3
+                if op == 0, !mutated.isEmpty {
+                    mutated.remove(at: Int(rng.next() % UInt64(mutated.count)))
+                } else if op == 1 {
+                    mutated.insert(
+                        UInt8(truncatingIfNeeded: rng.next()),
+                        at: Int(rng.next() % UInt64(mutated.count + 1)))
+                } else {
+                    mutated = Array(mutated.prefix(Int(rng.next() % UInt64(mutated.count + 1))))
+                }
+                _ = try? SQLJSON.parse(String(decoding: mutated, as: UTF8.self))
+            }
+        }
     }
 }

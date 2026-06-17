@@ -33,7 +33,7 @@ private enum CompoundFixture {
     }
 
     static func make(_ dir: TempDir, _ name: String) throws -> (Database, SQLiteMirror) {
-        let db = try Database.open(at: dir.file(name))
+        let db = try Database.openJSON(at: dir.file(name))
         try db.writeSync { (txn) throws(DBError) in try txn.createTable(definition) }
         let mirror = SQLiteMirror()
         try mirror.exec(sqliteDDL)

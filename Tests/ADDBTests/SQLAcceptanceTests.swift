@@ -80,7 +80,7 @@ private enum DocsCorpus {
 
     static func build() throws -> (Database, SQLiteMirror, TempDir) {
         let dir = TempDir()
-        let db = try Database.open(at: dir.file("acceptance.adsql"))
+        let db = try Database.openJSON(at: dir.file("acceptance.adsql"))
         let mirror = SQLiteMirror()
         for sql in schema + seedStatements() {
             try db.prepare(sql).run()

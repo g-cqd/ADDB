@@ -16,7 +16,7 @@ struct SQLDenormUpdateTests {
     @Test func denormColumnsPopulateViaUpdate() throws {
         let dir = TempDir()
         defer { dir.cleanup() }
-        let db = try Database.open(at: dir.file("denorm.adsql"))
+        let db = try Database.openJSON(at: dir.file("denorm.adsql"))
         defer { db.close() }
 
         for ddl in [

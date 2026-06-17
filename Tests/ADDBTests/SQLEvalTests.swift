@@ -1,4 +1,5 @@
 import ADDBTestSupport
+import ADSQLJSON
 import CSQLite
 import Testing
 
@@ -7,8 +8,14 @@ import Testing
 
 // MARK: - Engines side by side
 
+/// Enables SQL JSON once for this file's direct-evaluator tests (json_*, `->`/`->>`
+/// run through the process-wide registries, not a `Database`, so there's no
+/// `openJSON` seam). Idempotent.
+private let jsonEnabledForEval: Void = ADSQLJSONSupport.register()
+
 /// Evaluates `SELECT <expr>` through ADSQL's evaluator.
 private func adsqlEval(_ expr: String, params: [String: Value] = [:]) throws -> Value {
+    _ = jsonEnabledForEval
     let statement = try SQLParser.parseOne("SELECT \(expr)")
     guard case .select(let select) = statement,
         case .expr(let parsed, _, _) = select.columns[0]
@@ -390,31 +397,6 @@ struct SQLEvalSemanticsTests {
             let text = SQLFunctions.realToText(d)
             #expect(Double(text) == d, "\(d) → \(text)")
             #expect(text.contains(".") || text.contains("e") || text.contains("E"))
-        }
-    }
-
-    @Test func jsonParserFuzzNeverCrashes() {
-        var rng = SplitMix64(seed: 0x150)
-        let seeds = [
-            "{\"a\": [1, 2.5, \"x\", null, true]}", "[]", "{}", "\"hi\\u00e9\"",
-            "{\"nested\": {\"deep\": [[[1]]]}}",
-        ]
-        for seed in seeds {
-            let bytes = Array(seed.utf8)
-            for _ in 0..<200 {
-                var mutated = bytes
-                let op = rng.next() % 3
-                if op == 0, !mutated.isEmpty {
-                    mutated.remove(at: Int(rng.next() % UInt64(mutated.count)))
-                } else if op == 1 {
-                    mutated.insert(
-                        UInt8(truncatingIfNeeded: rng.next()),
-                        at: Int(rng.next() % UInt64(mutated.count + 1)))
-                } else {
-                    mutated = Array(mutated.prefix(Int(rng.next() % UInt64(mutated.count + 1))))
-                }
-                _ = try? SQLJSON.parse(String(decoding: mutated, as: UTF8.self))
-            }
         }
     }
 

@@ -205,7 +205,7 @@ package struct SQLEvalEnv {
     }
 }
 
-enum SQLEval {
+package enum SQLEval {
     // MARK: - Truthiness (SQLite: coerce to numeric, non-zero = true)
 
     static func truth(_ value: Value) -> Truth {
@@ -222,7 +222,7 @@ enum SQLEval {
 
     // MARK: - Expression evaluation
 
-    static func evaluate(_ expr: SQLExpr, _ env: SQLEvalEnv) throws(DBError) -> Value {
+    package static func evaluate(_ expr: SQLExpr, _ env: SQLEvalEnv) throws(DBError) -> Value {
         switch expr {
         case .literal(let value):
             return value
