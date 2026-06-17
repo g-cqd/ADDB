@@ -1,4 +1,5 @@
 import ADDBTestSupport
+import ADFIO
 import ADSQLFullTextSearch
 import Dispatch
 import Synchronization

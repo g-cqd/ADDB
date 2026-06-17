@@ -51,14 +51,3 @@ public enum PageType: UInt8, Sendable {
     case overflow = 3
     case freelist = 4
 }
-
-/// How committed data reaches stable storage.
-public enum DurabilityProfile: Sendable, Equatable {
-    /// `F_BARRIERFSYNC` around the meta flip: commits are always
-    /// crash-consistent; a power loss may drop the last few commits. Default.
-    case barrier
-    /// `F_FULLFSYNC`: power-loss durable, significantly slower.
-    case full
-    /// No syncing. Benchmarks and throwaway data only.
-    case none
-}

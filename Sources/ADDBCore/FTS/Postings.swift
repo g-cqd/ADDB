@@ -1,3 +1,5 @@
+import ADFCore
+
 /// FTS postings. A term's posting list is the docid-ascending sequence
 /// of documents containing it, each carrying per-field term frequencies (for
 /// bm25f) and per-field token positions (for phrase queries). The list is stored

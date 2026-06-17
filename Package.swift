@@ -84,26 +84,34 @@ let isDev = Context.environment["ADDB_DEV"] != nil
 // SQLite-dialect path evaluator). The DocC plugin that builds the documentation site is dev/CI-only
 // (gated behind ADDB_DEV), so packages that depend on ADSQL never resolve it.
 //
-// Two sources, by environment:
-//   • Default — pinned to an exact revision (ADJSON publishes no version tags and tracks `main`):
-//     a floating branch would let an upstream change silently alter ADSQL between builds. The
-//     committed `Package.resolved` locks this revision and the transitive graph (swift-collections,
-//     swift-syntax), so dev/CI builds are reproducible and consumers resolve their own graph.
-//   • `ADDB_LOCAL_ADJSON=1` — a local `../ADJSON` sibling checkout (path dependency), so the two
-//     packages can be edited together during development. A path dependency is unpinned, so it
-//     overrides `Package.resolved`; never set this in CI or a release build.
-let adjsonDependency: Package.Dependency =
-    Context.environment["ADDB_LOCAL_ADJSON"] != nil
-    ? .package(path: "../ADJSON")
-    : .package(
+// First-party dependencies use a per-dependency PATH env var so checkouts need not be co-located.
+// A PATH is an absolute or relative path of the caller's choice and overrides `Package.resolved`;
+// never set one in CI or a release build.
+//   ADJSON_PATH       -> a local ADJSON checkout, else the pinned revision below (ADJSON publishes
+//                        no version tags and tracks `main`, so a revision keeps dev/CI reproducible).
+//   ADFOUNDATION_PATH -> a local ADFoundation checkout, else the published `main` branch.
+let adjsonDependency: Package.Dependency = {
+    if let path = Context.environment["ADJSON_PATH"], !path.isEmpty {
+        return .package(path: path)
+    }
+    return .package(
         url: "https://github.com/g-cqd/ADJSON.git",
         revision: "82d516584d72a404b5fef0d6b0ccd295e139f156")
+}()
+
+let adfoundationDependency: Package.Dependency = {
+    if let path = Context.environment["ADFOUNDATION_PATH"], !path.isEmpty {
+        return .package(path: path)
+    }
+    return .package(url: "https://github.com/g-cqd/ADFoundation.git", branch: "main")
+}()
 // swift-syntax backs the `ADSQLMacros` compiler-plugin target (`@Table`, `#SQL`). It is a
 // build-time dependency only — pulled in to build the macro plugin with the host toolchain — and
 // resolves to the same version ADJSON already pins (`from: "603.0.0"`), so the committed
 // `Package.resolved` is unchanged. Version-based, so ADSQL stays resolvable via a pinned requirement.
 var packageDependencies: [Package.Dependency] = [
     adjsonDependency,
+    adfoundationDependency,
     .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "603.0.0"),
 ]
 if isDev {
@@ -135,14 +143,16 @@ let package = Package(
     ],
     dependencies: packageDependencies,
     targets: [
-        .target(name: "ADCAtomics"),
         // ADDBCore — the database engine implementation: storage (COW B+tree over
         // mmap, MVCC), the relational model + catalog, and the full-text-search
         // index. No SQL, no JSON. Carries the broad `package` surface the SQL layer
         // consumes; its curated `public` API is re-exported by the ADDB product.
         .target(
             name: "ADDBCore",
-            dependencies: ["ADCAtomics"],
+            dependencies: [
+                .product(name: "ADFCore", package: "ADFoundation"),
+                .product(name: "ADFIO", package: "ADFoundation"),
+            ],
             swiftSettings: kernelSettings),
         // ADDB — the database product: a thin public façade that re-exports
         // ADDBCore for consumers who want the engine without the SQL language.
@@ -183,6 +193,7 @@ let package = Package(
                 .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
                 .product(name: "SwiftDiagnostics", package: "swift-syntax"),
                 .product(name: "SwiftParser", package: "swift-syntax"),
+                .product(name: "ADFMacroSupport", package: "ADFoundation"),
             ],
             swiftSettings: strictSettings),
         // ADSQLFullTextSearch — the full-text-search *query* language as an opt-in
@@ -192,7 +203,7 @@ let package = Package(
         // `@_exported import ADSQL`, so `import ADSQLFullTextSearch` yields SQL + FTS.
         .target(
             name: "ADSQLFullTextSearch",
-            dependencies: ["ADDBCore", "ADSQL"],
+            dependencies: ["ADDBCore", "ADSQL", .product(name: "ADFCore", package: "ADFoundation")],
             swiftSettings: strictSettings,
             plugins: isDev ? ["LintBuild"] : []),
         .executableTarget(
@@ -226,6 +237,7 @@ let package = Package(
             name: "ADDBTests",
             dependencies: [
                 "ADDBCore", "ADSQL", "ADSQLFullTextSearch", "ADSQLJSON", "ADDBTestSupport", "CSQLite",
+                .product(name: "ADFCore", package: "ADFoundation"),
             ],
             swiftSettings: testSettings
         ),

@@ -1,4 +1,5 @@
 import ADDBCore
+import ADFCore
 
 /// A single FTS term's posting list as a block-max cursor for WAND. It
 /// walks docids in ascending order, gallops (`advance(to:)`) to a target docid by

@@ -1,3 +1,5 @@
+public import ADFIO
+
 /// Abstraction over the file the engine writes through. Production uses
 /// `FileChannel`; crash-injection tests substitute a journaling channel that
 /// can materialize torn power-cut images.

@@ -1,3 +1,5 @@
+import ADFCore
+
 /// Doc/field length statistics for bm25f length normalization. Per-doc
 /// field lengths live in the stats tree keyed by docid; a single global row
 /// (keyed by a reserved sentinel) holds the corpus totals so `avgdl[field] =

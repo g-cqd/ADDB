@@ -1,3 +1,5 @@
+import ADFCore
+
 /// Order-preserving key encoding: memcmp order over encoded bytes equals
 /// `Value.keyOrder` over the typed values. Used for index keys and PK probes.
 ///

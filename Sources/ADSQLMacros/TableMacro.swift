@@ -1,3 +1,4 @@
+import ADFMacroSupport
 import SwiftDiagnostics
 import SwiftParser
 import SwiftSyntax
@@ -52,7 +53,7 @@ struct TableMacro: ExtensionMacro {
                 }
                 let slot = decodeLines.count
                 columnDefs.append(
-                    "ColumnDefinition(\(stringLiteral(name)), .\(column.affinity), notNull: \(column.notNull))")
+                    "ColumnDefinition(\(swiftStringLiteral(name)), .\(column.affinity), notNull: \(column.notNull))")
                 decodeLines.append(decodeLine(name: name, table: tableName, slot: slot, column: column))
             }
         }
@@ -68,7 +69,7 @@ struct TableMacro: ExtensionMacro {
             extension \(type.trimmed): TableRow {
               public static var tableDefinition: TableDefinition {
                 TableDefinition(
-                  \(raw: stringLiteral(tableName)),
+                  \(raw: swiftStringLiteral(tableName)),
                   columns: [
                     \(raw: columns)
                   ])
@@ -140,11 +141,11 @@ struct TableMacro: ExtensionMacro {
         let expected = column.valueCase.uppercased()
         let target = "self.\(escapedIdentifier(name))"
         if column.notNull {
-            let message = stringLiteral("\(table).\(name): expected \(expected)")
+            let message = swiftStringLiteral("\(table).\(name): expected \(expected)")
             return "guard case .\(column.valueCase)(let \(bound)) = row[\(slot)] else "
                 + "{ throw DBError.sqlRuntime(\(message)) }\n\(target) = \(column.convert(bound))"
         }
-        let nullMessage = stringLiteral("\(table).\(name): expected \(expected) or NULL")
+        let nullMessage = swiftStringLiteral("\(table).\(name): expected \(expected) or NULL")
         return "if case .null = row[\(slot)] { \(target) = nil } "
             + "else if case .\(column.valueCase)(let \(bound)) = row[\(slot)] { \(target) = \(column.convert(bound)) } "
             + "else { throw DBError.sqlRuntime(\(nullMessage)) }"
@@ -217,34 +218,6 @@ struct TableMacro: ExtensionMacro {
         return text
     }
 
-    private static func escapedIdentifier(_ name: String) -> String {
-        swiftKeywords.contains(name) ? "`\(name)`" : name
-    }
-
-    private static func stringLiteral(_ value: String) -> String {
-        var out = "\""
-        for scalar in value.unicodeScalars {
-            switch scalar {
-            case "\\": out += "\\\\"
-            case "\"": out += "\\\""
-            case "\n": out += "\\n"
-            case "\r": out += "\\r"
-            case "\t": out += "\\t"
-            default: out.unicodeScalars.append(scalar)
-            }
-        }
-        out += "\""
-        return out
-    }
-
-    private static let swiftKeywords: Set<String> = [
-        "as", "associatedtype", "break", "case", "catch", "class", "continue", "default", "defer",
-        "deinit", "do", "else", "enum", "extension", "fallthrough", "false", "fileprivate", "for",
-        "func", "guard", "if", "import", "in", "init", "inout", "internal", "is", "let", "nil",
-        "operator", "private", "protocol", "public", "repeat", "rethrows", "return", "self",
-        "static", "struct", "subscript", "super", "switch", "throw", "throws", "true", "try",
-        "typealias", "var", "where", "while", "Any", "Self",
-    ]
 }
 
 enum TableMacroDiagnostic: DiagnosticMessage {

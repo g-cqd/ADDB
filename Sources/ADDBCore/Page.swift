@@ -1,3 +1,5 @@
+import ADFCore
+
 /// Node page header codec and slotted-page primitives.
 ///
 /// Header (32 bytes):

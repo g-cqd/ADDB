@@ -1,3 +1,5 @@
+import ADFCore
+
 /// FTS index build + maintenance. Drives a tokenized document into
 /// the three per-FTS-table B+trees the catalog `FTSRecord` owns:
 ///

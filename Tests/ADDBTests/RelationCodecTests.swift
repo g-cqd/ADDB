@@ -1,4 +1,5 @@
 import ADDBTestSupport
+import ADFCore
 import Testing
 
 @testable import ADDBCore

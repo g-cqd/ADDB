@@ -1,4 +1,4 @@
-import ADCAtomics
+import ADFIO
 
 #if canImport(Darwin)
     import Darwin
@@ -116,10 +116,10 @@ import ADCAtomics
         let owner = pid | (UInt64.random(in: 1...0xFFFF) << 40)
         for index in 0..<Format.readerSlotCount {
             let pidPtr = unsafe slotPointer(index, SlotOffset.ownerPid)
-            if unsafe adc_load_acquire_u64(pidPtr) == 0,
-                unsafe adc_cas_acq_rel_u64(pidPtr, 0, owner)
+            if unsafe adf_atomic_load_acquire_u64(pidPtr) == 0,
+                unsafe adf_atomic_cas_acq_rel_u64(pidPtr, 0, owner)
             {
-                unsafe adc_store_release_u64(slotPointer(index, SlotOffset.generation), 0)
+                unsafe adf_atomic_store_release_u64(slotPointer(index, SlotOffset.generation), 0)
                 slotIndex = index
                 return
             }
@@ -129,15 +129,15 @@ import ADCAtomics
 
     private func releaseSlot() {
         guard slotIndex >= 0 else { return }
-        unsafe adc_store_release_u64(slotPointer(slotIndex, SlotOffset.generation), 0)
-        unsafe adc_store_release_u64(slotPointer(slotIndex, SlotOffset.ownerPid), 0)
+        unsafe adf_atomic_store_release_u64(slotPointer(slotIndex, SlotOffset.generation), 0)
+        unsafe adf_atomic_store_release_u64(slotPointer(slotIndex, SlotOffset.ownerPid), 0)
         slotIndex = -1
     }
 
     /// Publishes this handle's minimum active reader generation (0 = none).
     func publish(minGeneration: UInt64) {
         guard slotIndex >= 0 else { return }
-        unsafe adc_store_release_u64(slotPointer(slotIndex, SlotOffset.generation), minGeneration)
+        unsafe adf_atomic_store_release_u64(slotPointer(slotIndex, SlotOffset.generation), minGeneration)
     }
 
     /// Minimum generation across every live slot (any process), or nil when
@@ -145,8 +145,8 @@ import ADCAtomics
     func minimumGeneration() -> UInt64? {
         var minimum: UInt64?
         for index in 0..<Format.readerSlotCount {
-            guard unsafe adc_load_acquire_u64(slotPointer(index, SlotOffset.ownerPid)) != 0 else { continue }
-            let generation = unsafe adc_load_acquire_u64(slotPointer(index, SlotOffset.generation))
+            guard unsafe adf_atomic_load_acquire_u64(slotPointer(index, SlotOffset.ownerPid)) != 0 else { continue }
+            let generation = unsafe adf_atomic_load_acquire_u64(slotPointer(index, SlotOffset.generation))
             guard generation != 0 else { continue }
             minimum = min(generation, minimum ?? generation)
         }
@@ -157,12 +157,12 @@ import ADCAtomics
     func sweepStaleSlots() {
         for index in 0..<Format.readerSlotCount {
             let pidPtr = unsafe slotPointer(index, SlotOffset.ownerPid)
-            let owner = unsafe adc_load_acquire_u64(pidPtr)
+            let owner = unsafe adf_atomic_load_acquire_u64(pidPtr)
             guard owner != 0 else { continue }
             let pid = pid_t(truncatingIfNeeded: owner & 0xFF_FFFF_FFFF)
             if kill(pid, 0) == -1 && errno == ESRCH {
-                unsafe adc_store_release_u64(slotPointer(index, SlotOffset.generation), 0)
-                _ = unsafe adc_cas_acq_rel_u64(pidPtr, owner, 0)
+                unsafe adf_atomic_store_release_u64(slotPointer(index, SlotOffset.generation), 0)
+                _ = unsafe adf_atomic_cas_acq_rel_u64(pidPtr, owner, 0)
             }
         }
     }

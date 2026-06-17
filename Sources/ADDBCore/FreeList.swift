@@ -1,3 +1,5 @@
+import ADFCore
+
 /// Page reclamation. Freed pages are recorded in a second COW B+tree (the
 /// free tree) keyed by when they become reusable:
 ///

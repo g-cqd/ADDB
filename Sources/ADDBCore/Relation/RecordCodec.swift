@@ -1,3 +1,5 @@
+import ADFCore
+
 /// Row record codec (table-tree values): varint column count followed by
 /// sequential tagged cells. Rows whose stored count is below the schema's
 /// column count read missing trailing columns as DEFAULT/NULL, which makes

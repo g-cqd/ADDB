@@ -1,3 +1,4 @@
+import ADFCore
 import Testing
 
 @testable import ADDBCore
