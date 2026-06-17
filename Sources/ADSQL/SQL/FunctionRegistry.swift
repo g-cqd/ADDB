@@ -15,8 +15,8 @@ package typealias SQLScalarHandler =
 /// time (so the hot path carries the captured handler — no per-row lookup), the
 /// tree-walk evaluator per call. Registration is idempotent and one-way (these
 /// functions are dialect-stateless), so the map is effectively immutable once the
-/// core builtins and any enabled extension modules (``ADSQLJSON``, ``ADSQLTime``)
-/// have registered. Per-process, matching the stateless dialect model.
+/// core builtins and any enabled extension modules (``ADSQLJSON``) have registered.
+/// Per-process, matching the stateless dialect model.
 package enum SQLFunctionRegistry {
     private static let handlers = Mutex<[String: SQLScalarHandler]>([:])
 

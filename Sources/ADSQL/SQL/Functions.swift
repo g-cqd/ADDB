@@ -196,8 +196,7 @@ enum SQLFunctions {
 
     /// Forces one-time registration of the core scalar builtins. Called by
     /// ``SQLFunctionRegistry/handler(for:)`` so any lookup first sees the core set;
-    /// extension modules (``ADSQLJSON``, ``ADSQLTime``) register their functions on
-    /// top when enabled.
+    /// extension modules (``ADSQLJSON``) register their functions on top when enabled.
     static func ensureBuiltinsRegistered() { _ = builtinsRegistered }
 
     private static let builtinsRegistered: Void = {
@@ -319,8 +318,10 @@ enum SQLFunctions {
 }
 extension SQLFunctions {
 
-    /// Registers the datetime functions. Moves to ``ADSQLTime`` later; until then
-    /// ADSQL registers it.
+    /// Registers `datetime()`. Unlike `json_*`, this is a core builtin: `CivilTime`
+    /// lives in ADDBCore (it also materializes the storage-level `DEFAULT
+    /// datetime('now')` in DML, which never reaches this registry), so the function
+    /// ships with the core rather than a separate extension module.
     static func registerDateTimeFunctions() {
         SQLFunctionRegistry.register("DATETIME") { args, star, offset, env throws(DBError) in
             try callDateTime("DATETIME", args: args, star: star, offset: offset, env)
