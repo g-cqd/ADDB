@@ -35,7 +35,7 @@ public final class MMap: @unchecked Sendable {
         let pageSize = UInt64(Format.pageSize)
         let cap = UInt64(capacity)
         let (offset, overflow) = pageNo.multipliedReportingOverflow(by: pageSize)
-        unsafe precondition(
+        precondition(
             !overflow && offset <= cap && cap - offset >= pageSize,
             "ADDB: page \(pageNo) lies outside the mapped range (corrupt page reference)")
         return unsafe map.region(offset: Int(offset), count: Format.pageSize)

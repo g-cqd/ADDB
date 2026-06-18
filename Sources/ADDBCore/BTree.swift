@@ -133,8 +133,10 @@
         // Empty tree: the new leaf is the root.
         if tree.rootPage == 0 {
             let (rootNo, buf) = ctx.allocatePage()
-            unsafe PageHeader.initialize(buf.raw, type: .leaf)
-            _ = unsafe Node.leafInsert(buf.raw, at: 0, key: key, value: leafValue)
+            buf.withMutableBytes { page in
+                PageHeader.initialize(&page, type: .leaf)
+                _ = unsafe Node.leafInsert(&page, at: 0, key: key, value: leafValue)
+            }
             tree.rootPage = rootNo
             tree.depth = 1
             tree.count += 1
@@ -157,10 +159,12 @@
             let childNo = unsafe slot < 0 ? PageHeader.link(ro) : Node.branchChild(ro, slot)
             let (newChildNo, childBuf) = try ctx.shadow(childNo)
             if newChildNo != childNo {
-                if slot < 0 {
-                    unsafe PageHeader.setLink(currentBuf.raw, newChildNo)
-                } else {
-                    unsafe Node.branchSetChild(currentBuf.raw, at: slot, child: newChildNo)
+                currentBuf.withMutableBytes { page in
+                    if slot < 0 {
+                        PageHeader.setLink(&page, newChildNo)
+                    } else {
+                        Node.branchSetChild(&page, at: slot, child: newChildNo)
+                    }
                 }
             }
             path.append((currentBuf, slot))
@@ -179,20 +183,31 @@
             if unsafe old.inlineValue == nil {
                 try Overflow.free(head: old.overflowHead, pager: &pager)
             }
-            unsafe Node.removeCell(currentBuf.raw, at: index)
+            currentBuf.withMutableBytes { page in
+                Node.removeCell(&page, at: index)
+            }
         } else {
             tree.count += 1
         }
 
-        if unsafe Node.leafInsert(currentBuf.raw, at: index, key: key, value: leafValue) {
-            return
+        let inserted = currentBuf.withMutableBytes { page in
+            unsafe Node.leafInsert(&page, at: index, key: key, value: leafValue)
         }
+        if inserted { return }
 
         // Leaf overflowed: split (left half stays on the shadowed page).
         let (rightNo, rightBuf) = ctx.allocatePage()
-        let separator = unsafe Node.splitLeafInserting(
-            original: currentBuf.readOnly, at: index, key: key, value: leafValue,
-            left: currentBuf.raw, right: rightBuf.raw)
+        // `left` aliases `currentBuf`; snapshot the pre-split image into a non-aliasing buffer so
+        // the source read can't overlap the `left` span's exclusive borrow (the split copies its
+        // source page-by-page from this snapshot regardless).
+        let original = unsafe PageBuf(copying: currentBuf.readOnly)
+        let separator = currentBuf.withMutableBytes { left in
+            rightBuf.withMutableBytes { right in
+                unsafe Node.splitLeafInserting(
+                    original: original.readOnly, at: index, key: key, value: leafValue,
+                    left: &left, right: &right)
+            }
+        }
         insertSeparator(ctx, tree: &tree, path: path, separator: separator, rightChild: rightNo)
     }
 
@@ -210,15 +225,24 @@
             let parent = path[level]
             let insertAt = parent.slot + 1
             let inserted = separator.withUnsafeBytes { sep in
-                unsafe Node.branchInsert(parent.buf.raw, at: insertAt, key: sep, child: rightChild)
+                parent.buf.withMutableBytes { page in
+                    unsafe Node.branchInsert(&page, at: insertAt, key: sep, child: rightChild)
+                }
             }
             if inserted { return }
 
             let (newRightNo, newRightBuf) = ctx.allocatePage()
+            // `left` aliases `parent.buf`; snapshot the pre-split image so the source read can't
+            // overlap the `left` span's exclusive borrow.
+            let original = unsafe PageBuf(copying: parent.buf.readOnly)
             let upSeparator = separator.withUnsafeBytes { sep in
-                unsafe Node.splitBranchInserting(
-                    original: parent.buf.readOnly, at: insertAt, key: sep, child: rightChild,
-                    left: parent.buf.raw, right: newRightBuf.raw)
+                parent.buf.withMutableBytes { left in
+                    newRightBuf.withMutableBytes { right in
+                        unsafe Node.splitBranchInserting(
+                            original: original.readOnly, at: insertAt, key: sep, child: rightChild,
+                            left: &left, right: &right)
+                    }
+                }
             }
             separator = upSeparator
             rightChild = newRightNo
@@ -227,10 +251,12 @@
 
         // Root split: grow the tree by one level.
         let (newRootNo, rootBuf) = ctx.allocatePage()
-        unsafe PageHeader.initialize(rootBuf.raw, type: .branch)
-        unsafe PageHeader.setLink(rootBuf.raw, tree.rootPage)
         let ok = separator.withUnsafeBytes { sep in
-            unsafe Node.branchInsert(rootBuf.raw, at: 0, key: sep, child: rightChild)
+            rootBuf.withMutableBytes { page in
+                PageHeader.initialize(&page, type: .branch)
+                PageHeader.setLink(&page, tree.rootPage)
+                return unsafe Node.branchInsert(&page, at: 0, key: sep, child: rightChild)
+            }
         }
         precondition(ok, "fresh root must fit one separator")
         tree.rootPage = newRootNo
@@ -284,7 +310,10 @@
             // stays the rightmost, so its parents still point at it — no descent needed.
             let (leafNo, buf) = try ctx.shadow(c.leafPageNo)
             let cellCount = unsafe PageHeader.cellCount(buf.readOnly)
-            if unsafe Node.leafInsert(buf.raw, at: cellCount, key: key, value: leafValue) {
+            let inserted = buf.withMutableBytes { page in
+                unsafe Node.leafInsert(&page, at: cellCount, key: key, value: leafValue)
+            }
+            if inserted {
                 tree.count += 1
                 cache = unsafe AppendCache(leafPageNo: leafNo, maxKey: [UInt8](key), rootPage: c.rootPage)
                 return
@@ -511,7 +540,7 @@
 struct ReadOnlyOverflowPager<R: PageResolver>: OverflowPager {
     let resolver: R
 
-    func allocateOverflowPage() throws(DBError) -> (pageNo: UInt64, buffer: UnsafeMutableRawBufferPointer) {
+    func allocateOverflowPage() throws(DBError) -> (pageNo: UInt64, buf: PageBuf) {
         preconditionFailure("read-only pager cannot allocate")
     }
     func readOverflowPage(_ pageNo: UInt64) throws(DBError) -> UnsafeRawBufferPointer {

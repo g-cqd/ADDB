@@ -68,42 +68,51 @@ import ADFCore
 
     // MARK: Writes
 
-    @_spi(ADDBEngine) public static func initialize(_ page: UnsafeMutableRawBufferPointer, type: PageType) {
-        precondition(page.count == Format.pageSize)
-        unsafe page.initializeMemory(as: UInt8.self, repeating: 0)
-        unsafe page[Offset.pageType] = type.rawValue
-        unsafe page.storeLE16(UInt16(Format.pageSize), at: Offset.cellAreaStart)
+    // The page mutators take the buffer as an `inout MutableRawSpan` (vended by
+    // `PageBuf.withMutableBytes`): the borrow checker bounds the byte view to the call, and the
+    // `storeLE*` are bounds-checked. Byte layout is unchanged — same offsets, same little-endian
+    // encoding, identical to the former `UnsafeMutableRawBufferPointer` codec.
+    @_spi(ADDBEngine) public static func initialize(_ page: inout MutableRawSpan, type: PageType) {
+        precondition(page.byteCount == Format.pageSize)
+        unsafe page.withUnsafeMutableBytes { buf in
+            unsafe buf.initializeMemory(as: UInt8.self, repeating: 0)
+            return
+        }
+        page.storeBytes(of: type.rawValue, toByteOffset: Offset.pageType, as: UInt8.self)
+        page.storeLE16(UInt16(Format.pageSize), at: Offset.cellAreaStart)
     }
 
     @inline(__always)
-    @_spi(ADDBEngine) public static func setCellCount(_ page: UnsafeMutableRawBufferPointer, _ value: Int) {
-        unsafe page.storeLE16(UInt16(value), at: Offset.cellCount)
+    @_spi(ADDBEngine) public static func setCellCount(_ page: inout MutableRawSpan, _ value: Int) {
+        page.storeLE16(UInt16(value), at: Offset.cellCount)
     }
     @inline(__always)
-    @_spi(ADDBEngine) public static func setCellAreaStart(_ page: UnsafeMutableRawBufferPointer, _ value: Int) {
-        unsafe page.storeLE16(UInt16(value), at: Offset.cellAreaStart)
+    @_spi(ADDBEngine) public static func setCellAreaStart(_ page: inout MutableRawSpan, _ value: Int) {
+        page.storeLE16(UInt16(value), at: Offset.cellAreaStart)
     }
     @inline(__always)
-    @_spi(ADDBEngine) public static func setFragmentedBytes(_ page: UnsafeMutableRawBufferPointer, _ value: Int) {
-        unsafe page.storeLE16(UInt16(value), at: Offset.fragmentedBytes)
+    @_spi(ADDBEngine) public static func setFragmentedBytes(_ page: inout MutableRawSpan, _ value: Int) {
+        page.storeLE16(UInt16(value), at: Offset.fragmentedBytes)
     }
     @inline(__always)
-    @_spi(ADDBEngine) public static func setLink(_ page: UnsafeMutableRawBufferPointer, _ value: UInt64) {
-        unsafe page.storeLE64(value, at: Offset.link)
+    @_spi(ADDBEngine) public static func setLink(_ page: inout MutableRawSpan, _ value: UInt64) {
+        page.storeLE64(value, at: Offset.link)
     }
     @inline(__always)
     @_spi(ADDBEngine) public static func setSlotOffset(
-        _ page: UnsafeMutableRawBufferPointer, _ index: Int, _ value: Int
+        _ page: inout MutableRawSpan, _ index: Int, _ value: Int
     ) {
-        unsafe page.storeLE16(UInt16(value), at: Format.nodeHeaderSize + index * Format.slotSize)
+        page.storeLE16(UInt16(value), at: Format.nodeHeaderSize + index * Format.slotSize)
     }
 
     // MARK: Checksums
 
     /// Stamps the page checksum. Called exactly once per dirty page at commit.
-    @_spi(ADDBEngine) public static func stampChecksum(_ page: UnsafeMutableRawBufferPointer, pageNo: UInt64) {
-        let body = unsafe UnsafeRawBufferPointer(rebasing: UnsafeRawBufferPointer(page)[8...])
-        unsafe page.storeLE64(XXH64.hash(body, seed: pageNo), at: Offset.checksum)
+    @_spi(ADDBEngine) public static func stampChecksum(_ page: inout MutableRawSpan, pageNo: UInt64) {
+        let digest = unsafe page.withUnsafeBytes { (ro: UnsafeRawBufferPointer) in
+            unsafe XXH64.hash(UnsafeRawBufferPointer(rebasing: ro[8...]), seed: pageNo)
+        }
+        page.storeLE64(digest, at: Offset.checksum)
     }
 
     @_spi(ADDBEngine) public static func verifyChecksum(_ page: UnsafeRawBufferPointer, pageNo: UInt64) -> Bool {

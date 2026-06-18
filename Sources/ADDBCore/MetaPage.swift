@@ -82,27 +82,32 @@ import ADFCore
 
     /// Serializes into a full page buffer (only the first 128 bytes are
     /// meaningful; the rest stays as-is, normally zero).
-    @_spi(ADDBEngine) public func encode(into buffer: UnsafeMutableRawBufferPointer, pageNo: UInt64) {
-        precondition(buffer.count == Format.pageSize)
-        Format.magicBytes.withUnsafeBytes { magic in
-            unsafe UnsafeMutableRawBufferPointer(rebasing: buffer[Offset.magic ..< Offset.formatVersion])
-                .copyMemory(from: magic)
+    @_spi(ADDBEngine) public func encode(into buffer: inout MutableRawSpan, pageNo: UInt64) {
+        precondition(buffer.byteCount == Format.pageSize)
+        unsafe buffer.withUnsafeMutableBytes { buf in
+            Format.magicBytes.withUnsafeBytes { magic in
+                unsafe UnsafeMutableRawBufferPointer(rebasing: buf[Offset.magic ..< Offset.formatVersion])
+                    .copyMemory(from: magic)
+            }
         }
-        unsafe buffer.storeLE32(Format.formatVersion, at: Offset.formatVersion)
-        unsafe buffer.storeLE32(UInt32(Format.pageSize), at: Offset.pageSize)
-        unsafe buffer.storeLE64(generation, at: Offset.generation)
-        unsafe buffer.storeLE64(rootPage, at: Offset.rootPage)
-        unsafe buffer.storeLE64(freeRootPage, at: Offset.freeRootPage)
-        unsafe buffer.storeLE64(pageCount, at: Offset.pageCount)
-        unsafe buffer.storeLE64(kvCount, at: Offset.kvCount)
-        unsafe buffer.storeLE16(treeDepth, at: Offset.treeDepth)
-        unsafe buffer.storeLE16(flags, at: Offset.flags)
-        unsafe buffer.storeLE16(freeDepth, at: Offset.freeDepth)
-        unsafe buffer.storeLE64(freeEntryCount, at: Offset.freeEntryCount)
-        for i in (Offset.freeEntryCount + 8) ..< Offset.reservedEnd { unsafe buffer[i] = 0 }
-        let digest = unsafe XXH64.hash(
-            UnsafeRawBufferPointer(rebasing: buffer[0 ..< Offset.checksum]), seed: pageNo)
-        unsafe buffer.storeLE64(digest, at: Offset.checksum)
+        buffer.storeLE32(Format.formatVersion, at: Offset.formatVersion)
+        buffer.storeLE32(UInt32(Format.pageSize), at: Offset.pageSize)
+        buffer.storeLE64(generation, at: Offset.generation)
+        buffer.storeLE64(rootPage, at: Offset.rootPage)
+        buffer.storeLE64(freeRootPage, at: Offset.freeRootPage)
+        buffer.storeLE64(pageCount, at: Offset.pageCount)
+        buffer.storeLE64(kvCount, at: Offset.kvCount)
+        buffer.storeLE16(treeDepth, at: Offset.treeDepth)
+        buffer.storeLE16(flags, at: Offset.flags)
+        buffer.storeLE16(freeDepth, at: Offset.freeDepth)
+        buffer.storeLE64(freeEntryCount, at: Offset.freeEntryCount)
+        for i in (Offset.freeEntryCount + 8) ..< Offset.reservedEnd {
+            buffer.storeBytes(of: 0, toByteOffset: i, as: UInt8.self)
+        }
+        let digest = unsafe buffer.withUnsafeBytes { (ro: UnsafeRawBufferPointer) in
+            unsafe XXH64.hash(UnsafeRawBufferPointer(rebasing: ro[0 ..< Offset.checksum]), seed: pageNo)
+        }
+        buffer.storeLE64(digest, at: Offset.checksum)
     }
 
     /// Strict decode: magic, format version, page size, and checksum must all

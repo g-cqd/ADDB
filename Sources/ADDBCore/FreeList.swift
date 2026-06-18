@@ -56,6 +56,9 @@ import ADFCore
     }
 
     /// Patches a fixed-width buffer with the final page list (count ≤ capacity).
+    /// Operates on a standalone free-tree *value* buffer (the reserve-then-backfill
+    /// placeholder), not a `PageBuf` page, so it stays on `UnsafeMutableRawBufferPointer`
+    /// rather than the page span surface.
     static func patchFixedWidth(_ buffer: UnsafeMutableRawBufferPointer, pages: ArraySlice<UInt64>) {
         precondition(buffer.count >= 4 + 8 * pages.count)
         unsafe buffer.storeLE32(UInt32(pages.count) | fixedWidthFlag, at: 0)

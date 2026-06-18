@@ -40,7 +40,10 @@ public import ADFIO
             var nextExpected = startPage
             while index < pageNos.count, pageNos[index] == nextExpected {
                 let buf = ctx.dirty[pageNos[index]]!
-                unsafe PageHeader.stampChecksum(buf.raw, pageNo: pageNos[index])
+                let pageNo = pageNos[index]
+                buf.withMutableBytes { page in
+                    PageHeader.stampChecksum(&page, pageNo: pageNo)
+                }
                 unsafe run.append(buf.readOnly)
                 nextExpected += 1
                 index += 1
@@ -55,7 +58,9 @@ public import ADFIO
 
         let metaBuf = PageBuf()
         let metaPageNo = newMeta.pageNo
-        unsafe newMeta.encode(into: metaBuf.raw, pageNo: metaPageNo)
+        metaBuf.withMutableBytes { page in
+            newMeta.encode(into: &page, pageNo: metaPageNo)
+        }
         unsafe try channel.pwrite(metaBuf.readOnly, at: Int(metaPageNo) * Format.pageSize)
 
         // `.full` must make THIS commit power-loss durable before returning.
@@ -103,7 +108,9 @@ public import ADFIO
         let meta = Meta.empty
         try channel.preallocate(minimumSize: Int(Format.metaPageCount) * Format.pageSize)
         let buf = PageBuf()
-        unsafe meta.encode(into: buf.raw, pageNo: 0)
+        buf.withMutableBytes { page in
+            meta.encode(into: &page, pageNo: 0)
+        }
         unsafe try channel.pwrite(buf.readOnly, at: 0)
         let zero = PageBuf()
         unsafe try channel.pwrite(zero.readOnly, at: Format.pageSize)

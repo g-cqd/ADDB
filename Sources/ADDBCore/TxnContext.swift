@@ -247,10 +247,9 @@ extension PageSource {
     // MARK: - OverflowPager
 
     @_spi(ADDBEngine) public func allocateOverflowPage() throws(DBError) -> (
-        pageNo: UInt64, buffer: UnsafeMutableRawBufferPointer
+        pageNo: UInt64, buf: PageBuf
     ) {
-        let (pageNo, buf) = allocatePage()
-        return unsafe (pageNo, buf.raw)
+        allocatePage()
     }
 
     @_spi(ADDBEngine) public func readOverflowPage(_ pageNo: UInt64) throws(DBError) -> UnsafeRawBufferPointer {

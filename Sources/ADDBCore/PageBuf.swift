@@ -2,15 +2,13 @@
 /// (keyed by page number in the write transaction's dirty table); ownership
 /// is unique so the backing memory is freed exactly once.
 @safe public final class PageBuf {
-    // The naked mutable buffer is now `internal` (was `public`): the page
-    // mutators (`Node.*`/`PageHeader.*`) live in this module, and external code
-    // only needs the read-only view below, so the writable pointer no longer
-    // leaves the package. SAFETY: the buffer outlives every
-    // borrowed view of it — PageBuf owns it for its whole lifetime and frees it
-    // exactly once in `deinit`. Vending it as a `MutableRawSpan` via a
-    // `withMutableBytes` scope (compiler-checked borrow) is deferred: it would
-    // touch the ~60 in-module `.raw` mutator call sites.
-    let raw: UnsafeMutableRawBufferPointer
+    // The naked mutable buffer is `private`: the page mutators (`Node.*`/`PageHeader.*`) reach the
+    // bytes through the compiler-checked ``withMutableBytes(_:)`` scope below (a `MutableRawSpan`
+    // whose lifetime the borrow checker bounds to the call), and external code only needs the
+    // read-only view. So the writable pointer never leaves the instance — neither as a bare pointer
+    // nor escaping the scope. SAFETY: the buffer outlives every borrowed view of it — PageBuf owns
+    // it for its whole lifetime and frees it exactly once in `deinit`.
+    private let raw: UnsafeMutableRawBufferPointer
     /// Which batch request last gained mutable access (group-commit nesting).
     var requestEpoch: UInt32 = 0
 
@@ -35,4 +33,17 @@
 
     @inline(__always)
     public var readOnly: UnsafeRawBufferPointer { unsafe UnsafeRawBufferPointer(raw) }
+
+    /// Vends the page's bytes as a `MutableRawSpan` for the duration of `body`. The span is the
+    /// in-module writer surface (the `Node.*` / `PageHeader.*` page mutators take `inout
+    /// MutableRawSpan`); the borrow checker bounds its lifetime to the call, so a page view can
+    /// neither escape nor outlive the buffer. SAFETY: the span covers exactly the owned 16 KiB
+    /// allocation, which lives for the whole `PageBuf` lifetime (freed once in `deinit`).
+    @inline(__always)
+    func withMutableBytes<E: Error, R: ~Copyable>(
+        _ body: (inout MutableRawSpan) throws(E) -> R
+    ) throws(E) -> R {
+        var span = unsafe MutableRawSpan(_unsafeBytes: raw)
+        return try body(&span)
+    }
 }

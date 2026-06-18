@@ -45,10 +45,12 @@ extension BTree {
             let childNo = unsafe slot < 0 ? PageHeader.link(ro) : Node.branchChild(ro, slot)
             let (newChildNo, childBuf) = try ctx.shadow(childNo)
             if newChildNo != childNo {
-                if slot < 0 {
-                    unsafe PageHeader.setLink(currentBuf.raw, newChildNo)
-                } else {
-                    unsafe Node.branchSetChild(currentBuf.raw, at: slot, child: newChildNo)
+                currentBuf.withMutableBytes { page in
+                    if slot < 0 {
+                        PageHeader.setLink(&page, newChildNo)
+                    } else {
+                        Node.branchSetChild(&page, at: slot, child: newChildNo)
+                    }
                 }
             }
             path.append(PathNode(pageNo: currentNo, buf: currentBuf, slot: slot))
@@ -66,7 +68,9 @@ extension BTree {
             var pager = ctx
             try Overflow.free(head: cell.overflowHead, pager: &pager)
         }
-        unsafe Node.removeCell(currentBuf.raw, at: index)
+        currentBuf.withMutableBytes { page in
+            Node.removeCell(&page, at: index)
+        }
         tree.count -= 1
 
         try rebalance(
@@ -168,16 +172,20 @@ extension BTree {
                 repointChild(parent.buf, cellIndex: parentCellIndex - 1, to: newLeftNo)
             }
             if !isLeaf {
+                let insertAt = unsafe PageHeader.cellCount(leftOwned.readOnly)
+                let rightLink = unsafe PageHeader.link(rightRO)
                 let ok = separator.withUnsafeBytes { sep in
-                    unsafe Node.branchInsert(
-                        leftOwned.raw, at: PageHeader.cellCount(leftOwned.readOnly),
-                        key: sep, child: PageHeader.link(rightRO))
+                    leftOwned.withMutableBytes { page in
+                        unsafe Node.branchInsert(&page, at: insertAt, key: sep, child: rightLink)
+                    }
                 }
                 precondition(ok, "merge size was pre-checked")
             }
             unsafe appendAllCells(from: rightRO, to: leftOwned)
             ctx.freePage(rightNo)
-            unsafe Node.removeCell(parent.buf.raw, at: parentCellIndex)
+            parent.buf.withMutableBytes { page in
+                Node.removeCell(&page, at: parentCellIndex)
+            }
             try rebalance(
                 ctx, tree: &tree, path: path,
                 nodePageNo: parent.pageNo, nodeBuf: parent.buf, level: level - 1)
@@ -200,19 +208,27 @@ extension BTree {
             let rRO = unsafe rightOwned.readOnly
             if isLeaf {
                 let image = unsafe cellImage(rRO, 0)
-                unsafe Node.removeCell(rightOwned.raw, at: 0)
+                rightOwned.withMutableBytes { page in
+                    Node.removeCell(&page, at: 0)
+                }
                 appendCellImage(image, to: leftOwned)
                 newSeparator = unsafe [UInt8](Node.nodeKey(rightOwned.readOnly, 0))
             } else {
+                // Reads of both pages first (distinct buffers), then the targeted writes.
+                let insertAt = unsafe PageHeader.cellCount(leftOwned.readOnly)
+                let rightLink = unsafe PageHeader.link(rRO)
+                let rightFirstChild = unsafe Node.branchChild(rRO, 0)
+                newSeparator = unsafe [UInt8](Node.branchKey(rRO, 0))
                 let ok = separator.withUnsafeBytes { sep in
-                    unsafe Node.branchInsert(
-                        leftOwned.raw, at: PageHeader.cellCount(leftOwned.readOnly),
-                        key: sep, child: PageHeader.link(rRO))
+                    leftOwned.withMutableBytes { page in
+                        unsafe Node.branchInsert(&page, at: insertAt, key: sep, child: rightLink)
+                    }
                 }
                 precondition(ok, "borrow target was underfull")
-                newSeparator = unsafe [UInt8](Node.branchKey(rRO, 0))
-                unsafe PageHeader.setLink(rightOwned.raw, Node.branchChild(rRO, 0))
-                unsafe Node.removeCell(rightOwned.raw, at: 0)
+                rightOwned.withMutableBytes { page in
+                    PageHeader.setLink(&page, rightFirstChild)
+                    Node.removeCell(&page, at: 0)
+                }
             }
         } else {
             // Move left's last cell into right.
@@ -221,7 +237,9 @@ extension BTree {
             if isLeaf {
                 let image = unsafe cellImage(lRO, lastIndex)
                 newSeparator = Node.keyOfCellImage(image, type: .leaf)
-                unsafe Node.removeCell(leftOwned.raw, at: lastIndex)
+                leftOwned.withMutableBytes { page in
+                    Node.removeCell(&page, at: lastIndex)
+                }
                 let ok = image.withUnsafeBytes { raw in
                     unsafe insertCellImage(raw, into: rightOwned, at: 0)
                 }
@@ -231,11 +249,17 @@ extension BTree {
                 let pushedChild = unsafe Node.branchChild(lRO, lastIndex)
                 let oldLeftmost = unsafe PageHeader.link(rightOwned.readOnly)
                 let ok = separator.withUnsafeBytes { sep in
-                    unsafe Node.branchInsert(rightOwned.raw, at: 0, key: sep, child: oldLeftmost)
+                    rightOwned.withMutableBytes { page in
+                        unsafe Node.branchInsert(&page, at: 0, key: sep, child: oldLeftmost)
+                    }
                 }
                 precondition(ok, "borrow target was underfull")
-                unsafe PageHeader.setLink(rightOwned.raw, pushedChild)
-                unsafe Node.removeCell(leftOwned.raw, at: lastIndex)
+                rightOwned.withMutableBytes { page in
+                    PageHeader.setLink(&page, pushedChild)
+                }
+                leftOwned.withMutableBytes { page in
+                    Node.removeCell(&page, at: lastIndex)
+                }
             }
         }
 
@@ -253,16 +277,25 @@ extension BTree {
     ) {
         let parent = path[parentLevel]
         let child = unsafe Node.branchChild(parent.buf.readOnly, cellIndex)
-        unsafe Node.removeCell(parent.buf.raw, at: cellIndex)
         let inserted = newKey.withUnsafeBytes { sep in
-            unsafe Node.branchInsert(parent.buf.raw, at: cellIndex, key: sep, child: child)
+            parent.buf.withMutableBytes { page in
+                Node.removeCell(&page, at: cellIndex)
+                return unsafe Node.branchInsert(&page, at: cellIndex, key: sep, child: child)
+            }
         }
         if inserted { return }
         let (newRightNo, newRightBuf) = ctx.allocatePage()
+        // `left` aliases `parent.buf`; snapshot the pre-split image so the source read can't
+        // overlap the `left` span's exclusive borrow.
+        let original = unsafe PageBuf(copying: parent.buf.readOnly)
         let upSeparator = newKey.withUnsafeBytes { sep in
-            unsafe Node.splitBranchInserting(
-                original: parent.buf.readOnly, at: cellIndex, key: sep, child: child,
-                left: parent.buf.raw, right: newRightBuf.raw)
+            parent.buf.withMutableBytes { left in
+                newRightBuf.withMutableBytes { right in
+                    unsafe Node.splitBranchInserting(
+                        original: original.readOnly, at: cellIndex, key: sep, child: child,
+                        left: &left, right: &right)
+                }
+            }
         }
         insertSeparator(
             ctx, tree: &tree, path: path[..<parentLevel].map { (buf: $0.buf, slot: $0.slot) },
@@ -275,10 +308,12 @@ extension BTree {
     private static func repointChild(
         _ parentBuf: PageBuf, cellIndex: Int, to newChild: UInt64
     ) {
-        if cellIndex < 0 {
-            unsafe PageHeader.setLink(parentBuf.raw, newChild)
-        } else {
-            unsafe Node.branchSetChild(parentBuf.raw, at: cellIndex, child: newChild)
+        parentBuf.withMutableBytes { page in
+            if cellIndex < 0 {
+                PageHeader.setLink(&page, newChild)
+            } else {
+                Node.branchSetChild(&page, at: cellIndex, child: newChild)
+            }
         }
     }
 
@@ -288,8 +323,9 @@ extension BTree {
     }
 
     private static func appendCellImage(_ image: [UInt8], to buf: PageBuf) {
+        let index = unsafe PageHeader.cellCount(buf.readOnly)
         let ok = image.withUnsafeBytes { raw in
-            unsafe insertCellImage(raw, into: buf, at: PageHeader.cellCount(buf.readOnly))
+            unsafe insertCellImage(raw, into: buf, at: index)
         }
         precondition(ok, "append target was pre-checked")
     }
@@ -297,8 +333,10 @@ extension BTree {
     private static func insertCellImage(
         _ image: UnsafeRawBufferPointer, into buf: PageBuf, at index: Int
     ) -> Bool {
-        unsafe Node.insertCell(buf.raw, at: index, size: image.count) { page, offset in
-            unsafe Node.copyBytes(into: page, at: offset, from: image)
+        buf.withMutableBytes { page in
+            Node.insertCell(&page, at: index, size: image.count) { cell, offset in
+                unsafe Node.copyBytes(into: &cell, at: offset, from: image)
+            }
         }
     }
 
@@ -306,12 +344,13 @@ extension BTree {
         for i in unsafe 0 ..< PageHeader.cellCount(source) {
             let offset = unsafe PageHeader.slotOffset(source, i)
             let length = unsafe Node.cellLength(source, i)
-            let ok = unsafe Node.insertCell(
-                buf.raw, at: PageHeader.cellCount(buf.readOnly), size: length
-            ) { page, dst in
-                unsafe Node.copyBytes(
-                    into: page, at: dst,
-                    from: UnsafeRawBufferPointer(rebasing: source[offset ..< offset + length]))
+            let index = unsafe PageHeader.cellCount(buf.readOnly)
+            let ok = buf.withMutableBytes { page in
+                Node.insertCell(&page, at: index, size: length) { cell, dst in
+                    unsafe Node.copyBytes(
+                        into: &cell, at: dst,
+                        from: UnsafeRawBufferPointer(rebasing: source[offset ..< offset + length]))
+                }
             }
             precondition(ok, "merge size was pre-checked")
         }

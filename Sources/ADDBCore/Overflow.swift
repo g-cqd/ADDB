@@ -3,7 +3,10 @@
 /// `Format.overflowCapacity` payload bytes; the header link field points to
 /// the next page in the chain (0 terminates).
 public protocol OverflowPager {
-    mutating func allocateOverflowPage() throws(DBError) -> (pageNo: UInt64, buffer: UnsafeMutableRawBufferPointer)
+    /// Allocates a fresh overflow page and hands back its owning `PageBuf`, so the writer reaches
+    /// the bytes through the buffer's compiler-checked `withMutableBytes` span scope (a
+    /// `MutableRawSpan` can't be vended as a bare pointer — it is `~Escapable`).
+    mutating func allocateOverflowPage() throws(DBError) -> (pageNo: UInt64, buf: PageBuf)
     func readOverflowPage(_ pageNo: UInt64) throws(DBError) -> UnsafeRawBufferPointer
     mutating func freeOverflowPage(_ pageNo: UInt64) throws(DBError)
 }
@@ -19,24 +22,27 @@ public enum Overflow {
     ) throws(DBError) -> UInt64 {
         unsafe precondition(!value.isEmpty)
         let pages = pageCount(forLength: value.count)
-        var allocated: [(pageNo: UInt64, buffer: UnsafeMutableRawBufferPointer)] = unsafe []
-        unsafe allocated.reserveCapacity(pages)
+        var allocated: [(pageNo: UInt64, buf: PageBuf)] = []
+        allocated.reserveCapacity(pages)
         for _ in 0 ..< pages {
-            unsafe allocated.append(try pager.allocateOverflowPage())
+            allocated.append(try pager.allocateOverflowPage())
         }
         var remaining = unsafe value
         for i in 0 ..< pages {
-            let slot = unsafe allocated[i]
+            let slot = allocated[i]
             let take = min(remaining.count, Format.overflowCapacity)
-            unsafe PageHeader.initialize(slot.buffer, type: .overflow)
-            unsafe PageHeader.setCellCount(slot.buffer, take)  // dataLen
-            unsafe PageHeader.setLink(slot.buffer, i + 1 < pages ? allocated[i + 1].pageNo : 0)
-            unsafe Node.copyBytes(
-                into: slot.buffer, at: Format.nodeHeaderSize,
-                from: UnsafeRawBufferPointer(rebasing: remaining[remaining.startIndex ..< remaining.startIndex + take]))
+            let nextLink: UInt64 = i + 1 < pages ? allocated[i + 1].pageNo : 0
+            let chunk = unsafe UnsafeRawBufferPointer(
+                rebasing: remaining[remaining.startIndex ..< remaining.startIndex + take])
+            slot.buf.withMutableBytes { page in
+                PageHeader.initialize(&page, type: .overflow)
+                PageHeader.setCellCount(&page, take)  // dataLen
+                PageHeader.setLink(&page, nextLink)
+                unsafe Node.copyBytes(into: &page, at: Format.nodeHeaderSize, from: chunk)
+            }
             unsafe remaining = unsafe UnsafeRawBufferPointer(rebasing: remaining[(remaining.startIndex + take)...])
         }
-        return unsafe allocated[0].pageNo
+        return allocated[0].pageNo
     }
 
     /// Reads a whole chain back (copying); `length` comes from the leaf cell.

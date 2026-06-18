@@ -262,41 +262,44 @@ import ADFCore
     }
 
     static func encodeLeafCell(
-        into page: UnsafeMutableRawBufferPointer, at offset: Int,
+        into page: inout MutableRawSpan, at offset: Int,
         key: UnsafeRawBufferPointer, value: LeafValue
     ) {
         switch value {
             case .inline(let v):
-                unsafe page[offset] = 0
-                unsafe page.storeLE16(UInt16(key.count), at: offset + 1)
-                unsafe page.storeLE16(UInt16(v.count), at: offset + 3)
-                unsafe copyBytes(into: page, at: offset + 5, from: key)
-                unsafe copyBytes(into: page, at: offset + 5 + key.count, from: v)
+                page.storeBytes(of: 0, toByteOffset: offset, as: UInt8.self)
+                page.storeLE16(UInt16(key.count), at: offset + 1)
+                page.storeLE16(UInt16(v.count), at: offset + 3)
+                unsafe copyBytes(into: &page, at: offset + 5, from: key)
+                unsafe copyBytes(into: &page, at: offset + 5 + key.count, from: v)
             case .overflow(let head, let length):
-                unsafe page[offset] = leafOverflowFlag
-                unsafe page.storeLE16(UInt16(key.count), at: offset + 1)
-                unsafe page.storeLE32(length, at: offset + 3)
-                unsafe page.storeLE64(head, at: offset + 7)
-                unsafe copyBytes(into: page, at: offset + 15, from: key)
+                page.storeBytes(of: leafOverflowFlag, toByteOffset: offset, as: UInt8.self)
+                page.storeLE16(UInt16(key.count), at: offset + 1)
+                page.storeLE32(length, at: offset + 3)
+                page.storeLE64(head, at: offset + 7)
+                unsafe copyBytes(into: &page, at: offset + 15, from: key)
         }
     }
 
     static func encodeBranchCell(
-        into page: UnsafeMutableRawBufferPointer, at offset: Int,
+        into page: inout MutableRawSpan, at offset: Int,
         key: UnsafeRawBufferPointer, child: UInt64
     ) {
-        unsafe page.storeLE16(UInt16(key.count), at: offset)
-        unsafe page.storeLE64(child, at: offset + 2)
-        unsafe copyBytes(into: page, at: offset + 10, from: key)
+        page.storeLE16(UInt16(key.count), at: offset)
+        page.storeLE64(child, at: offset + 2)
+        unsafe copyBytes(into: &page, at: offset + 10, from: key)
     }
 
     @inline(__always)
     static func copyBytes(
-        into page: UnsafeMutableRawBufferPointer, at offset: Int, from source: UnsafeRawBufferPointer
+        into page: inout MutableRawSpan, at offset: Int, from source: UnsafeRawBufferPointer
     ) {
         guard unsafe !source.isEmpty else { return }
-        unsafe UnsafeMutableRawBufferPointer(rebasing: page[offset ..< offset + source.count])
-            .copyMemory(from: source)
+        unsafe page.withUnsafeMutableBytes { buf in
+            unsafe UnsafeMutableRawBufferPointer(rebasing: buf[offset ..< offset + source.count])
+                .copyMemory(from: source)
+            return
+        }
     }
 
     // MARK: - Insertion / removal
@@ -304,88 +307,106 @@ import ADFCore
     /// Inserts an encoded cell of `size` bytes at slot `index`, claiming space
     /// from the cell area. Returns false when the page cannot fit it (split).
     static func insertCell(
-        _ page: UnsafeMutableRawBufferPointer, at index: Int, size: Int,
-        write: (UnsafeMutableRawBufferPointer, Int) -> Void
+        _ page: inout MutableRawSpan, at index: Int, size: Int,
+        write: (inout MutableRawSpan, Int) -> Void
     ) -> Bool {
-        let ro = UnsafeRawBufferPointer(page)
         let need = size + Format.slotSize
-        if unsafe PageHeader.freeSpace(ro) < need {
-            guard unsafe PageHeader.freeSpace(ro) + PageHeader.fragmentedBytes(ro) >= need else {
-                return false
-            }
-            unsafe compact(page)
+        // Header reads-during-write go through the page's read-only view.
+        let (freeSpace, fragmented) = unsafe page.withUnsafeBytes { (ro: UnsafeRawBufferPointer) in
+            unsafe (PageHeader.freeSpace(ro), PageHeader.fragmentedBytes(ro))
         }
-        let count = unsafe PageHeader.cellCount(ro)
-        let newOffset = unsafe PageHeader.cellAreaStart(ro) - size
-        unsafe write(page, newOffset)
+        if freeSpace < need {
+            guard freeSpace + fragmented >= need else { return false }
+            compact(&page)
+        }
+        let (count, cellAreaStart) = unsafe page.withUnsafeBytes { (ro: UnsafeRawBufferPointer) in
+            unsafe (PageHeader.cellCount(ro), PageHeader.cellAreaStart(ro))
+        }
+        let newOffset = cellAreaStart - size
+        write(&page, newOffset)
 
-        // Shift slots [index, count) up one position.
+        // Shift slots [index, count) up one position. The shift stays a single `memmove`
+        // (overlapping, hot insert path) inside the span's mutable-bytes scope — not a byte loop.
         let slotBase = Format.nodeHeaderSize
         if count > index {
             let src = slotBase + index * Format.slotSize
             let len = (count - index) * Format.slotSize
-            unsafe memmove(page.baseAddress! + src + Format.slotSize, page.baseAddress! + src, len)
+            unsafe page.withUnsafeMutableBytes { buf in
+                unsafe memmove(buf.baseAddress! + src + Format.slotSize, buf.baseAddress! + src, len)
+                return
+            }
         }
-        unsafe PageHeader.setSlotOffset(page, index, newOffset)
-        unsafe PageHeader.setCellCount(page, count + 1)
-        unsafe PageHeader.setCellAreaStart(page, newOffset)
+        PageHeader.setSlotOffset(&page, index, newOffset)
+        PageHeader.setCellCount(&page, count + 1)
+        PageHeader.setCellAreaStart(&page, newOffset)
         return true
     }
 
     @_spi(ADDBEngine) public static func leafInsert(
-        _ page: UnsafeMutableRawBufferPointer, at index: Int,
+        _ page: inout MutableRawSpan, at index: Int,
         key: UnsafeRawBufferPointer, value: LeafValue
     ) -> Bool {
-        unsafe insertCell(page, at: index, size: leafCellSize(keyLen: key.count, value: value)) {
-            unsafe encodeLeafCell(into: $0, at: $1, key: key, value: value)
+        insertCell(&page, at: index, size: leafCellSize(keyLen: key.count, value: value)) {
+            unsafe encodeLeafCell(into: &$0, at: $1, key: key, value: value)
         }
     }
 
     @_spi(ADDBEngine) public static func branchInsert(
-        _ page: UnsafeMutableRawBufferPointer, at index: Int,
+        _ page: inout MutableRawSpan, at index: Int,
         key: UnsafeRawBufferPointer, child: UInt64
     ) -> Bool {
-        unsafe insertCell(page, at: index, size: branchCellSize(keyLen: key.count)) {
-            unsafe encodeBranchCell(into: $0, at: $1, key: key, child: child)
+        insertCell(&page, at: index, size: branchCellSize(keyLen: key.count)) {
+            unsafe encodeBranchCell(into: &$0, at: $1, key: key, child: child)
         }
     }
 
     /// Removes the cell at slot `index`, accounting its bytes as fragmented
     /// (or reclaiming directly when it borders the cell area start).
-    @_spi(ADDBEngine) public static func removeCell(_ page: UnsafeMutableRawBufferPointer, at index: Int) {
-        let ro = UnsafeRawBufferPointer(page)
-        let count = unsafe PageHeader.cellCount(ro)
-        let offset = unsafe PageHeader.slotOffset(ro, index)
-        let length = unsafe cellLength(ro, index)
+    @_spi(ADDBEngine) public static func removeCell(_ page: inout MutableRawSpan, at index: Int) {
+        let (count, offset, length, cellAreaStart, fragmented) =
+            unsafe page.withUnsafeBytes { (ro: UnsafeRawBufferPointer) in
+                unsafe (
+                    PageHeader.cellCount(ro), PageHeader.slotOffset(ro, index), cellLength(ro, index),
+                    PageHeader.cellAreaStart(ro), PageHeader.fragmentedBytes(ro)
+                )
+            }
 
+        // Slot-array shift stays a single `memmove` (overlapping, hot delete path).
         let slotBase = Format.nodeHeaderSize
         if index < count - 1 {
             let dst = slotBase + index * Format.slotSize
             let len = (count - 1 - index) * Format.slotSize
-            unsafe memmove(page.baseAddress! + dst, page.baseAddress! + dst + Format.slotSize, len)
+            unsafe page.withUnsafeMutableBytes { buf in
+                unsafe memmove(buf.baseAddress! + dst, buf.baseAddress! + dst + Format.slotSize, len)
+                return
+            }
         }
-        unsafe PageHeader.setCellCount(page, count - 1)
-        if unsafe offset == PageHeader.cellAreaStart(ro) {
-            unsafe PageHeader.setCellAreaStart(page, offset + length)
+        PageHeader.setCellCount(&page, count - 1)
+        if offset == cellAreaStart {
+            PageHeader.setCellAreaStart(&page, offset + length)
         } else {
-            unsafe PageHeader.setFragmentedBytes(page, PageHeader.fragmentedBytes(ro) + length)
+            PageHeader.setFragmentedBytes(&page, fragmented + length)
         }
     }
 
     /// Overwrites the child pointer of a branch cell in place (fixed width).
     @_spi(ADDBEngine) public static func branchSetChild(
-        _ page: UnsafeMutableRawBufferPointer, at index: Int, child: UInt64
+        _ page: inout MutableRawSpan, at index: Int, child: UInt64
     ) {
-        let offset = unsafe PageHeader.slotOffset(UnsafeRawBufferPointer(page), index)
-        unsafe page.storeLE64(child, at: offset + 2)
+        let offset = unsafe page.withUnsafeBytes { (ro: UnsafeRawBufferPointer) in
+            unsafe PageHeader.slotOffset(ro, index)
+        }
+        page.storeLE64(child, at: offset + 2)
     }
 
     // MARK: - Compaction
 
     /// Rewrites the cell area densely (slot order preserved), clearing
     /// fragmentation. Uses a scratch copy of the page.
-    @_spi(ADDBEngine) public static func compact(_ page: UnsafeMutableRawBufferPointer) {
-        let scratch = unsafe PageBuf(copying: UnsafeRawBufferPointer(page))
+    @_spi(ADDBEngine) public static func compact(_ page: inout MutableRawSpan) {
+        let scratch = unsafe page.withUnsafeBytes { (ro: UnsafeRawBufferPointer) in
+            unsafe PageBuf(copying: ro)
+        }
         let ro = unsafe scratch.readOnly
         let count = unsafe PageHeader.cellCount(ro)
         var writeEnd = Format.pageSize
@@ -394,12 +415,12 @@ import ADFCore
             let src = unsafe PageHeader.slotOffset(ro, i)
             writeEnd -= length
             unsafe copyBytes(
-                into: page, at: writeEnd,
+                into: &page, at: writeEnd,
                 from: UnsafeRawBufferPointer(rebasing: ro[src ..< src + length]))
-            unsafe PageHeader.setSlotOffset(page, i, writeEnd)
+            PageHeader.setSlotOffset(&page, i, writeEnd)
         }
-        unsafe PageHeader.setCellAreaStart(page, writeEnd)
-        unsafe PageHeader.setFragmentedBytes(page, 0)
+        PageHeader.setCellAreaStart(&page, writeEnd)
+        PageHeader.setFragmentedBytes(&page, 0)
     }
 
     // MARK: - Splits
@@ -462,13 +483,19 @@ import ADFCore
         return logical - 1
     }
 
-    /// Splits a full leaf while inserting (key, value) at `index`.
-    /// `left` may alias the original page's buffer. Returns the separator key
-    /// (first key of the right page).
+    /// Splits a full leaf while inserting (key, value) at `index`. Returns the
+    /// separator key (first key of the right page).
+    ///
+    /// PRECONDITION: `original` must NOT alias `left` or `right` (it is read
+    /// cell-by-cell *after* both target pages are zero-initialized). A caller whose
+    /// left page aliases the page being split (the in-place COW case) snapshots the
+    /// pre-split image into a standalone buffer and passes that as `original` — the
+    /// same one 16 KiB copy this used to make internally, now hoisted to the caller
+    /// (so a non-aliasing caller pays none).
     @_spi(ADDBEngine) public static func splitLeafInserting(
         original: UnsafeRawBufferPointer, at index: Int,
         key: UnsafeRawBufferPointer, value: LeafValue,
-        left: UnsafeMutableRawBufferPointer, right: UnsafeMutableRawBufferPointer
+        left: inout MutableRawSpan, right: inout MutableRawSpan
     ) -> [UInt8] {
         let count = unsafe PageHeader.cellCount(original)
         let logical = count + 1
@@ -489,18 +516,13 @@ import ADFCore
 
         var newCell = [UInt8](repeating: 0, count: newSize)
         newCell.withUnsafeMutableBytes { raw in
-            unsafe encodeLeafCell(
-                into: UnsafeMutableRawBufferPointer(mutating: UnsafeRawBufferPointer(raw)), at: 0,
-                key: key, value: value)
+            var cell = unsafe MutableRawSpan(_unsafeBytes: raw)
+            unsafe encodeLeafCell(into: &cell, at: 0, key: key, value: value)
         }
-        // `left` may alias `original`; snapshot the source once (one 16 KiB copy,
-        // like `compact`) so the cell-by-cell copy never reads a half-overwritten
-        // page — and no per-cell `[UInt8]` is materialized.
-        let scratch = unsafe PageBuf(copying: original)
-        let src = unsafe scratch.readOnly
+        let src = unsafe original
+        PageHeader.initialize(&left, type: .leaf)
+        PageHeader.initialize(&right, type: .leaf)
         return newCell.withUnsafeBytes { (newBytes: UnsafeRawBufferPointer) -> [UInt8] in
-            unsafe PageHeader.initialize(left, type: .leaf)
-            unsafe PageHeader.initialize(right, type: .leaf)
             var leftEnd = Format.pageSize
             var rightEnd = Format.pageSize
             var leftSlot = 0
@@ -510,21 +532,21 @@ import ADFCore
                 let bytes = unsafe p == index ? newBytes : cellBytes(src, p < index ? p : p - 1)
                 if p < split {
                     leftEnd -= bytes.count
-                    unsafe copyBytes(into: left, at: leftEnd, from: bytes)
-                    unsafe PageHeader.setSlotOffset(left, leftSlot, leftEnd)
+                    unsafe copyBytes(into: &left, at: leftEnd, from: bytes)
+                    PageHeader.setSlotOffset(&left, leftSlot, leftEnd)
                     leftSlot += 1
                 } else {
                     if p == split { separator = unsafe [UInt8](leafCellKeyBytes(bytes)) }
                     rightEnd -= bytes.count
-                    unsafe copyBytes(into: right, at: rightEnd, from: bytes)
-                    unsafe PageHeader.setSlotOffset(right, rightSlot, rightEnd)
+                    unsafe copyBytes(into: &right, at: rightEnd, from: bytes)
+                    PageHeader.setSlotOffset(&right, rightSlot, rightEnd)
                     rightSlot += 1
                 }
             }
-            unsafe PageHeader.setCellCount(left, leftSlot)
-            unsafe PageHeader.setCellAreaStart(left, leftEnd)
-            unsafe PageHeader.setCellCount(right, rightSlot)
-            unsafe PageHeader.setCellAreaStart(right, rightEnd)
+            PageHeader.setCellCount(&left, leftSlot)
+            PageHeader.setCellAreaStart(&left, leftEnd)
+            PageHeader.setCellCount(&right, rightSlot)
+            PageHeader.setCellAreaStart(&right, rightEnd)
             return separator
         }
     }
@@ -532,10 +554,15 @@ import ADFCore
     /// Splits a full branch while inserting (key, child) at cell position
     /// `index`. The middle key moves *up*: it is returned as the separator and
     /// its child becomes the right page's leftmost child.
+    ///
+    /// PRECONDITION: `original` must NOT alias `left` or `right` (read cell-by-cell
+    /// after both targets are zero-initialized). An in-place caller snapshots the
+    /// pre-split page and passes that — the copy is hoisted to the caller (see
+    /// ``splitLeafInserting(original:at:key:value:left:right:)``).
     @_spi(ADDBEngine) public static func splitBranchInserting(
         original: UnsafeRawBufferPointer, at index: Int,
         key: UnsafeRawBufferPointer, child: UInt64,
-        left: UnsafeMutableRawBufferPointer, right: UnsafeMutableRawBufferPointer
+        left: inout MutableRawSpan, right: inout MutableRawSpan
     ) -> [UInt8] {
         let leftmost = unsafe PageHeader.link(original)
         let count = unsafe PageHeader.cellCount(original)
@@ -545,47 +572,48 @@ import ADFCore
 
         var newCell = [UInt8](repeating: 0, count: newSize)
         newCell.withUnsafeMutableBytes { raw in
-            unsafe encodeBranchCell(
-                into: UnsafeMutableRawBufferPointer(mutating: UnsafeRawBufferPointer(raw)), at: 0,
-                key: key, child: child)
+            var cell = unsafe MutableRawSpan(_unsafeBytes: raw)
+            unsafe encodeBranchCell(into: &cell, at: 0, key: key, child: child)
         }
-        let scratch = unsafe PageBuf(copying: original)
-        let src = unsafe scratch.readOnly
-        return newCell.withUnsafeBytes { (newBytes: UnsafeRawBufferPointer) -> [UInt8] in
-            // The middle cell is promoted: its key is the separator and its child
-            // becomes the right page's leftmost link; it lands on neither page.
+        let src = unsafe original
+        // The middle cell is promoted: its key is the separator and its child becomes the right
+        // page's leftmost link; it lands on neither page. Read it (and the promoted child) before
+        // the page writes so the `inout` span borrows don't overlap the `newCell` borrow.
+        let (separator, promotedChild) = newCell.withUnsafeBytes {
+            (newBytes: UnsafeRawBufferPointer) -> ([UInt8], UInt64) in
             let midCell = unsafe mid == index ? newBytes : cellBytes(src, mid < index ? mid : mid - 1)
-            let separator = unsafe [UInt8](branchCellKeyBytes(midCell))
-            let promotedChild = unsafe midCell.loadLE64(2)
+            return unsafe ([UInt8](branchCellKeyBytes(midCell)), midCell.loadLE64(2))
+        }
 
-            unsafe PageHeader.initialize(left, type: .branch)
-            unsafe PageHeader.setLink(left, leftmost)
+        PageHeader.initialize(&left, type: .branch)
+        PageHeader.setLink(&left, leftmost)
+        PageHeader.initialize(&right, type: .branch)
+        PageHeader.setLink(&right, promotedChild)
+        newCell.withUnsafeBytes { (newBytes: UnsafeRawBufferPointer) in
             var leftEnd = Format.pageSize
             var leftSlot = 0
             for p in 0 ..< mid {
                 let bytes = unsafe p == index ? newBytes : cellBytes(src, p < index ? p : p - 1)
                 leftEnd -= bytes.count
-                unsafe copyBytes(into: left, at: leftEnd, from: bytes)
-                unsafe PageHeader.setSlotOffset(left, leftSlot, leftEnd)
+                unsafe copyBytes(into: &left, at: leftEnd, from: bytes)
+                PageHeader.setSlotOffset(&left, leftSlot, leftEnd)
                 leftSlot += 1
             }
-            unsafe PageHeader.setCellCount(left, leftSlot)
-            unsafe PageHeader.setCellAreaStart(left, leftEnd)
+            PageHeader.setCellCount(&left, leftSlot)
+            PageHeader.setCellAreaStart(&left, leftEnd)
 
-            unsafe PageHeader.initialize(right, type: .branch)
-            unsafe PageHeader.setLink(right, promotedChild)
             var rightEnd = Format.pageSize
             var rightSlot = 0
             for p in (mid + 1) ..< logical {
                 let bytes = unsafe p == index ? newBytes : cellBytes(src, p < index ? p : p - 1)
                 rightEnd -= bytes.count
-                unsafe copyBytes(into: right, at: rightEnd, from: bytes)
-                unsafe PageHeader.setSlotOffset(right, rightSlot, rightEnd)
+                unsafe copyBytes(into: &right, at: rightEnd, from: bytes)
+                PageHeader.setSlotOffset(&right, rightSlot, rightEnd)
                 rightSlot += 1
             }
-            unsafe PageHeader.setCellCount(right, rightSlot)
-            unsafe PageHeader.setCellAreaStart(right, rightEnd)
-            return separator
+            PageHeader.setCellCount(&right, rightSlot)
+            PageHeader.setCellAreaStart(&right, rightEnd)
         }
+        return separator
     }
 }
