@@ -43,6 +43,14 @@ public enum Format {
     /// First allocatable data page.
     public static let firstDataPage: UInt64 = 2
 
+    /// Hard ceiling on B+tree height. A 16 KiB page holds ≥4 cells, so even a
+    /// 64 GiB database nests only ~11 levels; 64 is generous headroom. The tree
+    /// walks (`forEach`/`validate`, and `freeTree` via `validate`) reject a
+    /// handle whose `depth` exceeds it, bounding their recursion to a trivially
+    /// stack-safe constant instead of trusting an attacker/corrupt-file-controlled
+    /// depth that would otherwise overflow the stack.
+    public static let maxTreeDepth: UInt16 = 64
+
     /// Main-tree keys beginning with this byte belong to the relational
     /// catalog; the public KV API rejects them.
     public static let reservedKeyPrefix: UInt8 = 0x00

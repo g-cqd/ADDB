@@ -346,6 +346,10 @@
         resolver: some PageResolver, pageNo: UInt64, level: UInt16,
         _ body: (UnsafeRawBufferPointer, ValueRef) throws(DBError) -> Void
     ) throws(DBError) {
+        // `level` starts at the handle's `depth` and decrements each step, so this
+        // recursion is bounded by it. Cap it so a corrupt/oversized depth throws
+        // instead of overflowing the stack (a valid tree nests only a few levels).
+        guard level <= Format.maxTreeDepth else { throw DBError.corruptPage(pageNo: pageNo) }
         let page = unsafe try resolver.resolvePage(pageNo)
         if level > 1 {
             guard unsafe PageHeader.pageType(page) == .branch else {
@@ -413,6 +417,9 @@
         verifyChecksums: Bool = false,
         report: inout ValidationReport
     ) throws(DBError) {
+        // Bound the recursion by the tree-height ceiling (the cycle check below
+        // also stops revisits); a corrupt oversized `depth` throws cleanly here.
+        guard level <= Format.maxTreeDepth else { throw DBError.corruptPage(pageNo: pageNo) }
         guard report.reachablePages.insert(pageNo).inserted else {
             throw DBError.integrityFailure("page \(pageNo) reachable twice")
         }
