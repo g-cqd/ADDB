@@ -286,9 +286,13 @@ import ADFCore
         // One range scan over the term's block-keys, reassembled into the single
         // multi-block value. Each block value is `varint(1) || block`; the per-block
         // count prefix is dropped and the running total re-emitted at the head.
+        // Zero-copy in: `value` is the mapped page span, so `Array(value.dropFirst())`
+        // copies the body out once directly — no longer a full `copyValue` of the
+        // block followed by a second `dropFirst` copy. The slice is consumed here
+        // and `bodies` owns its contents; the span never escapes the call.
         var bodies: [[UInt8]] = []
         try forEachBlockValue(resolver, record.postings, term: term) { value in
-            bodies.append(Array(value.dropFirst()))
+            unsafe bodies.append(Array(value.dropFirst()))
         }
         guard !bodies.isEmpty else { return nil }
         let bodyBytes = bodies.reduce(0) { $0 + $1.count }
@@ -309,7 +313,9 @@ import ADFCore
         var present = false
         try forEachBlockValue(resolver, record.postings, term: term) { (value) throws(DBError) in
             present = true
-            ids.append(contentsOf: try FTSPostings.decodeDocids(singleBlock: value))
+            // `decodeDocids` consumes a `[UInt8]`; rebuild it from the span (same cost
+            // as the prior per-block `copyValue`, never worse) and consume it here.
+            ids.append(contentsOf: try FTSPostings.decodeDocids(singleBlock: unsafe Array(value)))
         }
         return present ? ids : nil
     }
@@ -430,9 +436,15 @@ import ADFCore
     /// (seek the prefix, walk while it holds) — far cheaper than a point-get per
     /// block on a multi-block term (one tree descent + leaf walk vs one descent
     /// each). Used by every read path.
+    ///
+    /// `body` receives each block value as a mapped-page span valid ONLY for that
+    /// call (zero-copy: an inline value is the page bytes directly). Every caller
+    /// decodes/copies what it needs within the call (`postingsValue` copies the
+    /// body out, `docids`/`fullList` decode into their own arrays) and retains
+    /// nothing — the span never escapes the resolver-snapshot scope.
     private static func forEachBlockValue(
         _ resolver: some PageResolver, _ handle: TreeHandle, term: [UInt8],
-        _ body: ([UInt8]) throws(DBError) -> Void
+        _ body: (UnsafeRawBufferPointer) throws(DBError) -> Void
     ) throws(DBError) {
         let prefix = blockKeyPrefix(term)
         var cursor = Cursor(resolver: resolver, tree: handle)
@@ -442,15 +454,19 @@ import ADFCore
         }
         while positioned {
             // One cursor access per block: prefix-check the raw key in place (no key
-            // copy) and materialize the value only if it still belongs to this term.
-            // nil ⇒ key left the term's range (or the cursor went invalid) ⇒ stop.
-            let value: [UInt8]? =
-                unsafe try cursor.withCurrent { (key, ref) throws(DBError) -> [UInt8]? in
-                    guard unsafe rawHasPrefix(key, prefix) else { return nil }
-                    return try BTree.copyValue(ref, resolver: resolver)
-                } ?? nil
-            guard let value else { break }
-            try body(value)
+            // copy) and hand the value's bytes to `body` zero-copy when it still
+            // belongs to this term. `proceed` reports whether the block was in range;
+            // false ⇒ key left the term's range (or the cursor went invalid) ⇒ stop.
+            let proceed: Bool =
+                unsafe try cursor.withCurrent { (key, ref) throws(DBError) -> Bool in
+                    guard unsafe rawHasPrefix(key, prefix) else { return false }
+                    unsafe try BTree.withValueBytes(ref, resolver: resolver) {
+                        (raw) throws(DBError) in
+                        unsafe try body(raw)
+                    }
+                    return true
+                } ?? false
+            guard proceed else { break }
             positioned = try cursor.next()
         }
     }
@@ -491,8 +507,11 @@ import ADFCore
     ) throws(DBError) -> [FTSPosting] {
         var list: [FTSPosting] = []
         try forEachBlockValue(resolver, handle, term: term) { (value) throws(DBError) in
+            // `decode` consumes a `[UInt8]`; rebuild it from the span (same cost as the
+            // prior per-block `copyValue`, never worse) and consume it here.
             list.append(
-                contentsOf: try FTSPostings.decode(value, columns: columns, storePositions: positions))
+                contentsOf: try FTSPostings.decode(
+                    unsafe Array(value), columns: columns, storePositions: positions))
         }
         return list
     }

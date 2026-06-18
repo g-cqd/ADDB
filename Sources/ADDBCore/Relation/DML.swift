@@ -120,11 +120,26 @@ extension Relation {
     ) throws(DBError) -> [Value] {
         var decoded: Result<[Value], DBError> = .success([])
         recordBytes.withUnsafeBytes { raw in
-            do throws(DBError) { decoded = unsafe .success(try RecordCodec.decode(raw)) } catch {
+            do throws(DBError) {
+                decoded = unsafe .success(
+                    try materializeRow(table: table, rowid: rowid, recordBytes: raw))
+            } catch {
                 decoded = .failure(error)
             }
         }
-        var row = try decoded.get()
+        return try decoded.get()
+    }
+
+    /// `materializeRow` over a raw record buffer (the mapped page span), so a
+    /// zero-copy consumer can decode straight from the snapshot without first
+    /// copying the value into a `[UInt8]`. `RecordCodec.decode` fully materializes
+    /// every cell into an owned `[Value]` (strings/blobs are copied out), so the
+    /// returned row does NOT alias `recordBytes` and is safe to use after the span
+    /// scope ends. The `[UInt8]` overload above forwards here.
+    static func materializeRow(
+        table: Catalog.TableRecord, rowid: Int64, recordBytes: UnsafeRawBufferPointer
+    ) throws(DBError) -> [Value] {
+        var row = unsafe try RecordCodec.decode(recordBytes)
         let columns = table.definition.columns
         guard row.count <= columns.count else {
             throw DBError.integrityFailure("row in \(table.definition.name) has too many columns")
@@ -481,15 +496,26 @@ extension Relation {
         var cursor = Cursor(resolver: ctx, tree: table.handle)
         var positioned = try cursor.move(to: .first)
         while positioned {
-            let entry: (rowid: Int64, bytes: [UInt8])? = unsafe try cursor.withCurrent {
+            // Zero-copy: decode the row straight from the mapped page span (inline
+            // values stay zero-copy via `withValueBytes`) rather than copying the
+            // record into a fresh `[UInt8]` first. `materializeRow` returns an OWNED
+            // `[Value]` (every cell copied out by `RecordCodec.decode`), so `entry`
+            // does not alias the span — the bytes are consumed entirely within the
+            // resolver-snapshot scope (`ctx` owns the mapping for the whole txn) and
+            // nothing escapes it.
+            let entry: (rowid: Int64, row: [Value])? = unsafe try cursor.withCurrent {
                 (key, ref) throws(DBError) in
                 guard let rowid = unsafe KeyCodec.rowid(fromSuffixOf: key) else {
                     throw DBError.integrityFailure("malformed row key in \(table.definition.name)")
                 }
-                return (rowid: rowid, bytes: try BTree.copyValue(ref, resolver: ctx))
+                let row = unsafe try BTree.withValueBytes(ref, resolver: ctx) {
+                    (raw) throws(DBError) in
+                    unsafe try materializeRow(table: table, rowid: rowid, recordBytes: raw)
+                }
+                return (rowid: rowid, row: row)
             }
             guard let entry else { break }
-            let row = try materializeRow(table: table, rowid: entry.rowid, recordBytes: entry.bytes)
+            let row = entry.row
             if definition.unique {
                 var withHandle = probe
                 withHandle.handle = handle
