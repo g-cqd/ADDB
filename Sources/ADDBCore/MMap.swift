@@ -25,10 +25,20 @@ public final class MMap: @unchecked Sendable {
 
     /// Borrowed view of one page. The caller must guarantee `pageNo` lies
     /// within the committed file (enforced by reading only via a transaction's
-    /// meta snapshot).
+    /// meta snapshot). The `precondition` is an always-on (release included)
+    /// backstop for this engine: it converts a corrupt/ungated `pageNo` whose
+    /// byte offset would overflow or fall outside the mapping into a clean trap
+    /// instead of a wild read — defense in depth behind the throwing gates in
+    /// `Pager.page` / the transaction resolvers.
     @inline(__always)
     public func pageBytes(_ pageNo: UInt64) -> UnsafeRawBufferPointer {
-        unsafe map.region(offset: Int(pageNo) * Format.pageSize, count: Format.pageSize)
+        let pageSize = UInt64(Format.pageSize)
+        let cap = UInt64(capacity)
+        let (offset, overflow) = pageNo.multipliedReportingOverflow(by: pageSize)
+        unsafe precondition(
+            !overflow && offset <= cap && cap - offset >= pageSize,
+            "ADDB: page \(pageNo) lies outside the mapped range (corrupt page reference)")
+        return unsafe map.region(offset: Int(offset), count: Format.pageSize)
     }
 
     /// Advisory readahead for a contiguous run of `count` pages starting at

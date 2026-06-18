@@ -31,6 +31,15 @@ public enum Format {
     public static let usablePageSize: Int = pageSize - nodeHeaderSize
     public static let overflowCapacity: Int = pageSize - nodeHeaderSize
 
+    /// Upper bound on the eager `reserveCapacity` when reassembling an overflow
+    /// value. The value length is read from a (possibly corrupt) leaf cell, so a
+    /// crafted huge length must never trigger a multi-GB up-front allocation
+    /// (DoS). The output still grows to the true length as REAL chain pages are
+    /// read — only pages that actually resolve contribute bytes — so legitimate
+    /// values are unaffected apart from a few re-growths past this size. 64 MiB
+    /// pre-sizes essentially every real value exactly.
+    public static let overflowReserveCap: Int = 64 << 20
+
     /// First allocatable data page.
     public static let firstDataPage: UInt64 = 2
 

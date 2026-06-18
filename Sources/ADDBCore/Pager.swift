@@ -18,8 +18,14 @@
 
     @inline(__always)
     @_spi(ADDBEngine) public func page(_ pageNo: UInt64) throws(DBError) -> UnsafeRawBufferPointer {
-        let end = (Int(pageNo) + 1) * Format.pageSize
-        guard end <= map.capacity else { throw DBError.mapFull }
+        // Bound `pageNo` in the UInt64 domain BEFORE any Int cast. A corrupt or
+        // attacker-supplied page number near UInt64.max would otherwise trap in
+        // `Int(pageNo)` or integer-overflow `(Int(pageNo)+1) * pageSize` to a
+        // small/negative value that slips past a byte-offset bound. `pageNo <
+        // capacity/pageSize` is exactly `(pageNo+1)*pageSize <= capacity` and
+        // guarantees the subsequent offset math in `pageBytes` cannot overflow.
+        let maxPages = UInt64(map.capacity / Format.pageSize)
+        guard pageNo < maxPages else { throw DBError.mapFull }
         return unsafe map.pageBytes(pageNo)
     }
 

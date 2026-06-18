@@ -44,7 +44,10 @@ public enum Overflow {
         head: UInt64, length: Int, pager: P
     ) throws(DBError) -> [UInt8] {
         var out: [UInt8] = []
-        out.reserveCapacity(length)
+        // `length` is attacker-influenced (read from a leaf cell); cap the eager
+        // reservation so a crafted huge length can't force a multi-GB allocation.
+        // `out` still grows to the real chain length below.
+        out.reserveCapacity(min(length, Format.overflowReserveCap))
         var pageNo = head
         var remaining = length
         while pageNo != 0, remaining > 0 {
@@ -53,7 +56,9 @@ public enum Overflow {
                 throw DBError.corruptPage(pageNo: pageNo)
             }
             let dataLen = unsafe PageHeader.overflowDataLen(page)
-            guard dataLen <= Format.overflowCapacity, dataLen <= remaining else {
+            // dataLen must be 1...min(capacity, remaining). Rejecting 0 guarantees
+            // forward progress, so a cyclic `link` chain can't spin forever.
+            guard dataLen >= 1, dataLen <= Format.overflowCapacity, dataLen <= remaining else {
                 throw DBError.corruptPage(pageNo: pageNo)
             }
             unsafe out.append(
@@ -80,7 +85,8 @@ public enum Overflow {
                 throw DBError.corruptPage(pageNo: pageNo)
             }
             let dataLen = unsafe PageHeader.overflowDataLen(page)
-            guard dataLen <= Format.overflowCapacity, dataLen <= remaining else {
+            // dataLen ≥ 1 guarantees forward progress (no infinite loop on a cyclic chain).
+            guard dataLen >= 1, dataLen <= Format.overflowCapacity, dataLen <= remaining else {
                 throw DBError.corruptPage(pageNo: pageNo)
             }
             unsafe body(

@@ -136,4 +136,38 @@ struct ADDBEngineCharacterizationTests {
             #expect(report.kvCount == 32)
         }
     }
+
+    @Test("a corrupt node page is rejected, never trapped or mis-read")
+    func corruptNodePageIsRejected() throws {
+        try withTempPath { path in
+            do {
+                let db = try Database.open(at: path)
+                defer { db.close() }
+                try db.writeSync { (txn) throws(DBError) in
+                    for i in 0 ..< 8 { try txn.put(key("k\(i)"), key("v\(i)")) }
+                }
+            }
+            // Corrupt the `cellAreaStart` header field (offset 12, u16) of every
+            // node page to a value past the page end. Any leaf/branch page now
+            // violates the structural invariant; the live root is one of them, so
+            // resolving it must throw `corruptPage` — not trap in `rebasing:` and
+            // not hand back an in-page-but-wrong value.
+            let pageSize: UInt64 = 16384
+            let fh = try FileHandle(forUpdating: URL(fileURLWithPath: path))
+            let size = try fh.seekToEnd()
+            var pageNo: UInt64 = 2  // pages 0,1 are meta
+            while (pageNo + 1) * pageSize <= size {
+                try fh.seek(toOffset: pageNo * pageSize + 12)
+                try fh.write(contentsOf: Data([0xFF, 0xFF]))
+                pageNo += 1
+            }
+            try fh.close()
+
+            #expect(throws: DBError.self) {
+                let db = try Database.open(at: path)
+                defer { db.close() }
+                _ = try db.read { (txn) throws(DBError) in try txn.get(key("k0")) }
+            }
+        }
+    }
 }

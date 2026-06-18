@@ -137,6 +137,67 @@ import ADFCore
         }
     }
 
+    // MARK: - Structural validation
+
+    /// Structural invariant check for a branch/leaf node page resolved from
+    /// disk. Run before any cell consumer slices the page, it turns a corrupt
+    /// slot offset or key/value length (a crafted or garbled file) into a clean
+    /// `DBError.corruptPage` throw — so an out-of-page range can neither trap in
+    /// `rebasing:` nor yield an in-page-but-wrong key/value. Pure bounds
+    /// arithmetic, no allocation. Overflow/freelist pages carry no key-sorted
+    /// slot array and are bounds-checked by their own readers (`Overflow`,
+    /// `FreeList`); an unknown page type is itself corruption.
+    @_spi(ADDBEngine) public static func validate(
+        _ page: UnsafeRawBufferPointer, pageNo: UInt64
+    ) throws(DBError) {
+        guard let type = unsafe PageHeader.pageType(page) else {
+            throw DBError.corruptPage(pageNo: pageNo)
+        }
+        let isBranch: Bool
+        switch type {
+            case .branch: isBranch = true
+            case .leaf: isBranch = false
+            case .overflow, .freelist: return
+        }
+        let count = unsafe PageHeader.cellCount(page)
+        let cellAreaStart = unsafe PageHeader.cellAreaStart(page)
+        let slotsEnd = Format.nodeHeaderSize + count * Format.slotSize
+        // The slot array and the cell area must not overlap, and the cell area
+        // must lie within the page. (A bogus huge `count` fails here.)
+        guard slotsEnd <= cellAreaStart, cellAreaStart <= Format.pageSize else {
+            throw DBError.corruptPage(pageNo: pageNo)
+        }
+        for i in 0 ..< count {
+            let at = unsafe PageHeader.slotOffset(page, i)
+            // Each cell starts inside the cell area and its fixed header fits.
+            let headerEnd = at + (isBranch ? 10 : 5)
+            guard at >= cellAreaStart, headerEnd <= Format.pageSize else {
+                throw DBError.corruptPage(pageNo: pageNo)
+            }
+            if isBranch {
+                let keyLen = unsafe Int(page.loadLE16(at))
+                guard keyLen <= Format.maxKeySize, at + 10 + keyLen <= Format.pageSize else {
+                    throw DBError.corruptPage(pageNo: pageNo)
+                }
+            } else {
+                let flags = unsafe page[at]
+                let keyLen = unsafe Int(page.loadLE16(at + 1))
+                guard keyLen <= Format.maxKeySize else { throw DBError.corruptPage(pageNo: pageNo) }
+                if flags & leafOverflowFlag == 0 {
+                    let valueLen = unsafe Int(page.loadLE16(at + 3))
+                    guard at + 5 + keyLen + valueLen <= Format.pageSize else {
+                        throw DBError.corruptPage(pageNo: pageNo)
+                    }
+                } else {
+                    // [flags u8 | keyLen u16 | valueLen u32 | head u64 | key]
+                    guard at + 15 + keyLen <= Format.pageSize else {
+                        throw DBError.corruptPage(pageNo: pageNo)
+                    }
+                }
+            }
+        }
+    }
+
     // MARK: - Search
 
     /// Binary search over the page's cells.

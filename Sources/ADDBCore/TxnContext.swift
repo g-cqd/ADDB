@@ -314,8 +314,18 @@ extension TxnContext {
     @_spi(ADDBEngine) public func resolvePage(_ pageNo: UInt64) throws(DBError) -> UnsafeRawBufferPointer {
         guard pageNo < pageCount else { throw DBError.corruptPage(pageNo: pageNo) }
         let page = unsafe try source.page(pageNo)
-        if verifyChecksums, unsafe !PageHeader.verifyChecksum(page, pageNo: pageNo) {
-            throw DBError.corruptPage(pageNo: pageNo)
+        if verifyChecksums {
+            // A matching XXH64 proves the page is byte-identical to when written,
+            // so it subsumes — and is stricter than — the structural pass below.
+            guard unsafe PageHeader.verifyChecksum(page, pageNo: pageNo) else {
+                throw DBError.corruptPage(pageNo: pageNo)
+            }
+        } else {
+            // Defense-in-depth baseline (no hashing): bounds-validate the slot
+            // array and every cell's key/value ranges so a corrupt committed page
+            // can neither trap in `rebasing:` nor hand out an in-page-but-wrong
+            // key/value to a consumer.
+            try unsafe Node.validate(page, pageNo: pageNo)
         }
         return unsafe page
     }
