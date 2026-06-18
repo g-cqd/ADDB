@@ -290,7 +290,9 @@ import ADFCore
             bodies.append(Array(value.dropFirst()))
         }
         guard !bodies.isEmpty else { return nil }
+        let bodyBytes = bodies.reduce(0) { $0 + $1.count }
         var combined: [UInt8] = []
+        combined.reserveCapacity(Varint.maxEncodedLength + bodyBytes)
         Varint.append(UInt64(bodies.count), to: &combined)
         for body in bodies { combined.append(contentsOf: body) }
         return combined
@@ -550,9 +552,8 @@ import ADFCore
     }
 
     private static func encodeDF(_ df: UInt64) -> [UInt8] {
-        var out: [UInt8] = []
-        Varint.append(df, to: &out)
-        return out
+        // A single varint, built into one exclusively-owned OutputSpan (no reserve foot-gun, no CoW).
+        [UInt8](capacity: Varint.maxEncodedLength) { out in Varint.append(df, to: &out) }
     }
 
     private static func decodeDF(_ bytes: [UInt8]) -> UInt64 {
@@ -563,7 +564,13 @@ import ADFCore
     /// Forward record: `varint fieldCount || field lengths || varint termCount ||
     /// (varint len || term bytes)*`.
     private static func encodeForward(fieldLengths: [UInt32], terms: [[UInt8]]) -> [UInt8] {
+        // Reserve once up front so the per-term appends never reallocate. Each term is ≤
+        // `maxTermBytes` (256), so its length varint is ≤ 2 bytes; the two count headers and the
+        // per-column field lengths are each bounded by `Varint.maxEncodedLength`.
+        let termBytes = terms.reduce(0) { $0 + $1.count }
         var out: [UInt8] = []
+        out.reserveCapacity(
+            Varint.maxEncodedLength * (2 + fieldLengths.count) + terms.count * 2 + termBytes)
         Varint.append(UInt64(fieldLengths.count), to: &out)
         for length in fieldLengths { Varint.append(UInt64(length), to: &out) }
         Varint.append(UInt64(terms.count), to: &out)
