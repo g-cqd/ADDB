@@ -192,7 +192,10 @@ public struct RelationState: Sendable {
         _ resolver: some PageResolver, _ mainTree: TreeHandle, kind: UInt8,
         _ body: (String, UnsafeRawBufferPointer) throws(DBError) -> Void
     ) throws(DBError) {
-        let (lower, upper) = Catalog.kindBounds(kind)
+        // Only the lower bound is needed: the cursor seeks there, and the per-row
+        // prefix/kind check below stops the scan at the first non-matching key
+        // (catalog records of one kind are contiguous), so the upper bound is dead.
+        let (lower, _) = Catalog.kindBounds(kind)
         var cursor = Cursor(resolver: resolver, tree: mainTree)
         var positioned = try lower.withUnsafeBytesThrowing { raw throws(DBError) in
             _ = unsafe try cursor.seek(raw)
@@ -201,7 +204,6 @@ public struct RelationState: Sendable {
         while positioned {
             let proceed: Bool? = unsafe try cursor.withCurrent { (key, ref) throws(DBError) in
                 guard key.count >= 2, unsafe key[0] == Catalog.prefix, unsafe key[1] == kind else { return false }
-                _ = upper
                 let name = unsafe String(decoding: key[2...], as: UTF8.self)
                 guard case .inline(let valueBytes) = ref else {
                     // Catalog records are small; an overflow value means corruption.
