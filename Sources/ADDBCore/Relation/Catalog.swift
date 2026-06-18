@@ -13,7 +13,7 @@ import ADFCore
 ///
 /// Tree roots move on every COW commit, so records embed their TreeHandle
 /// and `Relation.serializeState` rewrites changed records at commit time.
-package enum Catalog {
+@_spi(ADDBEngine) public enum Catalog {
     static let prefix: UInt8 = 0x00
     static let kindVersion: UInt8 = 0x76  // 'v'
     static let kindTable: UInt8 = 0x74  // 't'
@@ -80,34 +80,34 @@ package enum Catalog {
 
     // MARK: - Records
 
-    package struct TableRecord: Equatable, Sendable {
-        package var tableId: UInt32
-        package var handle: TreeHandle
-        package var definition: TableDefinition
+    @_spi(ADDBEngine) public struct TableRecord: Equatable, Sendable {
+        @_spi(ADDBEngine) public var tableId: UInt32
+        @_spi(ADDBEngine) public var handle: TreeHandle
+        @_spi(ADDBEngine) public var definition: TableDefinition
 
-        package init(tableId: UInt32, handle: TreeHandle, definition: TableDefinition) {
+        @_spi(ADDBEngine) public init(tableId: UInt32, handle: TreeHandle, definition: TableDefinition) {
             self.tableId = tableId
             self.handle = handle
             self.definition = definition
         }
     }
 
-    package struct IndexRecord: Equatable, Sendable {
-        package var indexId: UInt32
-        package var tableId: UInt32
-        package var handle: TreeHandle
-        package var definition: IndexDefinition
+    @_spi(ADDBEngine) public struct IndexRecord: Equatable, Sendable {
+        @_spi(ADDBEngine) public var indexId: UInt32
+        @_spi(ADDBEngine) public var tableId: UInt32
+        @_spi(ADDBEngine) public var handle: TreeHandle
+        @_spi(ADDBEngine) public var definition: IndexDefinition
     }
 
     /// An FTS virtual table: its config plus the three B+trees it owns (term
     /// dictionary, postings, doc/field stats). Roots are `.empty` until writes
     /// the first posting; `serializeState` rewrites the record when any moves.
-    package struct FTSRecord: Equatable, Sendable {
-        package var ftsId: UInt32
-        package var dict: TreeHandle
-        package var postings: TreeHandle
-        package var stats: TreeHandle
-        package var definition: FTSDefinition
+    @_spi(ADDBEngine) public struct FTSRecord: Equatable, Sendable {
+        @_spi(ADDBEngine) public var ftsId: UInt32
+        @_spi(ADDBEngine) public var dict: TreeHandle
+        @_spi(ADDBEngine) public var postings: TreeHandle
+        @_spi(ADDBEngine) public var stats: TreeHandle
+        @_spi(ADDBEngine) public var definition: FTSDefinition
     }
 
     private static let recordVersion: UInt8 = 1

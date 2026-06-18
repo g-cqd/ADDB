@@ -18,7 +18,7 @@ enum TreeKey: Hashable, Sendable {
 
 public struct RelationState: Sendable {
     var version: Catalog.VersionRow
-    package var tableRecords: [String: Catalog.TableRecord] = [:]
+    @_spi(ADDBEngine) public var tableRecords: [String: Catalog.TableRecord] = [:]
     var indexRecords: [String: Catalog.IndexRecord] = [:]
     var ftsRecords: [String: Catalog.FTSRecord] = [:]
     /// memtable: documents buffered this transaction, flushed coalesced into a
@@ -29,7 +29,7 @@ public struct RelationState: Sendable {
     /// Raw CREATE TRIGGER texts keyed by name, exactly as persisted — the catalog
     /// stores only text (like SQLite's `sqlite_schema`) and the SQL layer parses
     /// on demand. Value-typed, so `TxnRestorePoint` snapshots/restores it for free.
-    package var triggerTexts: [String: String] = [:]
+    @_spi(ADDBEngine) public var triggerTexts: [String: String] = [:]
     /// Triggers added or dropped this transaction whose catalog row needs a
     /// write-back (value = the raw SQL text, or nil for a drop).
     var triggerWrites: [String: String?] = [:]
@@ -48,7 +48,7 @@ public struct RelationState: Sendable {
     /// Set by DDL: bump catalogVersion at serialization.
     var schemaDirty = false
 
-    package var schema: Schema {
+    @_spi(ADDBEngine) public var schema: Schema {
         Schema(
             catalogVersion: version.catalogVersion,
             tables: tableRecords.mapValues(\.definition),
@@ -62,7 +62,7 @@ public struct RelationState: Sendable {
     }
 }
 
-package enum Relation {
+@_spi(ADDBEngine) public enum Relation {
     // MARK: - Byte-array bridges over BTree (typed-throws-safe)
 
     static func putBytes(
@@ -110,7 +110,7 @@ package enum Relation {
     /// Zero-copy point read: looks up `key` and hands its value to `body` as a
     /// mapped page span (no record copy); returns nil when the key is absent.
     /// The span is valid only for the duration of `body`.
-    package static func withRowValue<R>(
+    @_spi(ADDBEngine) public static func withRowValue<R>(
         _ resolver: some PageResolver, _ tree: TreeHandle, key: [UInt8],
         _ body: (BTree.ValueRef) throws(DBError) -> R
     ) throws(DBError) -> R? {
@@ -147,7 +147,7 @@ package enum Relation {
     // MARK: - State lifecycle
 
     /// Loads the full catalog from a snapshot's main tree.
-    package static func loadState(
+    @_spi(ADDBEngine) public static func loadState(
         resolver: some PageResolver, mainTree: TreeHandle
     ) throws(DBError) -> RelationState {
         var state = RelationState(version: Catalog.VersionRow())
@@ -217,7 +217,7 @@ package enum Relation {
 
     /// Populates `ctx.relation` from the transaction's snapshot if needed.
     @discardableResult
-    package static func ensureState(_ ctx: TxnContext) throws(DBError) -> RelationState {
+    @_spi(ADDBEngine) public static func ensureState(_ ctx: TxnContext) throws(DBError) -> RelationState {
         if let state = ctx.relation { return state }
         let state = try loadState(resolver: ctx, mainTree: ctx.meta.mainTree)
         ctx.relation = state
@@ -463,7 +463,7 @@ package enum Relation {
     }
 
     /// Single-record catalog fetches (read paths avoid full catalog loads).
-    package static func tableRecord(
+    @_spi(ADDBEngine) public static func tableRecord(
         _ resolver: some PageResolver, mainTree: TreeHandle, name: String
     ) throws(DBError) -> Catalog.TableRecord? {
         guard let bytes = try getBytes(resolver, mainTree, key: Catalog.tableKey(name)) else {
@@ -480,7 +480,7 @@ package enum Relation {
         return try result.get()
     }
 
-    package static func indexRecord(
+    @_spi(ADDBEngine) public static func indexRecord(
         _ resolver: some PageResolver, mainTree: TreeHandle, name: String
     ) throws(DBError) -> Catalog.IndexRecord? {
         guard let bytes = try getBytes(resolver, mainTree, key: Catalog.indexKey(name)) else {
@@ -500,7 +500,7 @@ package enum Relation {
     /// Single-record FTS catalog fetch (the read path resolves an FTS table's
     /// dictionary/postings/stats roots without a full catalog load), mirroring
     /// `tableRecord`/`indexRecord`. nil when the FTS table is absent.
-    package static func ftsRecord(
+    @_spi(ADDBEngine) public static func ftsRecord(
         _ resolver: some PageResolver, mainTree: TreeHandle, name: String
     ) throws(DBError) -> Catalog.FTSRecord? {
         guard let bytes = try getBytes(resolver, mainTree, key: Catalog.ftsKey(name)) else {

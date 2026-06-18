@@ -1,35 +1,25 @@
 // swift-tools-version: 6.3
-import CompilerPluginSupport
 import PackageDescription
 
-// Opt-in warnings-as-errors gate: set `ADDB_WERROR=1` to compile every first-party target with
-// `-warnings-as-errors`. It is unsafe-flag-based, but folding it into `strictSettings` is still
-// dependency-safe: a consumer resolves this manifest with `ADDB_WERROR` unset, so the array is empty
-// and the shipped library carries no unsafe flags (version resolution keeps working). Target-scoped
-// settings never reach ADJSON/swift-syntax/swift-collections, and the flag pulls in no extra
-// dependency, so the committed `Package.resolved` stays accurate. (Passing `-warnings-as-errors` on
-// the `swift build` CLI instead would also fail on dependency warnings outside our control.)
-//
-// `StrictMemorySafety` is carved back to a warning (`-Wwarning`): `.strictMemorySafety` flags every
-// unmarked unsafe construct, and shrinking that surface (via `Span`/`MutableSpan`/`InlineArray`) is a
-// tracked, in-progress effort rather than a one-shot `unsafe`-annotation sweep. So the gate errors on
-// every *other* diagnostic group (deprecations, unused results, implicit Sendable, …) while the
-// memory-safety diagnostics stay visible as warnings until that migration lands.
-//
-// Not yet wired into CI: warning emission is toolchain-dependent — some toolchains additionally emit
-// spurious, group-less `will never be executed` SILGen diagnostics on the typed-throws/`Never`
-// patterns (`throwErrno` etc.), which `-Wwarning` cannot selectively downgrade. CI will set
-// `ADDB_WERROR=1` once the toolchain is pinned to a release verified warning-clean (see the CI
-// toolchain-pinning work), so the gate is deterministic rather than a moving target.
+// ADDB — the embedded database engine: storage (COW B+tree over mmap, MVCC), the
+// relational model + catalog, and the full-text-search index. No SQL language and
+// no JSON — those live in the separate `ADSQL` package, which consumes this
+// engine through its `@_spi(ADDBEngine)` surface (the `ADDBCore` product exposes
+// the engine module; the curated `public` API is re-exported by the `ADDB`
+// product). The only dependency is the zero-dependency `ADFoundation` kernel.
+
+// Opt-in warnings-as-errors gate: set `ADDB_WERROR=1` to compile every first-party
+// target with `-warnings-as-errors`, while carving `StrictMemorySafety` back to a
+// warning (the unsafe-construct shrink via `Span`/`MutableSpan` is in progress).
+// Unset in consumer resolution, so the shipped library carries no unsafe flags and
+// version-based dependency resolution keeps working.
 let werrorSettings: [SwiftSetting] =
     Context.environment["ADDB_WERROR"] != nil
     ? [.unsafeFlags(["-warnings-as-errors", "-Wwarning", "StrictMemorySafety"])] : []
 
-// Maximum strictness, shared across every Swift target. Dependency-safe (no unsafe flags unless
-// `ADDB_WERROR` is set, see above), so the library can still be consumed via a version-pinned
-// SwiftPM requirement. `.v6` language mode turns on complete strict-concurrency checking; the
-// upcoming features tighten existentials and import visibility. Aligned with the sibling
-// `../adjson` package.
+// Maximum strictness, shared across every target. Dependency-safe (no unsafe flags
+// unless `ADDB_WERROR` is set). `.v6` turns on complete strict-concurrency checking;
+// the upcoming features tighten existentials and import visibility.
 let strictSettings: [SwiftSetting] =
     [
         .swiftLanguageMode(.v6),
@@ -38,27 +28,23 @@ let strictSettings: [SwiftSetting] =
         .enableUpcomingFeature("MemberImportVisibility"),
     ] + werrorSettings
 
-// Opt-in Instruments signposts: `ADDB_SIGNPOSTS=1` defines the compile flag that activates the
-// (otherwise no-op) signpost helpers in `Signposts.swift`. Off by default, so shipping builds compile
-// them out entirely; `os` is a system framework, never a package dependency. A `.define` is a safe
-// setting (no unsafe flags), so it never affects version-based dependency resolution.
+// Opt-in Instruments signposts: `ADDB_SIGNPOSTS=1` activates the (otherwise no-op)
+// signpost helpers. A `.define` is a safe setting, so it never affects resolution.
 let signpostSettings: [SwiftSetting] =
     Context.environment["ADDB_SIGNPOSTS"] != nil ? [.define("ADDB_SIGNPOSTS")] : []
 
-// The kernel's safety model, on top of `strictSettings`: SE-0458 strict memory safety (every unsafe
-// construct is explicitly `unsafe` or `@safe`-encapsulated, so any new unsafe use is compiler-flagged)
-// plus experimental lifetime dependence (SE-0446/0456) — the scope-bounded page views are
-// `~Escapable` over `RawSpan` with `@_lifetime`, so the compiler enforces they cannot outlive their
-// snapshot.
+// The kernel's safety model on top of `strictSettings`: SE-0458 strict memory
+// safety (every unsafe construct is explicitly `unsafe`/`@safe`-encapsulated) plus
+// experimental lifetime dependence (the scope-bounded page views are `~Escapable`
+// over `RawSpan` with `@_lifetime`).
 let kernelSettings: [SwiftSetting] =
     strictSettings + [
         .strictMemorySafety(),
         .enableExperimentalFeature("Lifetimes"),
     ] + signpostSettings
 
-// Compile-time type-check timing warnings (flag slow expressions / function bodies). These use unsafe
-// flags, which would block version-based dependency resolution if placed on the shipped library, so
-// they live only on the internal (non-exported) benchmark + test targets.
+// Compile-time type-check timing warnings (flag slow expressions / function bodies).
+// Unsafe flags, so they live only on the internal (non-exported) test targets.
 let timingWarningFlags: [SwiftSetting] = [
     .unsafeFlags([
         "-Xfrontend", "-warn-long-function-bodies=100",
@@ -66,65 +52,47 @@ let timingWarningFlags: [SwiftSetting] = [
     ])
 ]
 
-// Benchmarks: strict + timing warnings only (no runtime instrumentation, so timings stay clean).
-let benchSettings: [SwiftSetting] = strictSettings + timingWarningFlags
-
-// Tests: additionally enable runtime actor data-race checks.
+// Tests: strict + timing warnings + runtime actor data-race checks.
 let testSettings: [SwiftSetting] =
     strictSettings + timingWarningFlags + [.unsafeFlags(["-enable-actor-data-race-checks"])]
 
-// Dev-only tooling is gated behind `ADDB_DEV` so packages that depend on ADSQL never resolve it.
-// The `format` / `lint` command plugins carry no external dependencies, so they are always available
-// without the flag; build-time lint enforcement (the `LintBuild` plugin) attaches to the library only
-// in dev/CI.
+// Dev-only tooling is gated behind `ADDB_DEV` so packages that depend on ADDB never
+// resolve it. The `format` / `lint` command plugins carry no external dependencies,
+// so they are always available; build-time lint enforcement (`LintBuild`) attaches
+// to the libraries only in dev/CI.
 let isDev = Context.environment["ADDB_DEV"] != nil
 
-// ADSQL's only runtime dependency is the ADJSON package — specifically its Foundation-free,
-// swift-syntax-free `ADJSONCore` product, which backs the SQL JSON functions (tape parser +
-// SQLite-dialect path evaluator). The DocC plugin that builds the documentation site is dev/CI-only
-// (gated behind ADDB_DEV), so packages that depend on ADSQL never resolve it.
-//
-// First-party dependencies use a per-dependency PATH env var so checkouts need not be co-located.
-// A PATH is an absolute or relative path of the caller's choice and overrides `Package.resolved`;
-// never set one in CI or a release build.
-//   ADJSON_PATH       -> a local ADJSON checkout, else the pinned revision below (ADJSON publishes
-//                        no version tags and tracks `main`, so a revision keeps dev/CI reproducible).
-//   ADFOUNDATION_PATH -> a local ADFoundation checkout, else the published `main` branch.
-let adjsonDependency: Package.Dependency = {
-    if let path = Context.environment["ADJSON_PATH"], !path.isEmpty {
-        return .package(path: path)
-    }
-    return .package(
-        url: "https://github.com/g-cqd/ADJSON.git",
-        revision: "82d516584d72a404b5fef0d6b0ccd295e139f156")
-}()
+// Opt-in `-enable-testing` for ADDBCore (`ADDB_TESTING=1`), so the separate ADSQL
+// package's white-box tests can `@testable import ADDBCore` across the package boundary
+// and reach engine `internal` symbols (the former single-package `@testable` access).
+// Unsafe-flag-based, so it is gated: consumer/library builds leave it unset and the
+// shipped engine carries no unsafe flags — version-based resolution keeps working.
+let testingSettings: [SwiftSetting] =
+    Context.environment["ADDB_TESTING"] != nil ? [.unsafeFlags(["-enable-testing"])] : []
 
+// ADFoundation supplies the shared low-level primitives (`ADFCore` byte/number
+// kernel, `ADFIO` POSIX storage). Resolve from a local checkout when
+// `ADFOUNDATION_PATH` is set, otherwise from the published package.
 let adfoundationDependency: Package.Dependency = {
     if let path = Context.environment["ADFOUNDATION_PATH"], !path.isEmpty {
         return .package(path: path)
     }
     return .package(url: "https://github.com/g-cqd/ADFoundation.git", branch: "main")
 }()
-// swift-syntax backs the `ADSQLMacros` compiler-plugin target (`@Table`, `#SQL`). It is a
-// build-time dependency only — pulled in to build the macro plugin with the host toolchain — and
-// resolves to the same version ADJSON already pins (`from: "603.0.0"`), so the committed
-// `Package.resolved` is unchanged. Version-based, so ADSQL stays resolvable via a pinned requirement.
-var packageDependencies: [Package.Dependency] = [
-    adjsonDependency,
-    adfoundationDependency,
-    .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "603.0.0"),
-]
+
+var packageDependencies: [Package.Dependency] = [adfoundationDependency]
 if isDev {
     packageDependencies.append(
         .package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.0.0"))
 }
 
+let libraryBuildPlugins: [Target.PluginUsage] = isDev ? ["LintBuild"] : []
+
 let package = Package(
     name: "ADDB",
-    // Floor OSes match the sibling `../adjson` package: macOS one generation below the device
-    // platforms (everything the engine needs — `Synchronization`'s Atomic/Mutex ship in macOS 15,
-    // `Span`/`RawSpan` back-deploy further still — is available there), device platforms at the 2025
-    // generation. No `@available`/2025-SDK-gated APIs are used, so the macOS-15 floor compiles.
+    // macOS one generation below the device platforms (everything the engine needs —
+    // `Synchronization`'s Atomic/Mutex ship in macOS 15, `Span`/`RawSpan` back-deploy
+    // further still — is available there); device platforms at the 2025 generation.
     platforms: [
         .macOS(.v15),
         .iOS(.v26),
@@ -133,144 +101,43 @@ let package = Package(
         .visionOS(.v26),
     ],
     products: [
+        // The database product: a thin public façade that re-exports the engine's
+        // curated `public` API for consumers who want the engine without SQL.
         .library(name: "ADDB", targets: ["ADDB"]),
-        .library(name: "ADSQL", targets: ["ADSQL"]),
-        .library(name: "ADSQLFullTextSearch", targets: ["ADSQLFullTextSearch"]),
-        .library(name: "ADSQLJSON", targets: ["ADSQLJSON"]),
-        .library(name: "ADSQLImport", targets: ["ADSQLImport"]),
-        .library(name: "ADSQLSearch", targets: ["ADSQLSearch"]),
-        .executable(name: "adsql", targets: ["ADSQLTool"]),
+        // The engine module itself. The separate `ADSQL` package links this and
+        // imports its `@_spi(ADDBEngine)` surface (the broad engine API the SQL
+        // layer drives). General consumers should prefer the `ADDB` façade.
+        .library(name: "ADDBCore", targets: ["ADDBCore"]),
     ],
     dependencies: packageDependencies,
     targets: [
-        // ADDBCore — the database engine implementation: storage (COW B+tree over
-        // mmap, MVCC), the relational model + catalog, and the full-text-search
-        // index. No SQL, no JSON. Carries the broad `package` surface the SQL layer
-        // consumes; its curated `public` API is re-exported by the ADDB product.
+        // ADDBCore — storage (COW B+tree over mmap, MVCC), relational model +
+        // catalog, FTS index. Its `@_spi(ADDBEngine) public` surface is the broad
+        // API the SQL layer consumes; `public` is the curated façade API.
         .target(
             name: "ADDBCore",
             dependencies: [
                 .product(name: "ADFCore", package: "ADFoundation"),
                 .product(name: "ADFIO", package: "ADFoundation"),
             ],
-            swiftSettings: kernelSettings),
-        // ADDB — the database product: a thin public façade that re-exports
-        // ADDBCore for consumers who want the engine without the SQL language.
+            swiftSettings: kernelSettings + testingSettings,
+            plugins: libraryBuildPlugins),
+        // ADDB — thin public façade re-exporting ADDBCore's curated public API.
         .target(
             name: "ADDB",
             dependencies: ["ADDBCore"],
-            swiftSettings: strictSettings),
-        // ADSQL — the SQL language over ADDBCore: lexer/parser/AST, binder, planner,
-        // executor, evaluator, scalar/JSON functions, the trigger engine, and the
-        // query DSL. Re-exports the database surface so `import ADSQL` yields it all.
-        .target(
-            name: "ADSQL",
-            dependencies: ["ADDBCore", "ADSQLMacros"],
-            swiftSettings: kernelSettings,
-            plugins: isDev ? ["LintBuild"] : []),
-        // ADSQLJSON — the SQLite json1 surface as an opt-in superset of ADSQL: the
-        // json_* scalar functions, json_group_* aggregates, and the `->`/`->>` and
-        // `json_each` operators, all ADJSON-backed. It registers handlers via
-        // `Database.enableJSON()` into ADSQL's function/aggregate/operator registries,
-        // so ADSQL core is ADJSON-free. `@_exported import ADSQL` → SQL + JSON.
-        .target(
-            name: "ADSQLJSON",
-            dependencies: ["ADSQL", .product(name: "ADJSONCore", package: "ADJSON")],
             swiftSettings: strictSettings,
-            plugins: isDev ? ["LintBuild"] : []),
-        // ADSQLMacros — the compiler-plugin target backing `@Table` (synthesizes a
-        // row type's TableDefinition + typed SQLRow initializer) and `#SQL`
-        // (lightweight compile-time validation of a SQL string literal). Runs in the
-        // compiler on swift-syntax only; it never links ADDBCore/ADSQL (it emits
-        // source that references their types by name), so the engine AST stays out of
-        // the plugin.
-        .macro(
-            name: "ADSQLMacros",
-            dependencies: [
-                .product(name: "SwiftSyntax", package: "swift-syntax"),
-                .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
-                .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
-                .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
-                .product(name: "SwiftDiagnostics", package: "swift-syntax"),
-                .product(name: "SwiftParser", package: "swift-syntax"),
-                .product(name: "ADFMacroSupport", package: "ADFoundation"),
-            ],
-            swiftSettings: strictSettings),
-        // ADSQLFullTextSearch — the full-text-search *query* language as an opt-in
-        // superset of ADSQL: MATCH parsing, bm25f scoring, and block-max WAND. It
-        // implements ADDBCore's `FTSEvaluation` hook and installs it via
-        // `Database.enableFullTextSearch()`; ADDBCore keeps only the FTS index.
-        // `@_exported import ADSQL`, so `import ADSQLFullTextSearch` yields SQL + FTS.
-        .target(
-            name: "ADSQLFullTextSearch",
-            dependencies: ["ADDBCore", "ADSQL", .product(name: "ADFCore", package: "ADFoundation")],
-            swiftSettings: strictSettings,
-            plugins: isDev ? ["LintBuild"] : []),
-        .executableTarget(
-            name: "ADSQLTool", dependencies: ["ADSQL", "ADSQLImport"], swiftSettings: strictSettings),
-        .systemLibrary(name: "CSQLite"),
-        // SQLite-file importer: reads a source.db via CSQLite and writes an
-        // ADSQL database. Kept out of ADDBCore so the read-only engine never links sqlite3.
-        .target(
-            name: "ADSQLImport", dependencies: ["ADDBCore", "ADSQL", "CSQLite"], swiftSettings: strictSettings),
-        // apple-docs search-pages serving: builds the §2.2 main query, binds the
-        // §2.4 filter bag, and frames the §2.3 projection into the §2.5 response bytes — the Swift body
-        // of apple-docs' frozen `ad_storage_search_pages` ABI. Depends on ADSQL only (NOT CSQLite), so it
-        // stays link-clean exactly like the read engine.
-        .target(
-            name: "ADSQLSearch", dependencies: ["ADSQL", "ADSQLFullTextSearch"],
-            swiftSettings: strictSettings),
-        // ADSQLSearch is a bench dependency so the `search` scenario can call the real
-        // `searchPagesFramed` / `SearchQuery` hot path it benchmarks against
-        // system SQLite running the IDENTICAL `SearchQuery.sql` + `SearchQuery.bindings`.
-        .executableTarget(
-            name: "ADSQLBench",
-            dependencies: ["ADSQL", "ADSQLSearch", "ADSQLFullTextSearch", "ADSQLJSON", "CSQLite"],
-            swiftSettings: benchSettings),
-        .target(
-            name: "ADDBTestSupport",
-            dependencies: ["ADDBCore", "ADSQLJSON", "CSQLite"],
-            path: "Tests/ADDBTestSupport",
-            swiftSettings: testSettings
-        ),
+            plugins: libraryBuildPlugins),
+        // Engine characterization tests: pin the externally observable behavior of the
+        // storage/relational engine so the package is verifiable on its own. The deep
+        // coverage lives in the sibling ADSQL package's integration suite.
         .testTarget(
-            name: "ADDBTests",
-            dependencies: [
-                "ADDBCore", "ADSQL", "ADSQLFullTextSearch", "ADSQLJSON", "ADDBTestSupport", "CSQLite",
-                .product(name: "ADFCore", package: "ADFoundation"),
-            ],
-            swiftSettings: testSettings
-        ),
-        // Full-text-search query-language tests (MATCH parse/eval, bm25f scoring,
-        // WAND, and SQL MATCH/rank end-to-end). Enables FTS via
-        // `Database.enableFullTextSearch()`; the index-build tests stay in ADDBTests.
-        .testTarget(
-            name: "ADSQLFullTextSearchTests",
-            dependencies: ["ADDBCore", "ADSQL", "ADSQLFullTextSearch", "ADDBTestSupport", "CSQLite"],
-            swiftSettings: testSettings
-        ),
-        // Macro-expansion tests: drive `@Table` / `#SQL` through swift-syntax's
-        // generic test support (assert the expanded source / emitted diagnostics),
-        // so they need no runtime database.
-        .testTarget(
-            name: "ADSQLMacrosTests",
-            dependencies: [
-                "ADSQLMacros",
-                .product(name: "SwiftSyntaxMacrosGenericTestSupport", package: "swift-syntax"),
-            ],
-            swiftSettings: testSettings
-        ),
-        .testTarget(
-            name: "ADSQLImportTests",
-            dependencies: [
-                "ADDBCore", "ADSQL", "ADSQLFullTextSearch", "ADSQLJSON", "ADSQLImport", "ADSQLSearch",
-                "ADDBTestSupport", "CSQLite",
-            ],
-            swiftSettings: testSettings
-        ),
+            name: "ADDBCoreTests",
+            dependencies: ["ADDBCore"],
+            swiftSettings: testSettings),
 
-        // Developer tooling. The command plugins are dependency-free (they drive the toolchain's
-        // bundled `swift format`), so they impose nothing on packages that depend on ADSQL.
+        // Developer tooling. Command plugins are dependency-free (they drive the
+        // toolchain's bundled `swift format`), so they impose nothing on consumers.
         .plugin(
             name: "Format",
             capability: .command(

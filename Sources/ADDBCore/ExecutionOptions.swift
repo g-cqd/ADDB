@@ -64,7 +64,7 @@ public struct ExecutionOptions: Sendable, Equatable {
     /// Identifies the options that affect the *bound plan* (the join strategy), so
     /// a plan bound under one strategy is never reused under another. The evaluator
     /// and insert strategies are runtime-only and never change a plan.
-    package var planningTag: Int {
+    @_spi(ADDBEngine) public var planningTag: Int {
         switch join {
         case .nestedLoop: 0
         case .hash: 1

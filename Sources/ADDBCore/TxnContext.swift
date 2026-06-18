@@ -1,6 +1,6 @@
 /// Resolves page numbers to page bytes. Read transactions resolve straight
 /// from committed storage; write transactions overlay their dirty table.
-package protocol PageResolver {
+@_spi(ADDBEngine) public protocol PageResolver {
     func resolvePage(_ pageNo: UInt64) throws(DBError) -> UnsafeRawBufferPointer
     /// Advisory readahead for an upcoming contiguous page run (forward scans).
     func prefetch(fromPage: UInt64, count: Int)
@@ -18,18 +18,18 @@ extension PageResolver {
     /// Default: prefetch is a no-op (write contexts and test resolvers don't
     /// scan-prefetch; only the mapped committed reader forwards it).
     @inline(__always)
-    package func prefetch(fromPage: UInt64, count: Int) {}
+    @_spi(ADDBEngine) public func prefetch(fromPage: UInt64, count: Int) {}
     @inline(__always)
-    package var prefetchWindow: Int { 0 }
+    @_spi(ADDBEngine) public var prefetchWindow: Int { 0 }
     /// Default: no FTS query evaluator (raw key/value resolvers and test resolvers
     /// never run MATCH). `TxnContext`/`CommittedResolver` override with the value
     /// copied from the database.
     @inline(__always)
-    package var ftsEvaluator: (any FTSEvaluation)? { nil }
+    @_spi(ADDBEngine) public var ftsEvaluator: (any FTSEvaluation)? { nil }
 }
 
 /// Committed-page reader (mmap in production, dictionaries in tests).
-package protocol PageSource: AnyObject {
+@_spi(ADDBEngine) public protocol PageSource: AnyObject {
     func page(_ pageNo: UInt64) throws(DBError) -> UnsafeRawBufferPointer
     func prefetch(fromPage: UInt64, count: Int)
     var prefetchWindow: Int { get }
@@ -37,32 +37,32 @@ package protocol PageSource: AnyObject {
 
 extension PageSource {
     @inline(__always)
-    package func prefetch(fromPage: UInt64, count: Int) {}
+    @_spi(ADDBEngine) public func prefetch(fromPage: UInt64, count: Int) {}
     @inline(__always)
-    package var prefetchWindow: Int { 0 }
+    @_spi(ADDBEngine) public var prefetchWindow: Int { 0 }
 }
 
 /// Page allocation state for one write transaction. Fresh pages (allocated
 /// and freed within the same transaction, never visible to any reader) are
 /// recycled immediately; committed pages freed here must wait for readers
 /// and are handed to the free-list at commit.
-package struct PageAllocator {
+@_spi(ADDBEngine) public struct PageAllocator {
     /// Next never-used page (high-water mark, becomes meta.pageCount).
-    package var highWater: UInt64
+    @_spi(ADDBEngine) public var highWater: UInt64
     /// Reusable pages harvested from the free-list (older generations whose
     /// readers are gone) plus same-transaction fresh frees.
-    package var pool: [UInt64]
+    @_spi(ADDBEngine) public var pool: [UInt64]
     /// While the free-list serializes itself at commit time, the pool is
     /// frozen (its contents are being written out) and all allocation comes
     /// from the high-water mark.
-    package var highWaterOnly = false
+    @_spi(ADDBEngine) public var highWaterOnly = false
 
-    package init(highWater: UInt64, pool: [UInt64] = []) {
+    @_spi(ADDBEngine) public init(highWater: UInt64, pool: [UInt64] = []) {
         self.highWater = highWater
         self.pool = pool
     }
 
-    package mutating func allocate() -> UInt64 {
+    @_spi(ADDBEngine) public mutating func allocate() -> UInt64 {
         if !highWaterOnly, let reused = pool.popLast() { return reused }
         defer { highWater += 1 }
         return highWater
@@ -70,7 +70,7 @@ package struct PageAllocator {
 
     /// Allocate bypassing the recycled pool (used by free-list maintenance to
     /// avoid consuming the pool it is itself rebuilding).
-    package mutating func allocateHighWater() -> UInt64 {
+    @_spi(ADDBEngine) public mutating func allocateHighWater() -> UInt64 {
         defer { highWater += 1 }
         return highWater
     }
@@ -78,15 +78,15 @@ package struct PageAllocator {
 
 /// Mutable state of one write transaction. Single-threaded by construction:
 /// only the writer loop touches it.
-package final class TxnContext: PageResolver, OverflowPager {
-    package let source: any PageSource
-    package var meta: Meta
-    package var allocator: PageAllocator
+@_spi(ADDBEngine) public final class TxnContext: PageResolver, OverflowPager {
+    @_spi(ADDBEngine) public let source: any PageSource
+    @_spi(ADDBEngine) public var meta: Meta
+    @_spi(ADDBEngine) public var allocator: PageAllocator
     /// Pages written this transaction (always includes every allocated page).
-    package var dirty: [UInt64: PageBuf] = [:]
+    @_spi(ADDBEngine) public var dirty: [UInt64: PageBuf] = [:]
     /// Committed pages this transaction stopped referencing: reclaimable only
     /// once concurrent readers move past this generation.
-    package var pendingFree: [UInt64] = []
+    @_spi(ADDBEngine) public var pendingFree: [UInt64] = []
 
     /// Reusable encode buffers for the insert path: one for the row record, one for
     /// each index entry key (used sequentially). `putBytes` copies the bytes into
@@ -119,29 +119,29 @@ package final class TxnContext: PageResolver, OverflowPager {
 
     /// Relational state (catalog, handles, sequences), loaded lazily on first
     /// relational use. Value-typed: TxnRestorePoint snapshots it by copy.
-    package internal(set) var relation: RelationState?
+    @_spi(ADDBEngine) public internal(set) var relation: RelationState?
 
     /// Active NEW/OLD row frame while a trigger body executes. The write
     /// path consults it so trigger-body expressions can read `new.col`/`old.col`;
     /// nil outside a trigger. Stacked frames restore the prior frame on return.
-    package var triggerFrame: TriggerFrame?
+    @_spi(ADDBEngine) public var triggerFrame: TriggerFrame?
     /// Trigger recursion depth: bumped around each fired trigger body so a
     /// self-referential trigger errors instead of looping forever.
-    package var triggerDepth: UInt32 = 0
+    @_spi(ADDBEngine) public var triggerDepth: UInt32 = 0
     /// The SQL-layer trigger engine, installed by the SQL layer onto the database
     /// and copied onto each write context at creation. nil when no SQL layer is
     /// wired (raw key/value use), so DML simply never fires triggers.
-    package var triggerEngine: (any TriggerFiring)?
+    @_spi(ADDBEngine) public var triggerEngine: (any TriggerFiring)?
     /// Opaque per-transaction cache owned by the trigger engine (a box of parsed
     /// trigger definitions). Storage never inspects it; it dies with the txn, so a
     /// parsed definition cannot outlive its source text. Writer-confined → no lock.
-    package var triggerCache: AnyObject?
+    @_spi(ADDBEngine) public var triggerCache: AnyObject?
     /// The SQL-layer FTS query evaluator, installed by `ADSQLFullTextSearch` onto
     /// the database and copied onto each write context at creation (mirroring
     /// `triggerEngine`). nil when full-text search is not enabled, so a write that
     /// touches an FTS table's MATCH source on the overlay sees the same evaluator a
     /// read would.
-    package var ftsEvaluator: (any FTSEvaluation)?
+    @_spi(ADDBEngine) public var ftsEvaluator: (any FTSEvaluation)?
 
     /// Group-commit nesting: stacked micro-transactions bump the epoch; pages
     /// dirtied by earlier requests are cloned on first touch so a failing
@@ -151,7 +151,7 @@ package final class TxnContext: PageResolver, OverflowPager {
     var undoAllocated: [UInt64] = []
     var undoFreedOwned: [(pageNo: UInt64, buf: PageBuf)] = []
 
-    package init(source: any PageSource, meta: Meta, pool: [UInt64] = []) {
+    @_spi(ADDBEngine) public init(source: any PageSource, meta: Meta, pool: [UInt64] = []) {
         self.source = source
         self.meta = meta
         self.allocator = PageAllocator(highWater: meta.pageCount, pool: pool)
@@ -159,7 +159,7 @@ package final class TxnContext: PageResolver, OverflowPager {
 
     // MARK: - Page access
 
-    package func resolvePage(_ pageNo: UInt64) throws(DBError) -> UnsafeRawBufferPointer {
+    @_spi(ADDBEngine) public func resolvePage(_ pageNo: UInt64) throws(DBError) -> UnsafeRawBufferPointer {
         if let buf = dirty[pageNo] { return unsafe buf.readOnly }
         // Committed pages live in [0, meta.pageCount); a higher number is a corrupt
         // in-page pointer that would otherwise read mapped-but-uncommitted (zeroed)
@@ -170,10 +170,10 @@ package final class TxnContext: PageResolver, OverflowPager {
     }
 
     @inline(__always)
-    package func owns(_ pageNo: UInt64) -> Bool { dirty[pageNo] != nil }
+    @_spi(ADDBEngine) public func owns(_ pageNo: UInt64) -> Bool { dirty[pageNo] != nil }
 
     /// Brand-new zeroed page owned by this transaction.
-    package func allocatePage() -> (pageNo: UInt64, buf: PageBuf) {
+    @_spi(ADDBEngine) public func allocatePage() -> (pageNo: UInt64, buf: PageBuf) {
         let pageNo = allocator.allocate()
         let buf = PageBuf()
         buf.requestEpoch = requestEpoch
@@ -187,7 +187,7 @@ package final class TxnContext: PageResolver, OverflowPager {
     /// goes to pendingFree) — COW-once-per-transaction. Under group commit,
     /// pages owned by an *earlier request* are additionally cloned on first
     /// touch so the current request can be rolled back alone.
-    package func shadow(_ pageNo: UInt64) throws(DBError) -> (pageNo: UInt64, buf: PageBuf) {
+    @_spi(ADDBEngine) public func shadow(_ pageNo: UInt64) throws(DBError) -> (pageNo: UInt64, buf: PageBuf) {
         if let buf = dirty[pageNo] {
             if requestEpoch != 0, buf.requestEpoch != requestEpoch {
                 let clone = unsafe PageBuf(copying: buf.readOnly)
@@ -208,7 +208,7 @@ package final class TxnContext: PageResolver, OverflowPager {
     }
 
     /// Releases a page this transaction no longer references.
-    package func freePage(_ pageNo: UInt64) {
+    @_spi(ADDBEngine) public func freePage(_ pageNo: UInt64) {
         if let buf = dirty.removeValue(forKey: pageNo) {
             // Never visible to anyone: recycle immediately.
             allocator.pool.append(pageNo)
@@ -246,16 +246,18 @@ package final class TxnContext: PageResolver, OverflowPager {
 
     // MARK: - OverflowPager
 
-    package func allocateOverflowPage() throws(DBError) -> (pageNo: UInt64, buffer: UnsafeMutableRawBufferPointer) {
+    @_spi(ADDBEngine) public func allocateOverflowPage() throws(DBError) -> (
+        pageNo: UInt64, buffer: UnsafeMutableRawBufferPointer
+    ) {
         let (pageNo, buf) = allocatePage()
         return unsafe (pageNo, buf.raw)
     }
 
-    package func readOverflowPage(_ pageNo: UInt64) throws(DBError) -> UnsafeRawBufferPointer {
+    @_spi(ADDBEngine) public func readOverflowPage(_ pageNo: UInt64) throws(DBError) -> UnsafeRawBufferPointer {
         unsafe try resolvePage(pageNo)
     }
 
-    package func freeOverflowPage(_ pageNo: UInt64) throws(DBError) {
+    @_spi(ADDBEngine) public func freeOverflowPage(_ pageNo: UInt64) throws(DBError) {
         freePage(pageNo)
     }
 }
@@ -283,23 +285,23 @@ extension TxnContext {
 }
 
 /// Read-side resolver over committed pages only.
-package struct CommittedResolver: PageResolver {
-    package let source: any PageSource
+@_spi(ADDBEngine) public struct CommittedResolver: PageResolver {
+    @_spi(ADDBEngine) public let source: any PageSource
     /// Snapshot's committed high-water: a committed tree never references a page
     /// number ≥ pageCount, so anything beyond it is a corrupt in-page pointer
     /// (which would read mapped-but-uncommitted space without faulting). `.max`
     /// leaves the bound off for low-level resolvers built without a meta.
-    package let pageCount: UInt64
+    @_spi(ADDBEngine) public let pageCount: UInt64
     /// Verify each resolved page's checksum before use (opt-in; off on the hot
     /// path). Catches the full corruption class — a tampered cellCount/keyLen
     /// changes the page bytes, so the stored XXH64 no longer matches.
-    package let verifyChecksums: Bool
+    @_spi(ADDBEngine) public let verifyChecksums: Bool
     /// The FTS query evaluator for this read snapshot, copied from the database
     /// (nil unless `Database.enableFullTextSearch()` installed one). See
     /// ``PageResolver/ftsEvaluator``.
-    package let ftsEvaluator: (any FTSEvaluation)?
+    @_spi(ADDBEngine) public let ftsEvaluator: (any FTSEvaluation)?
 
-    package init(
+    @_spi(ADDBEngine) public init(
         source: any PageSource, pageCount: UInt64 = .max, verifyChecksums: Bool = false,
         ftsEvaluator: (any FTSEvaluation)? = nil
     ) {
@@ -309,7 +311,7 @@ package struct CommittedResolver: PageResolver {
         self.ftsEvaluator = ftsEvaluator
     }
     @inline(__always)
-    package func resolvePage(_ pageNo: UInt64) throws(DBError) -> UnsafeRawBufferPointer {
+    @_spi(ADDBEngine) public func resolvePage(_ pageNo: UInt64) throws(DBError) -> UnsafeRawBufferPointer {
         guard pageNo < pageCount else { throw DBError.corruptPage(pageNo: pageNo) }
         let page = unsafe try source.page(pageNo)
         if verifyChecksums, unsafe !PageHeader.verifyChecksum(page, pageNo: pageNo) {
@@ -318,9 +320,9 @@ package struct CommittedResolver: PageResolver {
         return unsafe page
     }
     @inline(__always)
-    package func prefetch(fromPage: UInt64, count: Int) {
+    @_spi(ADDBEngine) public func prefetch(fromPage: UInt64, count: Int) {
         source.prefetch(fromPage: fromPage, count: count)
     }
     @inline(__always)
-    package var prefetchWindow: Int { source.prefetchWindow }
+    @_spi(ADDBEngine) public var prefetchWindow: Int { source.prefetchWindow }
 }

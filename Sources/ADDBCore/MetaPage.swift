@@ -10,27 +10,27 @@ import ADFCore
 /// (page 0 and page 1). Commit N+1 writes to page `(N+1) % 2`; recovery
 /// takes the newest checksum-valid meta, so one torn meta page is expected
 /// and harmless.
-package struct Meta: Equatable, Sendable {
-    package var generation: UInt64
+@_spi(ADDBEngine) public struct Meta: Equatable, Sendable {
+    @_spi(ADDBEngine) public var generation: UInt64
     /// Root of the main B+tree; 0 means the tree is empty.
-    package var rootPage: UInt64
+    @_spi(ADDBEngine) public var rootPage: UInt64
     /// Root of the free-list B+tree; 0 means no free-list.
-    package var freeRootPage: UInt64
+    @_spi(ADDBEngine) public var freeRootPage: UInt64
     /// High-water page count: pages `[0, pageCount)` are owned by the file.
-    package var pageCount: UInt64
-    package var kvCount: UInt64
-    package var treeDepth: UInt16
-    package var flags: UInt16
-    package var freeDepth: UInt16
-    package var freeEntryCount: UInt64
+    @_spi(ADDBEngine) public var pageCount: UInt64
+    @_spi(ADDBEngine) public var kvCount: UInt64
+    @_spi(ADDBEngine) public var treeDepth: UInt16
+    @_spi(ADDBEngine) public var flags: UInt16
+    @_spi(ADDBEngine) public var freeDepth: UInt16
+    @_spi(ADDBEngine) public var freeEntryCount: UInt64
 
-    package static let empty = Meta(
+    @_spi(ADDBEngine) public static let empty = Meta(
         generation: 0, rootPage: 0, freeRootPage: 0,
         pageCount: Format.firstDataPage, kvCount: 0, treeDepth: 0, flags: 0,
         freeDepth: 0, freeEntryCount: 0)
 
     /// The user-visible key/value tree.
-    package var mainTree: TreeHandle {
+    @_spi(ADDBEngine) public var mainTree: TreeHandle {
         get { TreeHandle(rootPage: rootPage, depth: treeDepth, count: kvCount) }
         set {
             rootPage = newValue.rootPage
@@ -40,7 +40,7 @@ package struct Meta: Equatable, Sendable {
     }
 
     /// The free-list tree (page reclamation bookkeeping).
-    package var freeTree: TreeHandle {
+    @_spi(ADDBEngine) public var freeTree: TreeHandle {
         get { TreeHandle(rootPage: freeRootPage, depth: freeDepth, count: freeEntryCount) }
         set {
             freeRootPage = newValue.rootPage
@@ -51,7 +51,7 @@ package struct Meta: Equatable, Sendable {
 
     /// Which meta page the *next* commit (this meta's generation) writes to.
     @inline(__always)
-    package var pageNo: UInt64 { generation % 2 }
+    @_spi(ADDBEngine) public var pageNo: UInt64 { generation % 2 }
 
     /// The newest generation whose freed pages the next transaction may
     /// reuse. One generation of lag is what lets `.barrier` commits issue a
@@ -59,7 +59,7 @@ package struct Meta: Equatable, Sendable {
     /// an ordering window, so recovery can land on N-1 — pages freed at
     /// gens ≤ N-1 are absent from tree N-1 and safe to overwrite.
     @inline(__always)
-    package func reclaimLimit(minReader: UInt64) -> UInt64 {
+    @_spi(ADDBEngine) public func reclaimLimit(minReader: UInt64) -> UInt64 {
         min(minReader, generation > 0 ? generation - 1 : 0)
     }
 
@@ -82,7 +82,7 @@ package struct Meta: Equatable, Sendable {
 
     /// Serializes into a full page buffer (only the first 128 bytes are
     /// meaningful; the rest stays as-is, normally zero).
-    package func encode(into buffer: UnsafeMutableRawBufferPointer, pageNo: UInt64) {
+    @_spi(ADDBEngine) public func encode(into buffer: UnsafeMutableRawBufferPointer, pageNo: UInt64) {
         precondition(buffer.count == Format.pageSize)
         Format.magicBytes.withUnsafeBytes { magic in
             unsafe UnsafeMutableRawBufferPointer(rebasing: buffer[Offset.magic..<Offset.formatVersion])
@@ -109,7 +109,7 @@ package struct Meta: Equatable, Sendable {
     /// hold. Returns nil for "not a valid meta" (torn/empty); throws only for
     /// structurally impossible databases (wrong magic on page 0 is reported by
     /// the caller as `badMagic` / `unsupportedFormatVersion`).
-    package static func decode(
+    @_spi(ADDBEngine) public static func decode(
         from buffer: UnsafeRawBufferPointer, pageNo: UInt64
     ) -> DecodeResult {
         precondition(buffer.count >= Format.metaHeaderSize)
@@ -138,7 +138,7 @@ package struct Meta: Equatable, Sendable {
                 freeEntryCount: buffer.loadLE64(Offset.freeEntryCount)))
     }
 
-    package enum DecodeResult: Equatable, Sendable {
+    @_spi(ADDBEngine) public enum DecodeResult: Equatable, Sendable {
         case valid(Meta)
         case notAMeta
         case corrupt
@@ -148,7 +148,7 @@ package struct Meta: Equatable, Sendable {
 
     /// Recovery: pick the newest valid meta of the two. A single torn meta is
     /// normal (it was the in-flight commit); both invalid is fatal.
-    package static func recover(
+    @_spi(ADDBEngine) public static func recover(
         meta0: UnsafeRawBufferPointer, meta1: UnsafeRawBufferPointer
     ) throws(DBError) -> Meta {
         let results = unsafe [decode(from: meta0, pageNo: 0), decode(from: meta1, pageNo: 1)]
@@ -172,17 +172,17 @@ package struct Meta: Equatable, Sendable {
 
 /// Root reference of one COW B+tree within the file. The kernel hosts two
 /// today (main + free-list); the relational layer will host many.
-package struct TreeHandle: Equatable, Sendable {
+@_spi(ADDBEngine) public struct TreeHandle: Equatable, Sendable {
     /// 0 = empty tree.
-    package var rootPage: UInt64
-    package var depth: UInt16
-    package var count: UInt64
+    @_spi(ADDBEngine) public var rootPage: UInt64
+    @_spi(ADDBEngine) public var depth: UInt16
+    @_spi(ADDBEngine) public var count: UInt64
 
-    package init(rootPage: UInt64, depth: UInt16, count: UInt64) {
+    @_spi(ADDBEngine) public init(rootPage: UInt64, depth: UInt16, count: UInt64) {
         self.rootPage = rootPage
         self.depth = depth
         self.count = count
     }
 
-    package static let empty = TreeHandle(rootPage: 0, depth: 0, count: 0)
+    @_spi(ADDBEngine) public static let empty = TreeHandle(rootPage: 0, depth: 0, count: 0)
 }

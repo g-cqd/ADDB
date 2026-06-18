@@ -17,7 +17,7 @@ import ADFCore
 ///
 /// Readers reconstitute a term's whole list by unioning its block-keys
 /// (`postingsValue`), so `postings`/MATCH/WAND/the scorer are unchanged.
-package enum FTSIndex {
+@_spi(ADDBEngine) public enum FTSIndex {
     /// Tokens longer than this are skipped (kept out of the term keyspace); they
     /// still count toward field length. B+tree keys are bounded by `maxKeySize`.
     static let maxTermBytes = 256
@@ -246,7 +246,7 @@ package enum FTSIndex {
 
     // MARK: - Reads (tests + /)
 
-    package static func postings(
+    @_spi(ADDBEngine) public static func postings(
         _ resolver: some PageResolver, _ record: Catalog.FTSRecord, term: [UInt8]
     ) throws(DBError) -> [FTSPosting]? {
         guard let value = try postingsValue(resolver, record, term: term) else { return nil }
@@ -259,7 +259,7 @@ package enum FTSIndex {
     /// `FTSPostings` value, unioning its `0...lastNo` block-keys. nil when the term
     /// is absent. Readers (`postings`, MATCH, WAND, the scorer) consume this so
     /// they are oblivious to the block-per-key storage.
-    package static func postingsValue(
+    @_spi(ADDBEngine) public static func postingsValue(
         _ resolver: some PageResolver, _ record: Catalog.FTSRecord, term: [UInt8]
     ) throws(DBError) -> [UInt8]? {
         // One range scan over the term's block-keys, reassembled into the single
@@ -279,7 +279,7 @@ package enum FTSIndex {
     /// Docids only for `term` — unions the term's block-keys, decoding just docids
     /// from each block and skipping its TF/position payload (membership fast
     /// path). nil when the term is absent.
-    package static func docids(
+    @_spi(ADDBEngine) public static func docids(
         _ resolver: some PageResolver, _ record: Catalog.FTSRecord, term: [UInt8]
     ) throws(DBError) -> [Int64]? {
         var ids: [Int64] = []
@@ -291,13 +291,13 @@ package enum FTSIndex {
         return present ? ids : nil
     }
 
-    package static func documentFrequency(
+    @_spi(ADDBEngine) public static func documentFrequency(
         _ resolver: some PageResolver, _ record: Catalog.FTSRecord, term: [UInt8]
     ) throws(DBError) -> UInt64 {
         try documentFrequency(resolver, record.dict, term: term)
     }
 
-    package static func globalStats(
+    @_spi(ADDBEngine) public static func globalStats(
         _ resolver: some PageResolver, _ record: Catalog.FTSRecord
     ) throws(DBError) -> FTSGlobalStats {
         try readGlobal(resolver, record.stats, columns: record.definition.columns.count)
@@ -321,7 +321,7 @@ package enum FTSIndex {
     /// ONLY the leading field-length varints (never the doc's term list), zero-copy.
     /// nil when the doc has no stats row (absent/removed). Bit-identical `D` to the
     /// prior point read. Hot path: one call per scored document.
-    package static func docLength<R: PageResolver>(
+    @_spi(ADDBEngine) public static func docLength<R: PageResolver>(
         _ statsCursor: inout Cursor<R>, docid: Int64
     ) throws(DBError) -> Double? {
         let key = KeyCodec.rowKey(docid)
@@ -348,7 +348,7 @@ package enum FTSIndex {
     /// Every dictionary term that starts with `prefix` (for `foo*` queries). The
     /// dict tree is keyed by raw term bytes, so a seek + ascending walk while the
     /// key still carries the prefix enumerates the range.
-    package static func termsMatchingPrefix(
+    @_spi(ADDBEngine) public static func termsMatchingPrefix(
         _ resolver: some PageResolver, _ record: Catalog.FTSRecord, prefix: [UInt8]
     ) throws(DBError) -> [[UInt8]] {
         var terms: [[UInt8]] = []

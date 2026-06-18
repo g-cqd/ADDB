@@ -9,13 +9,13 @@
 /// Positions index a snapshot taken at creation (`meta`); cursors over a
 /// write context observe the state as of their creation point and must be
 /// recreated after further mutations.
-package struct Cursor<R: PageResolver>: ~Copyable {
+@_spi(ADDBEngine) public struct Cursor<R: PageResolver>: ~Copyable {
     let resolver: R
     let tree: TreeHandle
     /// One frame per level, root first. Branch frames hold the child position
     /// (-1 = leftmost link); the final frame is the leaf cell index.
     var stack: [(pageNo: UInt64, index: Int)] = []
-    package private(set) var isValid = false
+    @_spi(ADDBEngine) public private(set) var isValid = false
 
     /// Forward-scan readahead: `prefetchHorizon` is the highest page we've asked
     /// the kernel to prefetch. Iteration keeps a full `prefetchWindow` of pages in
@@ -30,11 +30,11 @@ package struct Cursor<R: PageResolver>: ~Copyable {
     var prefetchHorizon: UInt64 = 0
     let prefetchWindow: Int
 
-    package init(resolver: R, meta: Meta) {
+    @_spi(ADDBEngine) public init(resolver: R, meta: Meta) {
         self.init(resolver: resolver, tree: meta.mainTree)
     }
 
-    package init(resolver: R, tree: TreeHandle) {
+    @_spi(ADDBEngine) public init(resolver: R, tree: TreeHandle) {
         self.resolver = resolver
         self.tree = tree
         self.prefetchWindow = resolver.prefetchWindow
@@ -43,14 +43,14 @@ package struct Cursor<R: PageResolver>: ~Copyable {
 
     // MARK: - Positioning
 
-    package enum Edge: Sendable {
+    @_spi(ADDBEngine) public enum Edge: Sendable {
         case first
         case last
     }
 
     /// Positions at the lower bound of `key` (first entry ≥ key).
     /// Returns true exactly when the key itself is present.
-    package mutating func seek(_ key: UnsafeRawBufferPointer) throws(DBError) -> Bool {
+    @_spi(ADDBEngine) public mutating func seek(_ key: UnsafeRawBufferPointer) throws(DBError) -> Bool {
         stack.removeAll(keepingCapacity: true)
         isValid = false
         guard tree.rootPage != 0 else { return false }
@@ -87,7 +87,7 @@ package struct Cursor<R: PageResolver>: ~Copyable {
     /// falls back to a full `seek`. Provably equivalent to `seek` — the fast path
     /// runs only when the key is bounded by the current leaf's first/last key,
     /// where `Node.search` (the same primitive `seek` ends with) is authoritative.
-    package mutating func seekForward(_ key: UnsafeRawBufferPointer) throws(DBError) -> Bool {
+    @_spi(ADDBEngine) public mutating func seekForward(_ key: UnsafeRawBufferPointer) throws(DBError) -> Bool {
         if isValid, let top = stack.last {
             let leaf = unsafe try resolver.resolvePage(top.pageNo)
             let count = unsafe PageHeader.cellCount(leaf)
@@ -106,7 +106,7 @@ package struct Cursor<R: PageResolver>: ~Copyable {
     }
 
     @discardableResult
-    package mutating func move(to edge: Edge) throws(DBError) -> Bool {
+    @_spi(ADDBEngine) public mutating func move(to edge: Edge) throws(DBError) -> Bool {
         stack.removeAll(keepingCapacity: true)
         isValid = false
         guard tree.rootPage != 0 else { return false }
@@ -119,7 +119,7 @@ package struct Cursor<R: PageResolver>: ~Copyable {
     }
 
     @discardableResult
-    package mutating func next() throws(DBError) -> Bool {
+    @_spi(ADDBEngine) public mutating func next() throws(DBError) -> Bool {
         guard isValid else { return false }
         let top = stack.count - 1
         let leaf = unsafe try resolver.resolvePage(stack[top].pageNo)
@@ -133,7 +133,7 @@ package struct Cursor<R: PageResolver>: ~Copyable {
     }
 
     @discardableResult
-    package mutating func prev() throws(DBError) -> Bool {
+    @_spi(ADDBEngine) public mutating func prev() throws(DBError) -> Bool {
         guard isValid else { return false }
         let top = stack.count - 1
         if stack[top].index - 1 >= 0 {
@@ -147,7 +147,7 @@ package struct Cursor<R: PageResolver>: ~Copyable {
     // MARK: - Access
 
     /// Scoped zero-copy access to the current entry.
-    package mutating func withCurrent<T>(
+    @_spi(ADDBEngine) public mutating func withCurrent<T>(
         _ body: (UnsafeRawBufferPointer, borrowing BTree.ValueRef) throws(DBError) -> T
     ) throws(DBError) -> T? {
         guard isValid else { return nil }
@@ -162,14 +162,14 @@ package struct Cursor<R: PageResolver>: ~Copyable {
             cell.key, .overflow(head: cell.overflowHead, length: Int(cell.overflowLength)))
     }
 
-    package mutating func currentKey() throws(DBError) -> [UInt8]? {
+    @_spi(ADDBEngine) public mutating func currentKey() throws(DBError) -> [UInt8]? {
         unsafe try withCurrent { key, _ in unsafe [UInt8](key) }
     }
 
     /// Materializes the current value (streams overflow chains). The value ref
     /// is `~Escapable`, so it is consumed inside the access scope rather than
     /// returned out of it.
-    package mutating func currentValue() throws(DBError) -> [UInt8]? {
+    @_spi(ADDBEngine) public mutating func currentValue() throws(DBError) -> [UInt8]? {
         let resolver = self.resolver
         return unsafe try withCurrent { (_, ref) throws(DBError) in
             try BTree.copyValue(ref, resolver: resolver)
@@ -179,7 +179,7 @@ package struct Cursor<R: PageResolver>: ~Copyable {
     /// Zero-copy access to the current entry's value bytes (an inline value is the
     /// mapped page span directly; an overflow value is assembled once). The span is
     /// valid only for the duration of `body`. nil when the cursor is invalid.
-    package mutating func withCurrentValueBytes<T>(
+    @_spi(ADDBEngine) public mutating func withCurrentValueBytes<T>(
         _ body: (UnsafeRawBufferPointer) throws(DBError) -> T
     ) throws(DBError) -> T? {
         let resolver = self.resolver

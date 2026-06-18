@@ -11,7 +11,7 @@ import ADFCore
 /// | 02 || 8B LE bitPattern REAL
 /// | 03 || varint len || utf8 TEXT
 /// | 04 || varint len || raw BLOB
-package enum RecordCodec {
+@_spi(ADDBEngine) public enum RecordCodec {
     enum CellTag {
         static let null: UInt8 = 0
         static let integer: UInt8 = 1
@@ -20,7 +20,7 @@ package enum RecordCodec {
         static let blob: UInt8 = 4
     }
 
-    package static func encode(_ values: [Value]) -> [UInt8] {
+    @_spi(ADDBEngine) public static func encode(_ values: [Value]) -> [UInt8] {
         var out: [UInt8] = []
         encode(values, into: &out)
         return out
@@ -29,7 +29,7 @@ package enum RecordCodec {
     /// Encodes into a caller-owned buffer (cleared first, capacity kept) — lets the
     /// insert path reuse one scratch buffer across rows instead of allocating a
     /// fresh record per row.
-    package static func encode(_ values: [Value], into out: inout [UInt8]) {
+    @_spi(ADDBEngine) public static func encode(_ values: [Value], into out: inout [UInt8]) {
         out.removeAll(keepingCapacity: true)
         out.reserveCapacity(16 + values.count * 8)
         Varint.append(UInt64(values.count), to: &out)
@@ -55,7 +55,7 @@ package enum RecordCodec {
         }
     }
 
-    package static func decode(_ bytes: UnsafeRawBufferPointer) throws(DBError) -> [Value] {
+    @_spi(ADDBEngine) public static func decode(_ bytes: UnsafeRawBufferPointer) throws(DBError) -> [Value] {
         var offset = 0
         guard let rawCount = unsafe Varint.read(bytes, &offset), rawCount <= 4096 else {
             throw DBError.integrityFailure("row record: bad column count")
@@ -72,7 +72,7 @@ package enum RecordCodec {
     /// `offsets.count` is the row's stored column count (which may be below the
     /// schema's count: trailing columns read as DEFAULT/NULL). Allocates no
     /// strings, so it is cheap on the lazy-decode scan path.
-    package static func cellOffsets(_ bytes: UnsafeRawBufferPointer) throws(DBError) -> [Int] {
+    @_spi(ADDBEngine) public static func cellOffsets(_ bytes: UnsafeRawBufferPointer) throws(DBError) -> [Int] {
         var offset = 0
         guard let rawCount = unsafe Varint.read(bytes, &offset), rawCount <= 4096 else {
             throw DBError.integrityFailure("row record: bad column count")
@@ -87,7 +87,7 @@ package enum RecordCodec {
     }
 
     /// Decodes the single cell whose tag begins at `start` (from `cellOffsets`).
-    package static func decodeCell(
+    @_spi(ADDBEngine) public static func decodeCell(
         _ bytes: UnsafeRawBufferPointer, at start: Int
     ) throws(DBError) -> Value {
         var offset = start
@@ -99,7 +99,7 @@ package enum RecordCodec {
     /// rowid-alias column (the caller substitutes the rowid). Columns the row did
     /// not store read as their schema DEFAULT/NULL. The single point that bridges
     /// the safe `RawSpan` to the existing pointer-based decoder.
-    package static func value(
+    @_spi(ADDBEngine) public static func value(
         at index: Int, in span: RawSpan, defaults columns: [ColumnDefinition]
     ) throws(DBError) -> Value {
         try span.withUnsafeBytes { (bytes: UnsafeRawBufferPointer) throws(DBError) -> Value in
@@ -122,14 +122,14 @@ package enum RecordCodec {
     /// `nil` when the column is NULL, is a different type, or the (short) row did
     /// not store it. Unlike `value(at:)` this does NOT apply a column DEFAULT for a
     /// missing column (callers needing default-aware reads use `value(at:)`).
-    package static func withText<R>(
+    @_spi(ADDBEngine) public static func withText<R>(
         at index: Int, in span: RawSpan,
         _ body: (UnsafeRawBufferPointer?) throws(DBError) -> R
     ) throws(DBError) -> R {
         unsafe try withPayload(at: index, in: span, expecting: CellTag.text, body)
     }
 
-    package static func withBlob<R>(
+    @_spi(ADDBEngine) public static func withBlob<R>(
         at index: Int, in span: RawSpan,
         _ body: (UnsafeRawBufferPointer?) throws(DBError) -> R
     ) throws(DBError) -> R {
@@ -172,14 +172,14 @@ package enum RecordCodec {
     }
 
     /// Zero-copy TEXT/BLOB access over a raw record buffer (the scan-slot span).
-    package static func withText<R>(
+    @_spi(ADDBEngine) public static func withText<R>(
         at index: Int, in bytes: UnsafeRawBufferPointer,
         _ body: (UnsafeRawBufferPointer?) throws(DBError) -> R
     ) throws(DBError) -> R {
         unsafe try withPayload(at: index, in: bytes, expecting: CellTag.text, body)
     }
 
-    package static func withBlob<R>(
+    @_spi(ADDBEngine) public static func withBlob<R>(
         at index: Int, in bytes: UnsafeRawBufferPointer,
         _ body: (UnsafeRawBufferPointer?) throws(DBError) -> R
     ) throws(DBError) -> R {
@@ -188,7 +188,7 @@ package enum RecordCodec {
 
     /// Reads the leading varint column count and advances `offset` to the first
     /// cell — the entry point for incremental, allocation-free column location.
-    package static func readHeader(
+    @_spi(ADDBEngine) public static func readHeader(
         _ bytes: UnsafeRawBufferPointer, _ offset: inout Int
     ) throws(DBError) -> Int {
         guard let rawCount = unsafe Varint.read(bytes, &offset), rawCount <= 4096 else {
@@ -199,7 +199,7 @@ package enum RecordCodec {
 
     /// Advances `offset` past one cell without materializing its payload (used to
     /// walk to the i-th cell on the lazy scan path).
-    package static func skipCell(
+    @_spi(ADDBEngine) public static func skipCell(
         _ bytes: UnsafeRawBufferPointer, _ offset: inout Int
     ) throws(DBError) {
         unsafe try skipOne(bytes, &offset)

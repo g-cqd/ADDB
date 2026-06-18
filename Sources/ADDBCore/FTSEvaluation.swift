@@ -3,7 +3,7 @@
 /// (resolved query leaves, a reused stats cursor) so the executor's per-document
 /// loop is a lookup, not a re-resolution. Used transiently within one SELECT
 /// execution, on the thread that created it — not `Sendable`.
-package protocol FTSScoring: AnyObject {
+@_spi(ADDBEngine) public protocol FTSScoring: AnyObject {
     /// The (negated) bm25f relevance of `docid` for the prepared query — the same
     /// value the score-all path produces, and 0 for a document the query does not
     /// positively match.
@@ -20,7 +20,7 @@ package protocol FTSScoring: AnyObject {
 /// ``TriggerFiring`` does for triggers; FTS differs only in that its evaluator
 /// lives *above* the SQL engine, so registration is explicit rather than riding
 /// `prepare`.
-package protocol FTSEvaluation: Sendable {
+@_spi(ADDBEngine) public protocol FTSEvaluation: Sendable {
     /// The membership docids (ascending) of the MATCH `queryBytes` over `record`,
     /// plus — only when `needScore` — a per-document scorer prepared for the same
     /// query (a membership-only MATCH never builds a scorer). The query is parsed

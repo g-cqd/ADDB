@@ -54,7 +54,7 @@ public struct RowView: ~Copyable, ~Escapable {
     let coveringIncludes: [String]?
 
     @_lifetime(copy span)
-    package init(
+    @_spi(ADDBEngine) public init(
         rowid: Int64, definition: TableDefinition, span: RawSpan,
         coveringIncludes: [String]? = nil
     ) {
@@ -146,8 +146,8 @@ public struct RowView: ~Copyable, ~Escapable {
 /// Forward iteration over a table (rowid order) or an index (key order),
 /// materializing rows. Index cursors resolve each entry's rowid back into
 /// the table tree; a dangling entry is corruption and throws.
-package struct RowCursor<R: PageResolver>: ~Copyable {
-    package enum Mode {
+@_spi(ADDBEngine) public struct RowCursor<R: PageResolver>: ~Copyable {
+    @_spi(ADDBEngine) public enum Mode {
         case table
         case index(Catalog.IndexRecord)
     }
@@ -164,7 +164,7 @@ package struct RowCursor<R: PageResolver>: ~Copyable {
     var cursor: Cursor<R>
     var exhausted = false
 
-    package init(
+    @_spi(ADDBEngine) public init(
         resolver: R, table: Catalog.TableRecord, mode: Mode,
         lowerKey: [UInt8]?, upperKey: [UInt8]?, coveringIncludes: [String]? = nil
     ) throws(DBError) {
@@ -385,7 +385,7 @@ package struct RowCursor<R: PageResolver>: ~Copyable {
 
 extension Relation {
     /// (lower inclusive, upper exclusive) raw-key bounds for an index scan.
-    package static func scanBounds(
+    @_spi(ADDBEngine) public static func scanBounds(
         _ bounds: IndexBounds, index: Catalog.IndexRecord, table: Catalog.TableRecord
     ) throws(DBError) -> (lower: [UInt8]?, upper: [UInt8]?) {
         let collations = indexCollations(index.definition, table: table.definition)

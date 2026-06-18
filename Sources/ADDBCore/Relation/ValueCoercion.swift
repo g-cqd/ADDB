@@ -18,7 +18,7 @@ extension Value {
     }
 
     /// SQLite text rendering of a value (for ||, CAST AS TEXT, LIKE).
-    package static func textify(_ value: Value) -> String {
+    @_spi(ADDBEngine) public static func textify(_ value: Value) -> String {
         switch value {
         case .null: return ""  // callers handle NULL before textify
         case .integer(let v): return String(v)
@@ -30,7 +30,7 @@ extension Value {
 
     /// SQLite formats reals with %!.15g, upgrading precision until the text
     /// round-trips.
-    package static func realToText(_ d: Double) -> String {
+    @_spi(ADDBEngine) public static func realToText(_ d: Double) -> String {
         if d.isNaN { return "" }  // NaN is NULL upstream
         if d.isInfinite { return d > 0 ? "Inf" : "-Inf" }
         for precision in [15, 17, 20] {
@@ -71,7 +71,7 @@ extension Value {
 
     /// SQLite numeric-prefix coercion of text: leading spaces, sign, digits,
     /// optional fraction/exponent; empty/invalid prefix → integer 0.
-    package static func numericPrefix(_ s: String) -> Value {
+    @_spi(ADDBEngine) public static func numericPrefix(_ s: String) -> Value {
         let bytes = Array(s.utf8)
         var i = 0
         while i < bytes.count, bytes[i] == 0x20 || bytes[i] == 0x09 { i += 1 }
@@ -107,7 +107,7 @@ extension Value {
     }
 
     /// Numeric coercion for arithmetic operands.
-    package static func toNumeric(_ value: Value) -> Value {
+    @_spi(ADDBEngine) public static func toNumeric(_ value: Value) -> Value {
         switch value {
         case .integer, .real, .null: return value
         case .text(let s): return numericPrefix(s)
@@ -115,7 +115,7 @@ extension Value {
         }
     }
 
-    package static func cast(_ value: Value, to type: ColumnType) -> Value {
+    @_spi(ADDBEngine) public static func cast(_ value: Value, to type: ColumnType) -> Value {
         if value.isNull { return .null }
         switch type {
         case .integer:

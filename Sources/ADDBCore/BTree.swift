@@ -2,12 +2,12 @@
 /// (COW-once-per-transaction: a page already owned by the transaction is
 /// mutated in place), so committed pages are never touched and readers on
 /// older generations stay consistent without locks.
-package enum BTree {
-    package enum ValueRef: ~Escapable {
+@_spi(ADDBEngine) public enum BTree {
+    @_spi(ADDBEngine) public enum ValueRef: ~Escapable {
         case inline(RawSpan)
         case overflow(head: UInt64, length: Int)
 
-        package var length: Int {
+        @_spi(ADDBEngine) public var length: Int {
             switch self {
             case .inline(let v): return v.byteCount
             case .overflow(_, let length): return length
@@ -30,14 +30,14 @@ package enum BTree {
 
     @inline(__always)
     @_lifetime(borrow resolver)
-    package static func get<R: PageResolver>(
+    @_spi(ADDBEngine) public static func get<R: PageResolver>(
         resolver: borrowing R, meta: Meta, key: UnsafeRawBufferPointer
     ) throws(DBError) -> ValueRef? {
         unsafe try get(resolver: resolver, tree: meta.mainTree, key: key)
     }
 
     @_lifetime(borrow resolver)
-    package static func get<R: PageResolver>(
+    @_spi(ADDBEngine) public static func get<R: PageResolver>(
         resolver: borrowing R, tree: TreeHandle, key: UnsafeRawBufferPointer
     ) throws(DBError) -> ValueRef? {
         guard tree.rootPage != 0 else { return nil }
@@ -66,7 +66,7 @@ package enum BTree {
 
     /// Materializes a value reference (copying inline bytes or concatenating
     /// the overflow chain).
-    package static func copyValue(
+    @_spi(ADDBEngine) public static func copyValue(
         _ ref: ValueRef, resolver: some PageResolver
     ) throws(DBError) -> [UInt8] {
         switch ref {
@@ -81,7 +81,7 @@ package enum BTree {
     /// Zero-copy access to a value's bytes: an inline value is handed to `body`
     /// as the mapped page span directly; an overflow value is assembled once and
     /// spanned. The span is valid only for the duration of `body`.
-    package static func withValueBytes<R>(
+    @_spi(ADDBEngine) public static func withValueBytes<R>(
         _ ref: ValueRef, resolver: some PageResolver,
         _ body: (UnsafeRawBufferPointer) throws(DBError) -> R
     ) throws(DBError) -> R {
@@ -106,7 +106,7 @@ package enum BTree {
     // MARK: - Insert / update
 
     @inline(__always)
-    package static func put(
+    @_spi(ADDBEngine) public static func put(
         ctx: TxnContext, key: UnsafeRawBufferPointer, value: UnsafeRawBufferPointer
     ) throws(DBError) {
         var tree = ctx.meta.mainTree
@@ -114,7 +114,7 @@ package enum BTree {
         ctx.meta.mainTree = tree
     }
 
-    package static func put(
+    @_spi(ADDBEngine) public static func put(
         ctx: TxnContext, tree: inout TreeHandle,
         key: UnsafeRawBufferPointer, value: UnsafeRawBufferPointer
     ) throws(DBError) {
@@ -327,14 +327,14 @@ package enum BTree {
 
     /// In-order traversal of every (key, valueRef) pair.
     @inline(__always)
-    package static func forEach(
+    @_spi(ADDBEngine) public static func forEach(
         resolver: some PageResolver, meta: Meta,
         _ body: (UnsafeRawBufferPointer, ValueRef) throws(DBError) -> Void
     ) throws(DBError) {
         unsafe try forEach(resolver: resolver, tree: meta.mainTree, body)
     }
 
-    package static func forEach(
+    @_spi(ADDBEngine) public static func forEach(
         resolver: some PageResolver, tree: TreeHandle,
         _ body: (UnsafeRawBufferPointer, ValueRef) throws(DBError) -> Void
     ) throws(DBError) {
@@ -372,25 +372,25 @@ package enum BTree {
 
     // MARK: - Structural validation
 
-    package struct ValidationReport: Sendable {
-        package var reachablePages: Set<UInt64> = []
-        package var kvCount: UInt64 = 0
-        package var leafCount = 0
-        package var branchCount = 0
-        package var overflowPages = 0
+    @_spi(ADDBEngine) public struct ValidationReport: Sendable {
+        @_spi(ADDBEngine) public var reachablePages: Set<UInt64> = []
+        @_spi(ADDBEngine) public var kvCount: UInt64 = 0
+        @_spi(ADDBEngine) public var leafCount = 0
+        @_spi(ADDBEngine) public var branchCount = 0
+        @_spi(ADDBEngine) public var overflowPages = 0
     }
 
     /// Full structural check of the tree under `meta`: page types, in-node key
     /// order, separator bounds, uniform leaf depth, overflow chain lengths.
     /// Returns the set of reachable pages for liveness accounting.
     @inline(__always)
-    package static func validate(
+    @_spi(ADDBEngine) public static func validate(
         resolver: some PageResolver, meta: Meta, verifyChecksums: Bool = false
     ) throws(DBError) -> ValidationReport {
         try validate(resolver: resolver, tree: meta.mainTree, verifyChecksums: verifyChecksums)
     }
 
-    package static func validate(
+    @_spi(ADDBEngine) public static func validate(
         resolver: some PageResolver, tree: TreeHandle, verifyChecksums: Bool = false
     ) throws(DBError) -> ValidationReport {
         var report = ValidationReport()

@@ -143,7 +143,7 @@ extension Relation {
 
     // MARK: - Index keys
 
-    package static func indexCollations(
+    @_spi(ADDBEngine) public static func indexCollations(
         _ index: IndexDefinition, table: TableDefinition
     ) -> [Collation] {
         index.columns.map { name in

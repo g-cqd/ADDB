@@ -4,7 +4,7 @@
 /// engine) to fire any AFTER triggers, and on `DROP TABLE` it asks which
 /// triggers target the dropped table. This inverts the dependency: storage
 /// defines the protocol; the SQL layer implements it.
-package protocol TriggerFiring: Sendable {
+@_spi(ADDBEngine) public protocol TriggerFiring: Sendable {
     /// Fires every AFTER trigger registered for `(table, event)` against the
     /// supplied NEW/OLD row, in name order, within the same write transaction.
     func fire(
@@ -24,12 +24,12 @@ package protocol TriggerFiring: Sendable {
 /// event that has no such row (INSERT has no OLD, DELETE has no NEW). All fields
 /// are storage-layer types, so the frame lives here on the write context and the
 /// SQL engine only sets/reads it.
-package struct TriggerFrame: Sendable {
-    package let table: TableDefinition
-    package let new: [Value]?
-    package let old: [Value]?
+@_spi(ADDBEngine) public struct TriggerFrame: Sendable {
+    @_spi(ADDBEngine) public let table: TableDefinition
+    @_spi(ADDBEngine) public let new: [Value]?
+    @_spi(ADDBEngine) public let old: [Value]?
 
-    package init(table: TableDefinition, new: [Value]?, old: [Value]?) {
+    @_spi(ADDBEngine) public init(table: TableDefinition, new: [Value]?, old: [Value]?) {
         self.table = table
         self.new = new
         self.old = old

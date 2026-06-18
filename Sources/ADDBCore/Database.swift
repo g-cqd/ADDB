@@ -1,6 +1,6 @@
 public import ADFIO
 import Dispatch
-package import Synchronization
+public import Synchronization
 
 /// Options controlling how a ``Database`` is opened and run: durability profile,
 /// reserved mapping size, read-only / create-if-missing access, forward-scan
@@ -52,7 +52,7 @@ public struct DatabaseOptions: Sendable {
 /// Marker for the SQL layer's parsed-statement store, held opaquely on the
 /// database so storage never names the SQL cache type. The store is `Sendable`
 /// (self-synchronized); storage only guards its one-time creation.
-package protocol SQLStatementStore: AnyObject, Sendable {}
+@_spi(ADDBEngine) public protocol SQLStatementStore: AnyObject, Sendable {}
 
 /// An ADSQL database handle.
 ///
@@ -79,7 +79,7 @@ public final class Database: Sendable {
     public let path: String
     let channel: FileChannel
     let pager: Pager
-    package let options: DatabaseOptions
+    @_spi(ADDBEngine) public let options: DatabaseOptions
     let readerTable: ReaderTable
     let shared: Mutex<Shared>
     /// Writer exclusion: one dedicated large-stack serial thread shared by
@@ -96,12 +96,12 @@ public final class Database: Sendable {
     /// schema-independent half of `prepare`), lazily created and held behind the
     /// `SQLStatementStore` marker so storage never names the SQL cache type. Bound
     /// plans live on each `Statement`, keyed by catalog version.
-    package let sqlStatementStoreBox = Mutex<(any SQLStatementStore)?>(nil)
+    @_spi(ADDBEngine) public let sqlStatementStoreBox = Mutex<(any SQLStatementStore)?>(nil)
 
     /// Returns the SQL statement store, creating it once via `make` under the
     /// box's lock. The store is `Sendable` (self-synchronized), so callers use it
     /// outside the lock.
-    package func sqlStatementStore(
+    @_spi(ADDBEngine) public func sqlStatementStore(
         orCreate make: () -> any SQLStatementStore
     ) -> any SQLStatementStore {
         sqlStatementStoreBox.withLock { box in
@@ -120,7 +120,7 @@ public final class Database: Sendable {
     /// Installs the trigger engine (idempotent, one-way): the SQL layer calls this
     /// before running any SQL, so a write context created afterward can fire
     /// triggers. Stays nil for raw key/value databases that never touch SQL.
-    package func installTriggerEngine(_ engine: any TriggerFiring) {
+    @_spi(ADDBEngine) public func installTriggerEngine(_ engine: any TriggerFiring) {
         triggerEngineBox.withLock { if $0 == nil { $0 = engine } }
     }
 
@@ -132,7 +132,7 @@ public final class Database: Sendable {
     /// (`Database.enableFullTextSearch()`). Copied onto each read/write transaction
     /// so MATCH resolves uniformly; stays nil until enabled — a MATCH row source
     /// then throws a clear error instead.
-    package func installFTSEvaluator(_ evaluator: any FTSEvaluation) {
+    @_spi(ADDBEngine) public func installFTSEvaluator(_ evaluator: any FTSEvaluation) {
         shared.withLock { if $0.ftsEvaluator == nil { $0.ftsEvaluator = evaluator } }
     }
 
@@ -367,9 +367,9 @@ public final class Database: Sendable {
 /// A read snapshot. Noncopyable and only ever borrowed by the `read` closure,
 /// so it cannot outlive its reader registration.
 public struct ReadTxn: ~Copyable {
-    package let resolver: CommittedResolver
-    package let meta: Meta
-    package let schemaCache: SchemaCache?
+    @_spi(ADDBEngine) public let resolver: CommittedResolver
+    @_spi(ADDBEngine) public let meta: Meta
+    @_spi(ADDBEngine) public let schemaCache: SchemaCache?
 
     public var generation: UInt64 { meta.generation }
     public var count: UInt64 { meta.kvCount }
@@ -460,7 +460,7 @@ public struct ReadTxn: ~Copyable {
     /// Scoped ordered iteration over the snapshot. Low-level (yields a `Cursor`
     /// over the storage layer); `package` — in-package consumers (tests, bench)
     /// reach it via `import ADDB`.
-    package func withCursor<R>(
+    @_spi(ADDBEngine) public func withCursor<R>(
         _ body: (inout Cursor<CommittedResolver>) throws(DBError) -> R
     ) throws(DBError) -> R {
         var cursor = Cursor(resolver: resolver, meta: meta)
@@ -482,9 +482,9 @@ public struct ReadTxn: ~Copyable {
 /// An exclusive write transaction. Mutations become visible atomically at
 /// commit (when the `writeSync` closure returns without throwing).
 public struct WriteTxn: ~Copyable {
-    package let ctx: TxnContext
+    @_spi(ADDBEngine) public let ctx: TxnContext
 
-    package init(ctx: TxnContext) { self.ctx = ctx }
+    @_spi(ADDBEngine) public init(ctx: TxnContext) { self.ctx = ctx }
 
     /// Inserts or replaces.
     public func put(_ key: [UInt8], _ value: [UInt8]) throws(DBError) {

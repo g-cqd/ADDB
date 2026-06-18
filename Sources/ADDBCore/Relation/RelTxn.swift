@@ -20,7 +20,7 @@ public final class SchemaCache: Sendable {
 
     public init() {}
 
-    package func tableRecord(
+    @_spi(ADDBEngine) public func tableRecord(
         _ resolver: some PageResolver, meta: Meta, name: String
     ) throws(DBError) -> Catalog.TableRecord? {
         let cachedRecord: Catalog.TableRecord? = records.withLock { state in
@@ -45,7 +45,7 @@ public final class SchemaCache: Sendable {
         return loaded
     }
 
-    package func indexRecord(
+    @_spi(ADDBEngine) public func indexRecord(
         _ resolver: some PageResolver, meta: Meta, name: String
     ) throws(DBError) -> Catalog.IndexRecord? {
         let cachedRecord: Catalog.IndexRecord? = records.withLock { state in
@@ -68,7 +68,7 @@ public final class SchemaCache: Sendable {
         return loaded
     }
 
-    package func schema(resolver: some PageResolver, meta: Meta) throws(DBError) -> Schema {
+    @_spi(ADDBEngine) public func schema(resolver: some PageResolver, meta: Meta) throws(DBError) -> Schema {
         let version = try currentVersion(resolver: resolver, meta: meta)
         if let snapshot = cached.withLock({ $0 }), snapshot.catalogVersion == version {
             return snapshot
@@ -119,7 +119,7 @@ extension ReadTxn {
         return try Relation.loadState(resolver: resolver, mainTree: meta.mainTree).schema
     }
 
-    package func tableRecord(_ name: String) throws(DBError) -> Catalog.TableRecord {
+    @_spi(ADDBEngine) public func tableRecord(_ name: String) throws(DBError) -> Catalog.TableRecord {
         let record =
             if let schemaCache {
                 try schemaCache.tableRecord(resolver, meta: meta, name: name)
@@ -130,7 +130,7 @@ extension ReadTxn {
         return record
     }
 
-    package func indexRecord(_ name: String) throws(DBError) -> Catalog.IndexRecord {
+    @_spi(ADDBEngine) public func indexRecord(_ name: String) throws(DBError) -> Catalog.IndexRecord {
         let record =
             if let schemaCache {
                 try schemaCache.indexRecord(resolver, meta: meta, name: name)
@@ -144,7 +144,7 @@ extension ReadTxn {
     /// The catalog record (dictionary/postings/stats roots + config) of an FTS5
     /// table at this snapshot. Single-fetch (the schema cache covers tables and
     /// indexes only); the SELECT executor uses it to drive a MATCH source.
-    package func ftsRecord(_ name: String) throws(DBError) -> Catalog.FTSRecord {
+    @_spi(ADDBEngine) public func ftsRecord(_ name: String) throws(DBError) -> Catalog.FTSRecord {
         guard let record = try Relation.ftsRecord(resolver, mainTree: meta.mainTree, name: name) else {
             throw DBError.noSuchTable(name)
         }
@@ -162,7 +162,7 @@ extension ReadTxn {
     }
 
     /// Forward scan over a table in rowid order.
-    package func withRowCursor<R>(
+    @_spi(ADDBEngine) public func withRowCursor<R>(
         table: String, _ body: (inout RowCursor<CommittedResolver>) throws(DBError) -> R
     ) throws(DBError) -> R {
         var cursor = try RowCursor(
@@ -172,7 +172,7 @@ extension ReadTxn {
     }
 
     /// Forward scan over an index within typed bounds.
-    package func withIndexCursor<R>(
+    @_spi(ADDBEngine) public func withIndexCursor<R>(
         index name: String, bounds: IndexBounds = .all, covering: [String]? = nil,
         _ body: (inout RowCursor<CommittedResolver>) throws(DBError) -> R
     ) throws(DBError) -> R {
@@ -207,14 +207,14 @@ extension WriteTxn {
         try Relation.ensureState(ctx).schema
     }
 
-    package func tableRecord(_ name: String) throws(DBError) -> Catalog.TableRecord {
+    @_spi(ADDBEngine) public func tableRecord(_ name: String) throws(DBError) -> Catalog.TableRecord {
         guard let record = try Relation.ensureState(ctx).tableRecords[name] else {
             throw DBError.noSuchTable(name)
         }
         return record
     }
 
-    package func indexRecord(_ name: String) throws(DBError) -> Catalog.IndexRecord {
+    @_spi(ADDBEngine) public func indexRecord(_ name: String) throws(DBError) -> Catalog.IndexRecord {
         guard let record = try Relation.ensureState(ctx).indexRecords[name] else {
             throw DBError.noSuchIndex(name)
         }
@@ -271,7 +271,7 @@ extension WriteTxn {
         try tableRecord(table).handle.count
     }
 
-    package func withRowCursor<R>(
+    @_spi(ADDBEngine) public func withRowCursor<R>(
         table: String, _ body: (inout RowCursor<TxnContext>) throws(DBError) -> R
     ) throws(DBError) -> R {
         var cursor = try RowCursor(
@@ -280,7 +280,7 @@ extension WriteTxn {
         return try body(&cursor)
     }
 
-    package func withIndexCursor<R>(
+    @_spi(ADDBEngine) public func withIndexCursor<R>(
         index name: String, bounds: IndexBounds = .all,
         _ body: (inout RowCursor<TxnContext>) throws(DBError) -> R
     ) throws(DBError) -> R {
@@ -331,7 +331,7 @@ extension WriteTxn {
     /// Resolves an FTS table's catalog record (flushing buffered docs first for
     /// read-your-writes). `package` so the `ADSQLFullTextSearch` query layer's
     /// `ftsMatch`/`ftsScore` conveniences can reach it.
-    package func ftsRecord(_ name: String) throws(DBError) -> Catalog.FTSRecord {
+    @_spi(ADDBEngine) public func ftsRecord(_ name: String) throws(DBError) -> Catalog.FTSRecord {
         try Relation.flushFTS(ctx, name: name)  // read-your-writes: flush buffered docs first.
         guard let record = try Relation.ensureState(ctx).ftsRecords[name] else {
             throw DBError.noSuchTable(name)
@@ -372,7 +372,7 @@ extension WriteTxn {
     /// Registers a row trigger from its name, already-parsed target table, and
     /// verbatim CREATE TRIGGER text. The body is parsed on demand and fires in the
     /// DML path. The SQL layer is the only caller (it supplies the parsed target).
-    package func createTrigger(name: String, table: String, sql: String) throws(DBError) {
+    @_spi(ADDBEngine) public func createTrigger(name: String, table: String, sql: String) throws(DBError) {
         try Relation.createTrigger(ctx, name: name, table: table, sql: sql)
     }
 

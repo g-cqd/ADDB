@@ -1,58 +1,58 @@
-package import ADFIO
+public import ADFIO
 
 /// POSIX-backed `StorageChannel`. Wraps ADFIO's ``PosixFile`` (the positioned
 /// read/write, vectored write, durability, and space-management mechanics) and
 /// maps its domain-neutral ``IOError`` into the engine's `DBError` taxonomy.
 /// All calls are stateless per-fd operations, safe to issue from any thread.
-package final class FileChannel: StorageChannel, @unchecked Sendable {
+@_spi(ADDBEngine) public final class FileChannel: StorageChannel, @unchecked Sendable {
     private let file: PosixFile
-    package var fileDescriptor: Int32 { file.fileDescriptor }
+    @_spi(ADDBEngine) public var fileDescriptor: Int32 { file.fileDescriptor }
 
-    package typealias Mode = PosixFile.Mode
+    @_spi(ADDBEngine) public typealias Mode = PosixFile.Mode
 
-    package init(path: String, mode: Mode) throws(DBError) {
+    @_spi(ADDBEngine) public init(path: String, mode: Mode) throws(DBError) {
         do { self.file = try PosixFile(path: path, mode: mode) } catch { throw error.asDBError }
     }
 
     /// Wraps an already-open descriptor (ownership not transferred).
-    package init(borrowing fd: Int32) {
+    @_spi(ADDBEngine) public init(borrowing fd: Int32) {
         self.file = PosixFile(borrowing: fd)
     }
 
-    package func fileSize() throws(DBError) -> Int {
+    @_spi(ADDBEngine) public func fileSize() throws(DBError) -> Int {
         do { return try file.fileSize() } catch { throw error.asDBError }
     }
 
-    package func pread(into buffer: UnsafeMutableRawBufferPointer, at offset: Int) throws(DBError) {
+    @_spi(ADDBEngine) public func pread(into buffer: UnsafeMutableRawBufferPointer, at offset: Int) throws(DBError) {
         do { unsafe try file.pread(into: buffer, at: offset) } catch { throw error.asDBError }
     }
 
-    package func pwrite(_ buffer: UnsafeRawBufferPointer, at offset: Int) throws(DBError) {
+    @_spi(ADDBEngine) public func pwrite(_ buffer: UnsafeRawBufferPointer, at offset: Int) throws(DBError) {
         do { unsafe try file.pwrite(buffer, at: offset) } catch { throw error.asDBError }
     }
 
-    package func pwritev(_ buffers: [UnsafeRawBufferPointer], at offset: Int) throws(DBError) {
+    @_spi(ADDBEngine) public func pwritev(_ buffers: [UnsafeRawBufferPointer], at offset: Int) throws(DBError) {
         do { unsafe try file.pwritev(buffers, at: offset) } catch { throw error.asDBError }
     }
 
-    package func sync(_ profile: DurabilityProfile) throws(DBError) {
+    @_spi(ADDBEngine) public func sync(_ profile: DurabilityProfile) throws(DBError) {
         do { try file.sync(profile) } catch { throw error.asDBError }
     }
 
-    package func preallocate(minimumSize: Int) throws(DBError) {
+    @_spi(ADDBEngine) public func preallocate(minimumSize: Int) throws(DBError) {
         do { try file.preallocate(minimumSize: minimumSize) } catch { throw error.asDBError }
     }
 
-    package func truncate(to size: Int) throws(DBError) {
+    @_spi(ADDBEngine) public func truncate(to size: Int) throws(DBError) {
         do { try file.truncate(to: size) } catch { throw error.asDBError }
     }
 
     /// Toggles the unified-buffer-cache bypass for bulk load paths.
-    package func setNoCache(_ enabled: Bool) {
+    @_spi(ADDBEngine) public func setNoCache(_ enabled: Bool) {
         file.setNoCache(enabled)
     }
 
-    package func close() {
+    @_spi(ADDBEngine) public func close() {
         file.close()
     }
 }

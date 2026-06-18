@@ -16,13 +16,13 @@ import ADFCore
 ///
 /// Slots are u16 cell offsets in key order growing up from the header; cell
 /// content grows down from the page end.
-package enum Node {
-    package static let leafOverflowFlag: UInt8 = 0b0000_0001
+@_spi(ADDBEngine) public enum Node {
+    @_spi(ADDBEngine) public static let leafOverflowFlag: UInt8 = 0b0000_0001
 
     // MARK: - Key comparison (memcmp order)
 
     @inline(__always)
-    package static func compare(_ a: UnsafeRawBufferPointer, _ b: UnsafeRawBufferPointer) -> Int {
+    @_spi(ADDBEngine) public static func compare(_ a: UnsafeRawBufferPointer, _ b: UnsafeRawBufferPointer) -> Int {
         let n = min(a.count, b.count)
         if n > 0 {
             let c = unsafe memcmp(a.baseAddress!, b.baseAddress!, n)
@@ -35,13 +35,13 @@ package enum Node {
     // MARK: - Sizes
 
     @inline(__always)
-    package static func inlineLeafCellSize(keyLen: Int, valueLen: Int) -> Int { 5 + keyLen + valueLen }
+    @_spi(ADDBEngine) public static func inlineLeafCellSize(keyLen: Int, valueLen: Int) -> Int { 5 + keyLen + valueLen }
     @inline(__always)
-    package static func overflowLeafCellSize(keyLen: Int) -> Int { 15 + keyLen }
+    @_spi(ADDBEngine) public static func overflowLeafCellSize(keyLen: Int) -> Int { 15 + keyLen }
     @inline(__always)
-    package static func branchCellSize(keyLen: Int) -> Int { 10 + keyLen }
+    @_spi(ADDBEngine) public static func branchCellSize(keyLen: Int) -> Int { 10 + keyLen }
     @inline(__always)
-    package static func shouldInline(keyLen: Int, valueLen: Int) -> Bool {
+    @_spi(ADDBEngine) public static func shouldInline(keyLen: Int, valueLen: Int) -> Bool {
         inlineLeafCellSize(keyLen: keyLen, valueLen: valueLen) <= Format.maxInlineCellSize
     }
 
@@ -56,13 +56,13 @@ package enum Node {
     // there), so there is nothing to bind to without threading the resolver
     // through every node primitive. Owner: the page buffer of the enclosing read.
     @safe public struct LeafCell {
-        package var key: UnsafeRawBufferPointer
+        @_spi(ADDBEngine) public var key: UnsafeRawBufferPointer
         /// Inline payload, or nil when the value lives in an overflow chain.
-        package var inlineValue: UnsafeRawBufferPointer?
-        package var overflowHead: UInt64
-        package var overflowLength: UInt32
+        @_spi(ADDBEngine) public var inlineValue: UnsafeRawBufferPointer?
+        @_spi(ADDBEngine) public var overflowHead: UInt64
+        @_spi(ADDBEngine) public var overflowLength: UInt32
 
-        package var valueLength: Int {
+        @_spi(ADDBEngine) public var valueLength: Int {
             unsafe inlineValue?.count ?? Int(overflowLength)
         }
     }
@@ -72,7 +72,7 @@ package enum Node {
         unsafe PageHeader.slotOffset(page, index)
     }
 
-    package static func leafCell(_ page: UnsafeRawBufferPointer, _ index: Int) -> LeafCell {
+    @_spi(ADDBEngine) public static func leafCell(_ page: UnsafeRawBufferPointer, _ index: Int) -> LeafCell {
         let at = unsafe cellStart(page, index)
         let flags = unsafe page[at]
         let keyLen = unsafe Int(page.loadLE16(at + 1))
@@ -94,19 +94,22 @@ package enum Node {
     }
 
     @inline(__always)
-    package static func branchKey(_ page: UnsafeRawBufferPointer, _ index: Int) -> UnsafeRawBufferPointer {
+    @_spi(ADDBEngine) public static func branchKey(
+        _ page: UnsafeRawBufferPointer, _ index: Int
+    ) -> UnsafeRawBufferPointer {
         let at = unsafe cellStart(page, index)
         let keyLen = unsafe Int(page.loadLE16(at))
         return unsafe UnsafeRawBufferPointer(rebasing: page[at + 10..<at + 10 + keyLen])
     }
 
     @inline(__always)
-    package static func branchChild(_ page: UnsafeRawBufferPointer, _ index: Int) -> UInt64 {
+    @_spi(ADDBEngine) public static func branchChild(_ page: UnsafeRawBufferPointer, _ index: Int) -> UInt64 {
         unsafe page.loadLE64(cellStart(page, index) + 2)
     }
 
     @inline(__always)
-    package static func nodeKey(_ page: UnsafeRawBufferPointer, _ index: Int) -> UnsafeRawBufferPointer {
+    @_spi(ADDBEngine) public static func nodeKey(_ page: UnsafeRawBufferPointer, _ index: Int) -> UnsafeRawBufferPointer
+    {
         if unsafe PageHeader.pageType(page) == .branch {
             return unsafe branchKey(page, index)
         }
@@ -119,7 +122,7 @@ package enum Node {
 
     /// Total encoded size of the cell at `index` (used by removal accounting
     /// and page compaction).
-    package static func cellLength(_ page: UnsafeRawBufferPointer, _ index: Int) -> Int {
+    @_spi(ADDBEngine) public static func cellLength(_ page: UnsafeRawBufferPointer, _ index: Int) -> Int {
         let at = unsafe cellStart(page, index)
         switch unsafe PageHeader.pageType(page) {
         case .branch:
@@ -138,7 +141,7 @@ package enum Node {
 
     /// Binary search over the page's cells.
     /// Returns the first index whose key is >= `key`, and whether it's exact.
-    package static func search(
+    @_spi(ADDBEngine) public static func search(
         _ page: UnsafeRawBufferPointer, key: UnsafeRawBufferPointer
     ) -> (index: Int, exact: Bool) {
         var lo = 0
@@ -154,13 +157,17 @@ package enum Node {
 
     /// Index of the child to descend into for `key`: -1 = leftmost child.
     @inline(__always)
-    package static func branchChildSlot(_ page: UnsafeRawBufferPointer, key: UnsafeRawBufferPointer) -> Int {
+    @_spi(ADDBEngine) public static func branchChildSlot(
+        _ page: UnsafeRawBufferPointer, key: UnsafeRawBufferPointer
+    ) -> Int {
         let (index, exact) = unsafe search(page, key: key)
         return exact ? index : index - 1
     }
 
     @inline(__always)
-    package static func descendTarget(_ page: UnsafeRawBufferPointer, key: UnsafeRawBufferPointer) -> UInt64 {
+    @_spi(ADDBEngine) public static func descendTarget(
+        _ page: UnsafeRawBufferPointer, key: UnsafeRawBufferPointer
+    ) -> UInt64 {
         let slot = unsafe branchChildSlot(page, key: key)
         return unsafe slot < 0 ? PageHeader.link(page) : branchChild(page, slot)
     }
@@ -186,7 +193,7 @@ package enum Node {
         }
     }
 
-    package static func leafCellSize(keyLen: Int, value: LeafValue) -> Int {
+    @_spi(ADDBEngine) public static func leafCellSize(keyLen: Int, value: LeafValue) -> Int {
         switch value {
         case .inline(let v): return inlineLeafCellSize(keyLen: keyLen, valueLen: v.count)
         case .overflow: return overflowLeafCellSize(keyLen: keyLen)
@@ -265,7 +272,7 @@ package enum Node {
         return true
     }
 
-    package static func leafInsert(
+    @_spi(ADDBEngine) public static func leafInsert(
         _ page: UnsafeMutableRawBufferPointer, at index: Int,
         key: UnsafeRawBufferPointer, value: LeafValue
     ) -> Bool {
@@ -274,7 +281,7 @@ package enum Node {
         }
     }
 
-    package static func branchInsert(
+    @_spi(ADDBEngine) public static func branchInsert(
         _ page: UnsafeMutableRawBufferPointer, at index: Int,
         key: UnsafeRawBufferPointer, child: UInt64
     ) -> Bool {
@@ -285,7 +292,7 @@ package enum Node {
 
     /// Removes the cell at slot `index`, accounting its bytes as fragmented
     /// (or reclaiming directly when it borders the cell area start).
-    package static func removeCell(_ page: UnsafeMutableRawBufferPointer, at index: Int) {
+    @_spi(ADDBEngine) public static func removeCell(_ page: UnsafeMutableRawBufferPointer, at index: Int) {
         let ro = UnsafeRawBufferPointer(page)
         let count = unsafe PageHeader.cellCount(ro)
         let offset = unsafe PageHeader.slotOffset(ro, index)
@@ -306,7 +313,7 @@ package enum Node {
     }
 
     /// Overwrites the child pointer of a branch cell in place (fixed width).
-    package static func branchSetChild(
+    @_spi(ADDBEngine) public static func branchSetChild(
         _ page: UnsafeMutableRawBufferPointer, at index: Int, child: UInt64
     ) {
         let offset = unsafe PageHeader.slotOffset(UnsafeRawBufferPointer(page), index)
@@ -317,7 +324,7 @@ package enum Node {
 
     /// Rewrites the cell area densely (slot order preserved), clearing
     /// fragmentation. Uses a scratch copy of the page.
-    package static func compact(_ page: UnsafeMutableRawBufferPointer) {
+    @_spi(ADDBEngine) public static func compact(_ page: UnsafeMutableRawBufferPointer) {
         let scratch = unsafe PageBuf(copying: UnsafeRawBufferPointer(page))
         let ro = unsafe scratch.readOnly
         let count = unsafe PageHeader.cellCount(ro)
@@ -398,7 +405,7 @@ package enum Node {
     /// Splits a full leaf while inserting (key, value) at `index`.
     /// `left` may alias the original page's buffer. Returns the separator key
     /// (first key of the right page).
-    package static func splitLeafInserting(
+    @_spi(ADDBEngine) public static func splitLeafInserting(
         original: UnsafeRawBufferPointer, at index: Int,
         key: UnsafeRawBufferPointer, value: LeafValue,
         left: UnsafeMutableRawBufferPointer, right: UnsafeMutableRawBufferPointer
@@ -463,7 +470,7 @@ package enum Node {
     /// Splits a full branch while inserting (key, child) at cell position
     /// `index`. The middle key moves *up*: it is returned as the separator and
     /// its child becomes the right page's leftmost child.
-    package static func splitBranchInserting(
+    @_spi(ADDBEngine) public static func splitBranchInserting(
         original: UnsafeRawBufferPointer, at index: Int,
         key: UnsafeRawBufferPointer, child: UInt64,
         left: UnsafeMutableRawBufferPointer, right: UnsafeMutableRawBufferPointer

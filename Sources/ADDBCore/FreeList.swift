@@ -16,8 +16,8 @@ import ADFCore
 ///
 /// Entries are chunked so values stay inline (no overflow chains inside the
 /// free tree), which keeps commit-time self-serialization convergent.
-package enum FreeList {
-    package static let pagesPerEntry = 400
+@_spi(ADDBEngine) public enum FreeList {
+    @_spi(ADDBEngine) public static let pagesPerEntry = 400
     static let keySize = 10
 
     // MARK: - Codecs
@@ -118,7 +118,7 @@ package enum FreeList {
     /// pool. `limit` must be min(reader generations, committed generation).
     /// Returns the number of pages harvested.
     @discardableResult
-    package static func harvest(ctx: TxnContext, upTo limit: UInt64) throws(DBError) -> Int {
+    @_spi(ADDBEngine) public static func harvest(ctx: TxnContext, upTo limit: UInt64) throws(DBError) -> Int {
         var free = ctx.meta.freeTree
         var harvested = 0
         while free.rootPage != 0 {
@@ -158,7 +158,7 @@ package enum FreeList {
     ///
     /// Requires `harvest` to have run at transaction start (gen-0 keys are
     /// assumed consumed) and must be the last mutation before commit.
-    package static func serialize(ctx: TxnContext) throws(DBError) {
+    @_spi(ADDBEngine) public static func serialize(ctx: TxnContext) throws(DBError) {
         let commitGen = ctx.meta.generation + 1
         var free = ctx.meta.freeTree
         var genSeq: UInt16 = 0
@@ -233,7 +233,7 @@ package enum FreeList {
     // MARK: - Inspection (integrity, tests)
 
     /// Every page currently listed as free, with its availability generation.
-    package static func allListedPages(
+    @_spi(ADDBEngine) public static func allListedPages(
         resolver: some PageResolver, tree: TreeHandle
     ) throws(DBError) -> [(gen: UInt64, page: UInt64)] {
         var listed: [(gen: UInt64, page: UInt64)] = []
