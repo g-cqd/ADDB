@@ -36,7 +36,11 @@ import ADFIO
 
     init(databasePath: String, claimWriterLock: Bool) throws(DBError) {
         let path = databasePath + "-lock"
-        let fd = path.withCString { unsafe open($0, O_RDWR | O_CREAT | O_CLOEXEC, 0o644) }
+        // open/ftruncate/mmap can be interrupted by a signal (EINTR); the POSIX contract is to retry,
+        // not to fail the database open (mirrors ADFIO/PosixFile's discipline).
+        let fd = path.withCString { cPath in
+            retryingOnEINTR { unsafe open(cPath, O_RDWR | O_CREAT | O_CLOEXEC, 0o644) }
+        }
         guard fd >= 0 else { try throwErrno("open(\(path))") }
         self.fd = fd
 
@@ -46,12 +50,15 @@ import ADFIO
             try throwErrno("fstat(lock)")
         }
         if st.st_size < off_t(Format.lockFileSize) {
-            guard ftruncate(fd, off_t(Format.lockFileSize)) == 0 else {
+            guard retryingOnEINTR({ ftruncate(fd, off_t(Format.lockFileSize)) }) == 0 else {
                 close(fd)
                 try throwErrno("ftruncate(lock)")
             }
         }
-        let mapped = unsafe mmap(nil, Format.lockFileSize, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0)
+        var mapped = unsafe mmap(nil, Format.lockFileSize, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0)
+        while unsafe mapped == MAP_FAILED, errno == EINTR {
+            mapped = unsafe mmap(nil, Format.lockFileSize, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0)
+        }
         guard let mapped = unsafe mapped, unsafe mapped != MAP_FAILED else {
             close(fd)
             try throwErrno("mmap(lock)")
@@ -165,5 +172,17 @@ import ADFIO
                 _ = unsafe SharedAtomicU64.compareExchangeAcqRel(pidPtr, expected: owner, desired: 0)
             }
         }
+    }
+}
+
+/// Retries an interruptible syscall while it fails with `EINTR` (a signal arrived mid-call) — the
+/// POSIX contract for slow syscalls. The closure returns the raw syscall result; a `-1` return with
+/// `errno == EINTR` means "interrupted, try again". `errno` is read only on the `-1` path.
+@inline(__always)
+private func retryingOnEINTR<T: SignedInteger>(_ body: () -> T) -> T {
+    while true {
+        let result = body()
+        if result == -1 && errno == EINTR { continue }
+        return result
     }
 }
