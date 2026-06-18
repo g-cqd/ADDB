@@ -84,6 +84,12 @@ var packageDependencies: [Package.Dependency] = [adfoundationDependency]
 if isDev {
     packageDependencies.append(
         .package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.0.0"))
+    // ordo-one's statistically-rigorous benchmark framework (p-percentile latencies + malloc
+    // metrics), matching the sibling ADFoundation/ADJSON suites. The suite lives in
+    // `Benchmarks/ADDBSuite` and runs via `ADDB_DEV=1 swift package benchmark`. Dev-only, so
+    // packages depending on ADDB never resolve it.
+    packageDependencies.append(
+        .package(url: "https://github.com/ordo-one/benchmark", from: "1.4.0"))
 }
 
 let libraryBuildPlugins: [Target.PluginUsage] = isDev ? ["LintBuild"] : []
@@ -150,3 +156,19 @@ let package = Package(
         .plugin(name: "LintBuild", capability: .buildTool()),
     ]
 )
+
+// ordo-one benchmark suite (ADDB_DEV-gated): allocation/throughput guards for the storage codec and
+// CoW-sensitive paths so a reintroduced copy can't silently regress. Runs via
+// `ADDB_DEV=1 swift package benchmark`.
+if isDev {
+    package.targets.append(
+        .executableTarget(
+            name: "ADDBSuite",
+            dependencies: [
+                "ADDBCore",
+                .product(name: "Benchmark", package: "benchmark"),
+            ],
+            path: "Benchmarks/ADDBSuite",
+            swiftSettings: strictSettings,
+            plugins: [.plugin(name: "BenchmarkPlugin", package: "benchmark")]))
+}
