@@ -9,8 +9,8 @@
 
         @_spi(ADDBEngine) public var length: Int {
             switch self {
-            case .inline(let v): return v.byteCount
-            case .overflow(_, let length): return length
+                case .inline(let v): return v.byteCount
+                case .overflow(_, let length): return length
             }
         }
     }
@@ -70,11 +70,11 @@
         _ ref: ValueRef, resolver: some PageResolver
     ) throws(DBError) -> [UInt8] {
         switch ref {
-        case .inline(let bytes):
-            return bytes.withUnsafeBytes { unsafe [UInt8]($0) }
-        case .overflow(let head, let length):
-            return try Overflow.read(
-                head: head, length: length, pager: ReadOnlyOverflowPager(resolver: resolver))
+            case .inline(let bytes):
+                return bytes.withUnsafeBytes { unsafe [UInt8]($0) }
+            case .overflow(let head, let length):
+                return try Overflow.read(
+                    head: head, length: length, pager: ReadOnlyOverflowPager(resolver: resolver))
         }
     }
 
@@ -86,20 +86,20 @@
         _ body: (UnsafeRawBufferPointer) throws(DBError) -> R
     ) throws(DBError) -> R {
         switch ref {
-        case .inline(let bytes):
-            return try bytes.withUnsafeBytes { (raw) throws(DBError) in unsafe try body(raw) }
-        case .overflow(let head, let length):
-            let assembled = try Overflow.read(
-                head: head, length: length, pager: ReadOnlyOverflowPager(resolver: resolver))
-            var result: Result<R, DBError>?
-            assembled.withUnsafeBytes { raw in
-                do throws(DBError) {
-                    result = unsafe .success(try body(raw))
-                } catch {
-                    result = .failure(error)
+            case .inline(let bytes):
+                return try bytes.withUnsafeBytes { (raw) throws(DBError) in unsafe try body(raw) }
+            case .overflow(let head, let length):
+                let assembled = try Overflow.read(
+                    head: head, length: length, pager: ReadOnlyOverflowPager(resolver: resolver))
+                var result: Result<R, DBError>?
+                assembled.withUnsafeBytes { raw in
+                    do throws(DBError) {
+                        result = unsafe .success(try body(raw))
+                    } catch {
+                        result = .failure(error)
+                    }
                 }
-            }
-            return try result!.get()
+                return try result!.get()
         }
     }
 
@@ -352,7 +352,7 @@
                 throw DBError.corruptPage(pageNo: pageNo)
             }
             unsafe try walk(resolver: resolver, pageNo: PageHeader.link(page), level: level - 1, body)
-            for i in unsafe 0..<PageHeader.cellCount(page) {
+            for i in unsafe 0 ..< PageHeader.cellCount(page) {
                 unsafe try walk(resolver: resolver, pageNo: Node.branchChild(page, i), level: level - 1, body)
             }
             return
@@ -360,7 +360,7 @@
         guard unsafe PageHeader.pageType(page) == .leaf else {
             throw DBError.corruptPage(pageNo: pageNo)
         }
-        for i in unsafe 0..<PageHeader.cellCount(page) {
+        for i in unsafe 0 ..< PageHeader.cellCount(page) {
             let cell = unsafe Node.leafCell(page, i)
             if let inline = unsafe cell.inlineValue {
                 unsafe try body(cell.key, .inline(boundInline(inline, to: resolver)))
@@ -423,7 +423,7 @@
         let count = unsafe PageHeader.cellCount(page)
 
         func checkOrderAndBounds() throws(DBError) {
-            for i in 0..<count {
+            for i in 0 ..< count {
                 let key = unsafe Node.nodeKey(page, i)
                 if i > 0, unsafe Node.compare(Node.nodeKey(page, i - 1), key) >= 0 {
                     throw DBError.integrityFailure("page \(pageNo): keys out of order at \(i)")
@@ -450,7 +450,7 @@
                 resolver: resolver, pageNo: PageHeader.link(page), level: level - 1,
                 lower: lower, upper: [UInt8](Node.branchKey(page, 0)),
                 verifyChecksums: verifyChecksums, report: &report)
-            for i in 0..<count {
+            for i in 0 ..< count {
                 let childLower = unsafe [UInt8](Node.branchKey(page, i))
                 let childUpper = unsafe i + 1 < count ? [UInt8](Node.branchKey(page, i + 1)) : upper
                 unsafe try validateNode(
@@ -470,7 +470,7 @@
         report.leafCount += 1
         try checkOrderAndBounds()
         report.kvCount += UInt64(count)
-        for i in 0..<count {
+        for i in 0 ..< count {
             let cell = unsafe Node.leafCell(page, i)
             if unsafe cell.inlineValue == nil {
                 var chainPage = cell.overflowHead

@@ -78,14 +78,16 @@ extension Relation {
                     ctx, index: edge.index, table: childTable, parentRowid: parentRowid)
                 guard !victims.isEmpty else { continue }
                 switch edge.fk.onDelete {
-                case .restrict:
-                    throw DBError.foreignKeyViolation(table: edge.table)
-                case .cascade:
-                    for victim in victims {
-                        if try deleteRowCore(ctx, from: edge.table, rowid: victim) {
-                            worklist.append((table: edge.table, rowid: victim))
+                    case .restrict:
+                        throw DBError.foreignKeyViolation(table: edge.table)
+                    case .cascade:
+                        // swift-format-ignore: UseWhereClausesInForLoops
+                        // (the predicate is a throwing call, which a `where` clause cannot carry)
+                        for victim in victims {
+                            if try deleteRowCore(ctx, from: edge.table, rowid: victim) {
+                                worklist.append((table: edge.table, rowid: victim))
+                            }
                         }
-                    }
                 }
             }
         }

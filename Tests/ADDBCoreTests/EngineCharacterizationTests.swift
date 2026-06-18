@@ -83,7 +83,7 @@ struct ADDBEngineCharacterizationTests {
             let db = try Database.open(at: path)
             defer { db.close() }
             try db.writeSync { (txn) throws(DBError) in
-                for i in 0..<16 { try txn.put(key("key-\(i)"), key("value-\(i)")) }
+                for i in 0 ..< 16 { try txn.put(key("key-\(i)"), key("value-\(i)")) }
             }
             #expect(db.count == 16)
         }
@@ -130,7 +130,7 @@ struct ADDBEngineCharacterizationTests {
             let db = try Database.open(at: path)
             defer { db.close() }
             try db.writeSync { (txn) throws(DBError) in
-                for i in 0..<32 { try txn.put(key("row-\(i)"), key("payload-\(i)")) }
+                for i in 0 ..< 32 { try txn.put(key("row-\(i)"), key("payload-\(i)")) }
             }
             let report = try db.verifyIntegrity(deep: true)
             #expect(report.kvCount == 32)

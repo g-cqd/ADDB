@@ -20,12 +20,12 @@ public struct TrigramTokenizer: FTSTokenizer {
             let value = arguments[index + 1]
             index += 2
             switch key {
-            case "case_sensitive":
-                caseSensitive = value != "0"
-            case "remove_diacritics":
-                break  // accepted; diacritics are not stripped for trigram (SQLite default 0)
-            default:
-                throw DBError.sqlUnsupported("trigram option '\(key)'")
+                case "case_sensitive":
+                    caseSensitive = value != "0"
+                case "remove_diacritics":
+                    break  // accepted; diacritics are not stripped for trigram (SQLite default 0)
+                default:
+                    throw DBError.sqlUnsupported("trigram option '\(key)'")
             }
         }
         self.caseSensitive = caseSensitive
@@ -44,7 +44,7 @@ public struct TrigramTokenizer: FTSTokenizer {
             offset += width
         }
         guard units.count >= 3 else { return }
-        for i in 0...(units.count - 3) {
+        for i in 0 ... (units.count - 3) {
             var term: [UInt8] = []
             UTF8Text.append(units[i].scalar, to: &term)
             UTF8Text.append(units[i + 1].scalar, to: &term)
@@ -57,7 +57,7 @@ public struct TrigramTokenizer: FTSTokenizer {
     /// Single-scalar case fold (ASCII fast path; otherwise the first scalar of the
     /// stdlib lowercase mapping, keeping one character per trigram slot).
     static func fold(_ scalar: Unicode.Scalar) -> Unicode.Scalar {
-        if (0x41...0x5A).contains(scalar.value) { return Unicode.Scalar(scalar.value + 0x20)! }
+        if (0x41 ... 0x5A).contains(scalar.value) { return Unicode.Scalar(scalar.value + 0x20)! }
         if scalar.value < 0x80 { return scalar }
         return scalar.properties.lowercaseMapping.unicodeScalars.first ?? scalar
     }

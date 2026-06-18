@@ -21,11 +21,11 @@ public enum Overflow {
         let pages = pageCount(forLength: value.count)
         var allocated: [(pageNo: UInt64, buffer: UnsafeMutableRawBufferPointer)] = unsafe []
         unsafe allocated.reserveCapacity(pages)
-        for _ in 0..<pages {
+        for _ in 0 ..< pages {
             unsafe allocated.append(try pager.allocateOverflowPage())
         }
         var remaining = unsafe value
-        for i in 0..<pages {
+        for i in 0 ..< pages {
             let slot = unsafe allocated[i]
             let take = min(remaining.count, Format.overflowCapacity)
             unsafe PageHeader.initialize(slot.buffer, type: .overflow)
@@ -33,7 +33,7 @@ public enum Overflow {
             unsafe PageHeader.setLink(slot.buffer, i + 1 < pages ? allocated[i + 1].pageNo : 0)
             unsafe Node.copyBytes(
                 into: slot.buffer, at: Format.nodeHeaderSize,
-                from: UnsafeRawBufferPointer(rebasing: remaining[remaining.startIndex..<remaining.startIndex + take]))
+                from: UnsafeRawBufferPointer(rebasing: remaining[remaining.startIndex ..< remaining.startIndex + take]))
             unsafe remaining = unsafe UnsafeRawBufferPointer(rebasing: remaining[(remaining.startIndex + take)...])
         }
         return unsafe allocated[0].pageNo
@@ -43,7 +43,7 @@ public enum Overflow {
     public static func read<P: OverflowPager>(
         head: UInt64, length: Int, pager: P
     ) throws(DBError) -> [UInt8] {
-        var out = [UInt8]()
+        var out: [UInt8] = []
         out.reserveCapacity(length)
         var pageNo = head
         var remaining = length
@@ -57,7 +57,7 @@ public enum Overflow {
                 throw DBError.corruptPage(pageNo: pageNo)
             }
             unsafe out.append(
-                contentsOf: page[Format.nodeHeaderSize..<Format.nodeHeaderSize + dataLen])
+                contentsOf: page[Format.nodeHeaderSize ..< Format.nodeHeaderSize + dataLen])
             remaining -= dataLen
             pageNo = unsafe PageHeader.link(page)
         }
@@ -85,7 +85,7 @@ public enum Overflow {
             }
             unsafe body(
                 UnsafeRawBufferPointer(
-                    rebasing: page[Format.nodeHeaderSize..<Format.nodeHeaderSize + dataLen]))
+                    rebasing: page[Format.nodeHeaderSize ..< Format.nodeHeaderSize + dataLen]))
             remaining -= dataLen
             pageNo = unsafe PageHeader.link(page)
         }

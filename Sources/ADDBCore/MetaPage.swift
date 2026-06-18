@@ -85,7 +85,7 @@ import ADFCore
     @_spi(ADDBEngine) public func encode(into buffer: UnsafeMutableRawBufferPointer, pageNo: UInt64) {
         precondition(buffer.count == Format.pageSize)
         Format.magicBytes.withUnsafeBytes { magic in
-            unsafe UnsafeMutableRawBufferPointer(rebasing: buffer[Offset.magic..<Offset.formatVersion])
+            unsafe UnsafeMutableRawBufferPointer(rebasing: buffer[Offset.magic ..< Offset.formatVersion])
                 .copyMemory(from: magic)
         }
         unsafe buffer.storeLE32(Format.formatVersion, at: Offset.formatVersion)
@@ -99,9 +99,9 @@ import ADFCore
         unsafe buffer.storeLE16(flags, at: Offset.flags)
         unsafe buffer.storeLE16(freeDepth, at: Offset.freeDepth)
         unsafe buffer.storeLE64(freeEntryCount, at: Offset.freeEntryCount)
-        for i in (Offset.freeEntryCount + 8)..<Offset.reservedEnd { unsafe buffer[i] = 0 }
+        for i in (Offset.freeEntryCount + 8) ..< Offset.reservedEnd { unsafe buffer[i] = 0 }
         let digest = unsafe XXH64.hash(
-            UnsafeRawBufferPointer(rebasing: buffer[0..<Offset.checksum]), seed: pageNo)
+            UnsafeRawBufferPointer(rebasing: buffer[0 ..< Offset.checksum]), seed: pageNo)
         unsafe buffer.storeLE64(digest, at: Offset.checksum)
     }
 
@@ -123,7 +123,7 @@ import ADFCore
         guard pageSize == UInt32(Format.pageSize) else { return .unsupportedPageSize(pageSize) }
         let stored = unsafe buffer.loadLE64(Offset.checksum)
         let computed = unsafe XXH64.hash(
-            UnsafeRawBufferPointer(rebasing: buffer[0..<Offset.checksum]), seed: pageNo)
+            UnsafeRawBufferPointer(rebasing: buffer[0 ..< Offset.checksum]), seed: pageNo)
         guard stored == computed else { return .corrupt }
         return unsafe .valid(
             Meta(

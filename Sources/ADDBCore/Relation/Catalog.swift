@@ -128,7 +128,7 @@ import ADFCore
         guard offset + length <= bytes.count else {
             throw DBError.integrityFailure("catalog: truncated name body")
         }
-        let name = unsafe String(decoding: bytes[offset..<offset + length], as: UTF8.self)
+        let name = unsafe String(decoding: bytes[offset ..< offset + length], as: UTF8.self)
         offset += length
         return name
     }
@@ -178,36 +178,36 @@ import ADFCore
             if column.collation == .nocase { flags |= 2 }
             out.append(flags)
             switch column.defaultValue {
-            case nil:
-                out.append(0)
-            case .value(.null):
-                out.append(1)
-            case .value(.integer(let v)):
-                out.append(2)
-                Varint.append(Varint.zigzag(v), to: &out)
-            case .value(.real(let d)):
-                out.append(3)
-                withUnsafeBytes(of: d.bitPattern.littleEndian) { unsafe out.append(contentsOf: $0) }
-            case .value(.text(let s)):
-                out.append(4)
-                let utf8 = Array(s.utf8)
-                withUnsafeBytes(of: UInt16(utf8.count).littleEndian) { unsafe out.append(contentsOf: $0) }
-                out.append(contentsOf: utf8)
-            case .value(.blob(let b)):
-                out.append(5)
-                withUnsafeBytes(of: UInt16(b.count).littleEndian) { unsafe out.append(contentsOf: $0) }
-                out.append(contentsOf: b)
-            case .datetimeNow:
-                out.append(6)
+                case nil:
+                    out.append(0)
+                case .value(.null):
+                    out.append(1)
+                case .value(.integer(let v)):
+                    out.append(2)
+                    Varint.append(Varint.zigzag(v), to: &out)
+                case .value(.real(let d)):
+                    out.append(3)
+                    withUnsafeBytes(of: d.bitPattern.littleEndian) { unsafe out.append(contentsOf: $0) }
+                case .value(.text(let s)):
+                    out.append(4)
+                    let utf8 = Array(s.utf8)
+                    withUnsafeBytes(of: UInt16(utf8.count).littleEndian) { unsafe out.append(contentsOf: $0) }
+                    out.append(contentsOf: utf8)
+                case .value(.blob(let b)):
+                    out.append(5)
+                    withUnsafeBytes(of: UInt16(b.count).littleEndian) { unsafe out.append(contentsOf: $0) }
+                    out.append(contentsOf: b)
+                case .datetimeNow:
+                    out.append(6)
             }
         }
         switch definition.primaryKey {
-        case .implicitRowid:
-            out.append(0)
-        case .rowidAlias(let column, let autoincrement):
-            out.append(1)
-            appendName(column, to: &out)
-            out.append(autoincrement ? 1 : 0)
+            case .implicitRowid:
+                out.append(0)
+            case .rowidAlias(let column, let autoincrement):
+                out.append(1)
+                appendName(column, to: &out)
+                out.append(autoincrement ? 1 : 0)
         }
         out.append(UInt8(definition.foreignKeys.count))
         for fk in definition.foreignKeys {
@@ -244,7 +244,7 @@ import ADFCore
 
         var columns: [ColumnDefinition] = []
         columns.reserveCapacity(columnCount)
-        for _ in 0..<columnCount {
+        for _ in 0 ..< columnCount {
             let columnName = unsafe try readName(bytes, &offset)
             guard offset + 3 <= bytes.count else {
                 throw DBError.integrityFailure("catalog: truncated column")
@@ -257,42 +257,42 @@ import ADFCore
             offset += 3
             var defaultValue: DefaultValue?
             switch defaultKind {
-            case 0:
-                defaultValue = nil
-            case 1:
-                defaultValue = .value(.null)
-            case 2:
-                guard let raw = unsafe Varint.read(bytes, &offset) else {
-                    throw DBError.integrityFailure("catalog: truncated default int")
-                }
-                defaultValue = .value(.integer(Varint.unzigzag(raw)))
-            case 3:
-                guard offset + 8 <= bytes.count else {
-                    throw DBError.integrityFailure("catalog: truncated default real")
-                }
-                let bits = unsafe UInt64(littleEndian: bytes.loadUnaligned(fromByteOffset: offset, as: UInt64.self))
-                offset += 8
-                defaultValue = .value(.real(Double(bitPattern: bits)))
-            case 4, 5:
-                guard offset + 2 <= bytes.count else {
-                    throw DBError.integrityFailure("catalog: truncated default length")
-                }
-                let length = unsafe Int(
-                    UInt16(littleEndian: bytes.loadUnaligned(fromByteOffset: offset, as: UInt16.self)))
-                offset += 2
-                guard offset + length <= bytes.count else {
-                    throw DBError.integrityFailure("catalog: truncated default body")
-                }
-                let payload = unsafe bytes[offset..<offset + length]
-                offset += length
-                defaultValue =
-                    unsafe defaultKind == 4
-                    ? .value(.text(String(decoding: payload, as: UTF8.self)))
-                    : .value(.blob([UInt8](payload)))
-            case 6:
-                defaultValue = .datetimeNow
-            default:
-                throw DBError.integrityFailure("catalog: unknown default kind")
+                case 0:
+                    defaultValue = nil
+                case 1:
+                    defaultValue = .value(.null)
+                case 2:
+                    guard let raw = unsafe Varint.read(bytes, &offset) else {
+                        throw DBError.integrityFailure("catalog: truncated default int")
+                    }
+                    defaultValue = .value(.integer(Varint.unzigzag(raw)))
+                case 3:
+                    guard offset + 8 <= bytes.count else {
+                        throw DBError.integrityFailure("catalog: truncated default real")
+                    }
+                    let bits = unsafe UInt64(littleEndian: bytes.loadUnaligned(fromByteOffset: offset, as: UInt64.self))
+                    offset += 8
+                    defaultValue = .value(.real(Double(bitPattern: bits)))
+                case 4, 5:
+                    guard offset + 2 <= bytes.count else {
+                        throw DBError.integrityFailure("catalog: truncated default length")
+                    }
+                    let length = unsafe Int(
+                        UInt16(littleEndian: bytes.loadUnaligned(fromByteOffset: offset, as: UInt16.self)))
+                    offset += 2
+                    guard offset + length <= bytes.count else {
+                        throw DBError.integrityFailure("catalog: truncated default body")
+                    }
+                    let payload = unsafe bytes[offset ..< offset + length]
+                    offset += length
+                    defaultValue =
+                        unsafe defaultKind == 4
+                        ? .value(.text(String(decoding: payload, as: UTF8.self)))
+                        : .value(.blob([UInt8](payload)))
+                case 6:
+                    defaultValue = .datetimeNow
+                default:
+                    throw DBError.integrityFailure("catalog: unknown default kind")
             }
             columns.append(
                 ColumnDefinition(
@@ -306,32 +306,32 @@ import ADFCore
         offset += 1
         let primaryKey: PrimaryKey
         switch pkKind {
-        case 0:
-            primaryKey = .implicitRowid
-        case 1:
-            let column = unsafe try readName(bytes, &offset)
-            guard offset < bytes.count else {
-                throw DBError.integrityFailure("catalog: truncated autoincrement flag")
-            }
-            let autoincrement = unsafe bytes[offset] != 0
-            offset += 1
-            primaryKey = .rowidAlias(column: column, autoincrement: autoincrement)
-        default:
-            throw DBError.integrityFailure("catalog: unknown pk kind")
+            case 0:
+                primaryKey = .implicitRowid
+            case 1:
+                let column = unsafe try readName(bytes, &offset)
+                guard offset < bytes.count else {
+                    throw DBError.integrityFailure("catalog: truncated autoincrement flag")
+                }
+                let autoincrement = unsafe bytes[offset] != 0
+                offset += 1
+                primaryKey = .rowidAlias(column: column, autoincrement: autoincrement)
+            default:
+                throw DBError.integrityFailure("catalog: unknown pk kind")
         }
 
         guard offset < bytes.count else { throw DBError.integrityFailure("catalog: truncated fk count") }
         let fkCount = unsafe Int(bytes[offset])
         offset += 1
         var foreignKeys: [ForeignKey] = []
-        for _ in 0..<fkCount {
+        for _ in 0 ..< fkCount {
             guard offset < bytes.count else {
                 throw DBError.integrityFailure("catalog: truncated fk")
             }
             let colCount = unsafe Int(bytes[offset])
             offset += 1
             var childColumns: [String] = []
-            for _ in 0..<colCount { unsafe childColumns.append(try readName(bytes, &offset)) }
+            for _ in 0 ..< colCount { unsafe childColumns.append(try readName(bytes, &offset)) }
             let parent = unsafe try readName(bytes, &offset)
             guard offset < bytes.count, let action = unsafe FKAction(rawValue: bytes[offset]) else {
                 throw DBError.integrityFailure("catalog: bad fk action")
@@ -399,13 +399,13 @@ import ADFCore
         let colCount = unsafe Int(bytes[offset])
         offset += 1
         var columns: [String] = []
-        for _ in 0..<colCount { unsafe columns.append(try readName(bytes, &offset)) }
+        for _ in 0 ..< colCount { unsafe columns.append(try readName(bytes, &offset)) }
         // Trailing INCLUDE block (absent in pre-covering records → empty).
         var includes: [String] = []
         if offset < bytes.count {
             let includeCount = unsafe Int(bytes[offset])
             offset += 1
-            for _ in 0..<includeCount { unsafe includes.append(try readName(bytes, &offset)) }
+            for _ in 0 ..< includeCount { unsafe includes.append(try readName(bytes, &offset)) }
         }
         return IndexRecord(
             indexId: indexId, tableId: tableId, handle: handle,
@@ -435,22 +435,22 @@ import ADFCore
         out.append(UInt8(definition.tokenize.count))
         for token in definition.tokenize { appendName(token, to: &out) }
         switch definition.content {
-        case .selfContained:
-            out.append(0)
-        case .external(let table, let rowid):
-            out.append(1)
-            appendName(table, to: &out)
-            appendName(rowid, to: &out)
-        case .contentless(let deleteEnabled):
-            out.append(2)
-            out.append(deleteEnabled ? 1 : 0)
+            case .selfContained:
+                out.append(0)
+            case .external(let table, let rowid):
+                out.append(1)
+                appendName(table, to: &out)
+                appendName(rowid, to: &out)
+            case .contentless(let deleteEnabled):
+                out.append(2)
+                out.append(deleteEnabled ? 1 : 0)
         }
         out.append(UInt8(definition.prefix.count))
         for size in definition.prefix { out.append(UInt8(min(size, 255))) }
         switch definition.detail {
-        case .full: out.append(0)
-        case .column: out.append(1)
-        case .none: out.append(2)
+            case .full: out.append(0)
+            case .column: out.append(1)
+            case .none: out.append(2)
         }
         out.append(definition.columnSize ? 1 : 0)
         return out
@@ -480,7 +480,7 @@ import ADFCore
         offset += 2
         var columns: [String] = []
         columns.reserveCapacity(columnCount)
-        for _ in 0..<columnCount { unsafe columns.append(try readName(bytes, &offset)) }
+        for _ in 0 ..< columnCount { unsafe columns.append(try readName(bytes, &offset)) }
 
         guard offset < bytes.count else {
             throw DBError.integrityFailure("catalog: truncated fts tokenize count")
@@ -488,7 +488,7 @@ import ADFCore
         let tokenizeCount = unsafe Int(bytes[offset])
         offset += 1
         var tokenize: [String] = []
-        for _ in 0..<tokenizeCount { unsafe tokenize.append(try readName(bytes, &offset)) }
+        for _ in 0 ..< tokenizeCount { unsafe tokenize.append(try readName(bytes, &offset)) }
 
         guard offset < bytes.count else {
             throw DBError.integrityFailure("catalog: truncated fts content kind")
@@ -497,21 +497,21 @@ import ADFCore
         offset += 1
         let content: FTSContentMode
         switch contentKind {
-        case 0:
-            content = .selfContained
-        case 1:
-            let table = unsafe try readName(bytes, &offset)
-            let rowid = unsafe try readName(bytes, &offset)
-            content = .external(table: table, rowid: rowid)
-        case 2:
-            guard offset < bytes.count else {
-                throw DBError.integrityFailure("catalog: truncated fts contentless flag")
-            }
-            let deleteEnabled = unsafe bytes[offset] != 0
-            offset += 1
-            content = .contentless(deleteEnabled: deleteEnabled)
-        default:
-            throw DBError.integrityFailure("catalog: unknown fts content kind")
+            case 0:
+                content = .selfContained
+            case 1:
+                let table = unsafe try readName(bytes, &offset)
+                let rowid = unsafe try readName(bytes, &offset)
+                content = .external(table: table, rowid: rowid)
+            case 2:
+                guard offset < bytes.count else {
+                    throw DBError.integrityFailure("catalog: truncated fts contentless flag")
+                }
+                let deleteEnabled = unsafe bytes[offset] != 0
+                offset += 1
+                content = .contentless(deleteEnabled: deleteEnabled)
+            default:
+                throw DBError.integrityFailure("catalog: unknown fts content kind")
         }
 
         guard offset < bytes.count else {
@@ -520,7 +520,7 @@ import ADFCore
         let prefixCount = unsafe Int(bytes[offset])
         offset += 1
         var prefix: [Int] = []
-        for _ in 0..<prefixCount {
+        for _ in 0 ..< prefixCount {
             guard offset < bytes.count else {
                 throw DBError.integrityFailure("catalog: truncated fts prefix")
             }
@@ -535,10 +535,10 @@ import ADFCore
         offset += 1
         let detail: FTSDetail
         switch detailRaw {
-        case 0: detail = .full
-        case 1: detail = .column
-        case 2: detail = .none
-        default: throw DBError.integrityFailure("catalog: unknown fts detail")
+            case 0: detail = .full
+            case 1: detail = .column
+            case 2: detail = .none
+            default: throw DBError.integrityFailure("catalog: unknown fts detail")
         }
         let columnSize = unsafe bytes[offset] != 0
 

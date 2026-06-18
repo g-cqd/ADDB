@@ -120,8 +120,8 @@ import ADFIO
         let pid = UInt64(getpid())
         // Unique per handle: pid in the low bits, a per-process nonce above —
         // several handles in one process claim distinct slots.
-        let owner = pid | (UInt64.random(in: 1...0xFFFF) << 40)
-        for index in 0..<Format.readerSlotCount {
+        let owner = pid | (UInt64.random(in: 1 ... 0xFFFF) << 40)
+        for index in 0 ..< Format.readerSlotCount {
             let pidPtr = unsafe slotPointer(index, SlotOffset.ownerPid)
             if unsafe SharedAtomicU64.loadAcquire(pidPtr) == 0,
                 unsafe SharedAtomicU64.compareExchangeAcqRel(pidPtr, expected: 0, desired: owner)
@@ -151,8 +151,8 @@ import ADFIO
     /// no reader is registered anywhere.
     func minimumGeneration() -> UInt64? {
         var minimum: UInt64?
-        for index in 0..<Format.readerSlotCount {
-            guard unsafe SharedAtomicU64.loadAcquire(slotPointer(index, SlotOffset.ownerPid)) != 0 else { continue }
+        for index in 0 ..< Format.readerSlotCount
+        where unsafe SharedAtomicU64.loadAcquire(slotPointer(index, SlotOffset.ownerPid)) != 0 {
             let generation = unsafe SharedAtomicU64.loadAcquire(slotPointer(index, SlotOffset.generation))
             guard generation != 0 else { continue }
             minimum = min(generation, minimum ?? generation)
@@ -162,7 +162,7 @@ import ADFIO
 
     /// Clears slots owned by dead processes (kill(pid, 0) == ESRCH).
     func sweepStaleSlots() {
-        for index in 0..<Format.readerSlotCount {
+        for index in 0 ..< Format.readerSlotCount {
             let pidPtr = unsafe slotPointer(index, SlotOffset.ownerPid)
             let owner = unsafe SharedAtomicU64.loadAcquire(pidPtr)
             guard owner != 0 else { continue }

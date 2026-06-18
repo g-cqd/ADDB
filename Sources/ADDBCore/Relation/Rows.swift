@@ -175,8 +175,8 @@ public struct RowView: ~Copyable, ~Escapable {
         self.coveringIncludes = coveringIncludes
         let tree: TreeHandle =
             switch mode {
-            case .table: table.handle
-            case .index(let index): index.handle
+                case .table: table.handle
+                case .index(let index): index.handle
             }
         self.cursor = Cursor(resolver: resolver, tree: tree)
         if let lowerKey {
@@ -209,10 +209,10 @@ public struct RowView: ~Copyable, ~Escapable {
                     throw DBError.integrityFailure("malformed key in \(table.definition.name)")
                 }
                 switch mode {
-                case .table:
-                    return (rowid: rowid, record: try BTree.copyValue(ref, resolver: resolver))
-                case .index:
-                    return (rowid: rowid, record: nil)
+                    case .table:
+                        return (rowid: rowid, record: try BTree.copyValue(ref, resolver: resolver))
+                    case .index:
+                        return (rowid: rowid, record: nil)
                 }
             } ?? nil
 
@@ -246,89 +246,89 @@ public struct RowView: ~Copyable, ~Escapable {
         _ body: (Int64, UnsafeRawBufferPointer) throws(DBError) -> Bool
     ) throws(DBError) {
         switch mode {
-        case .table:
-            while !exhausted {
-                let step: Bool? =
-                    unsafe try cursor.withCurrent { (key, ref) throws(DBError) -> Bool? in
-                        if let upperKey, unsafe !Self.inBounds(key, below: upperKey) { return nil }
-                        guard let rowid = unsafe KeyCodec.rowid(fromSuffixOf: key) else {
-                            throw DBError.integrityFailure("malformed key in \(table.definition.name)")
-                        }
-                        return unsafe try BTree.withValueBytes(ref, resolver: resolver) { span throws(DBError) in
-                            unsafe try body(rowid, span)
-                        }
-                    } ?? nil
-                guard let proceed = step else {
-                    exhausted = true
-                    return
-                }
-                if !proceed { return }
-                exhausted = !(try cursor.next())
-            }
-        case .index where coveringIncludes != nil:
-            // Index-only scan: every needed column lives in the entry's covering
-            // value, so serve it straight from the index leaf — no table descent.
-            while !exhausted {
-                let step: Bool? =
-                    unsafe try cursor.withCurrent { (key, ref) throws(DBError) -> Bool? in
-                        if let upperKey, unsafe !Self.inBounds(key, below: upperKey) { return nil }
-                        guard let rowid = unsafe KeyCodec.rowid(fromSuffixOf: key) else {
-                            throw DBError.integrityFailure("malformed key in \(table.definition.name)")
-                        }
-                        return unsafe try BTree.withValueBytes(ref, resolver: resolver) { span throws(DBError) in
-                            unsafe try body(rowid, span)
-                        }
-                    } ?? nil
-                guard let proceed = step else {
-                    exhausted = true
-                    return
-                }
-                if !proceed { return }
-                exhausted = !(try cursor.next())
-            }
-        case .index:
-            // Index entries within a probe arrive in (columns…, rowid) order, so the
-            // rowids are ascending; a warm table cursor (`seekForward`) skips the
-            // root→leaf descent whenever the next rowid is in the leaf it already
-            // holds. The row fetch happens outside the index cursor's scope so the
-            // two cursors never alias.
-            var tableCursor = Cursor(resolver: resolver, tree: table.handle)
-            while !exhausted {
-                let rowid: Int64? =
-                    unsafe try cursor.withCurrent { (key, _) throws(DBError) -> Int64? in
-                        if let upperKey, unsafe !Self.inBounds(key, below: upperKey) { return nil }
-                        guard let rowid = unsafe KeyCodec.rowid(fromSuffixOf: key) else {
-                            throw DBError.integrityFailure("malformed key in \(table.definition.name)")
-                        }
-                        return rowid
-                    } ?? nil
-                guard let rowid else {
-                    exhausted = true
-                    return
-                }
-
-                var found: Result<Bool, DBError> = .success(false)
-                withUnsafeTemporaryAllocation(byteCount: 8, alignment: 8) { raw in
-                    unsafe KeyCodec.writeRowKey(rowid, into: raw)
-                    do throws(DBError) {
-                        found = unsafe .success(try tableCursor.seekForward(UnsafeRawBufferPointer(raw)))
-                    } catch {
-                        found = .failure(error)
+            case .table:
+                while !exhausted {
+                    let step: Bool? =
+                        unsafe try cursor.withCurrent { (key, ref) throws(DBError) -> Bool? in
+                            if let upperKey, unsafe !Self.inBounds(key, below: upperKey) { return nil }
+                            guard let rowid = unsafe KeyCodec.rowid(fromSuffixOf: key) else {
+                                throw DBError.integrityFailure("malformed key in \(table.definition.name)")
+                            }
+                            return unsafe try BTree.withValueBytes(ref, resolver: resolver) { span throws(DBError) in
+                                unsafe try body(rowid, span)
+                            }
+                        } ?? nil
+                    guard let proceed = step else {
+                        exhausted = true
+                        return
                     }
+                    if !proceed { return }
+                    exhausted = !(try cursor.next())
                 }
-                guard try found.get() else {
-                    throw DBError.integrityFailure(
-                        "dangling index entry: \(table.definition.name) rowid \(rowid)")
+            case .index where coveringIncludes != nil:
+                // Index-only scan: every needed column lives in the entry's covering
+                // value, so serve it straight from the index leaf — no table descent.
+                while !exhausted {
+                    let step: Bool? =
+                        unsafe try cursor.withCurrent { (key, ref) throws(DBError) -> Bool? in
+                            if let upperKey, unsafe !Self.inBounds(key, below: upperKey) { return nil }
+                            guard let rowid = unsafe KeyCodec.rowid(fromSuffixOf: key) else {
+                                throw DBError.integrityFailure("malformed key in \(table.definition.name)")
+                            }
+                            return unsafe try BTree.withValueBytes(ref, resolver: resolver) { span throws(DBError) in
+                                unsafe try body(rowid, span)
+                            }
+                        } ?? nil
+                    guard let proceed = step else {
+                        exhausted = true
+                        return
+                    }
+                    if !proceed { return }
+                    exhausted = !(try cursor.next())
                 }
-                let proceed: Bool =
-                    unsafe try tableCursor.withCurrent { (_, rowRef) throws(DBError) in
-                        unsafe try BTree.withValueBytes(rowRef, resolver: resolver) { span throws(DBError) in
-                            unsafe try body(rowid, span)
+            case .index:
+                // Index entries within a probe arrive in (columns…, rowid) order, so the
+                // rowids are ascending; a warm table cursor (`seekForward`) skips the
+                // root→leaf descent whenever the next rowid is in the leaf it already
+                // holds. The row fetch happens outside the index cursor's scope so the
+                // two cursors never alias.
+                var tableCursor = Cursor(resolver: resolver, tree: table.handle)
+                while !exhausted {
+                    let rowid: Int64? =
+                        unsafe try cursor.withCurrent { (key, _) throws(DBError) -> Int64? in
+                            if let upperKey, unsafe !Self.inBounds(key, below: upperKey) { return nil }
+                            guard let rowid = unsafe KeyCodec.rowid(fromSuffixOf: key) else {
+                                throw DBError.integrityFailure("malformed key in \(table.definition.name)")
+                            }
+                            return rowid
+                        } ?? nil
+                    guard let rowid else {
+                        exhausted = true
+                        return
+                    }
+
+                    var found: Result<Bool, DBError> = .success(false)
+                    withUnsafeTemporaryAllocation(byteCount: 8, alignment: 8) { raw in
+                        unsafe KeyCodec.writeRowKey(rowid, into: raw)
+                        do throws(DBError) {
+                            found = unsafe .success(try tableCursor.seekForward(UnsafeRawBufferPointer(raw)))
+                        } catch {
+                            found = .failure(error)
                         }
-                    } ?? false
-                if !proceed { return }
-                exhausted = !(try cursor.next())
-            }
+                    }
+                    guard try found.get() else {
+                        throw DBError.integrityFailure(
+                            "dangling index entry: \(table.definition.name) rowid \(rowid)")
+                    }
+                    let proceed: Bool =
+                        unsafe try tableCursor.withCurrent { (_, rowRef) throws(DBError) in
+                            unsafe try BTree.withValueBytes(rowRef, resolver: resolver) { span throws(DBError) in
+                                unsafe try body(rowid, span)
+                            }
+                        } ?? false
+                    if !proceed { return }
+                    exhausted = !(try cursor.next())
+                }
         }
     }
 
@@ -397,23 +397,23 @@ extension Relation {
             return try KeyCodec.encode(values, collations: Array(collations.prefix(values.count)))
         }
         switch bounds {
-        case .all:
-            return (nil, nil)
-        case .prefix(let values):
-            let lower = try encodePrefix(values)
-            return (lower, KeyCodec.prefixSuccessor(lower))
-        case .range(let lower, let upper, let lowerOpen, let upperOpen):
-            var lowerKey: [UInt8]?
-            if let lower {
-                let encoded = try encodePrefix(lower)
-                lowerKey = lowerOpen ? KeyCodec.prefixSuccessor(encoded) : encoded
-            }
-            var upperKey: [UInt8]?
-            if let upper {
-                let encoded = try encodePrefix(upper)
-                upperKey = upperOpen ? encoded : KeyCodec.prefixSuccessor(encoded)
-            }
-            return (lowerKey, upperKey)
+            case .all:
+                return (nil, nil)
+            case .prefix(let values):
+                let lower = try encodePrefix(values)
+                return (lower, KeyCodec.prefixSuccessor(lower))
+            case .range(let lower, let upper, let lowerOpen, let upperOpen):
+                var lowerKey: [UInt8]?
+                if let lower {
+                    let encoded = try encodePrefix(lower)
+                    lowerKey = lowerOpen ? KeyCodec.prefixSuccessor(encoded) : encoded
+                }
+                var upperKey: [UInt8]?
+                if let upper {
+                    let encoded = try encodePrefix(upper)
+                    upperKey = upperOpen ? encoded : KeyCodec.prefixSuccessor(encoded)
+                }
+                return (lowerKey, upperKey)
         }
     }
 

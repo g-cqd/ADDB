@@ -27,7 +27,7 @@ public struct FTSDocStats: Equatable, Sendable {
         }
         var lengths: [UInt32] = []
         lengths.reserveCapacity(Int(count))
-        for _ in 0..<Int(count) {
+        for _ in 0 ..< Int(count) {
             guard let length = Varint.read(bytes, &offset) else {
                 throw DBError.integrityFailure("fts doc stats: truncated field length")
             }
@@ -68,7 +68,7 @@ public struct FTSGlobalStats: Equatable, Sendable {
         }
         var totals: [UInt64] = []
         totals.reserveCapacity(Int(count))
-        for _ in 0..<Int(count) {
+        for _ in 0 ..< Int(count) {
             guard let total = Varint.read(bytes, &offset) else {
                 throw DBError.integrityFailure("fts global stats: truncated field total")
             }

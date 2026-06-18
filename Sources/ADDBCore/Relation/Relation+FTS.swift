@@ -12,8 +12,9 @@ extension Relation {
         guard state.ftsRecords[name] != nil else { throw DBError.noSuchTable(name) }
         // buffer the document; the coalesced batch is written by `flushFTS` at
         // the next read of this table or at commit. No tree writes here.
-        state.ftsBuffer[name, default: []].append(
-            FTSIndex.PendingDoc(docid: docid, columnTexts: columnTexts))
+        state.ftsBuffer[name, default: []]
+            .append(
+                FTSIndex.PendingDoc(docid: docid, columnTexts: columnTexts))
         ctx.relation = state
     }
 

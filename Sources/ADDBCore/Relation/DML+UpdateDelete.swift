@@ -17,8 +17,8 @@ extension Relation {
         }
         let row = try materializeRow(table: table, rowid: rowid, recordBytes: recordBytes)
 
-        for indexName in state.indexRecords.keys.sorted() {
-            guard state.indexRecords[indexName]!.tableId == table.tableId else { continue }
+        for indexName in state.indexRecords.keys.sorted() where state.indexRecords[indexName]!.tableId == table.tableId
+        {
             var index = state.indexRecords[indexName]!
             let key = try indexEntryKey(index: index, table: table, row: row, rowid: rowid)
             var indexHandle = index.handle
@@ -95,9 +95,10 @@ extension Relation {
         }
 
         // Index maintenance for changed keys only, with unique pre-checks.
-        let ownIndexNames = state.indexRecords.keys.sorted().filter {
-            state.indexRecords[$0]!.tableId == table.tableId
-        }
+        let ownIndexNames = state.indexRecords.keys.sorted()
+            .filter {
+                state.indexRecords[$0]!.tableId == table.tableId
+            }
         // An entry is rewritten when its key changes, or — for a covering index —
         // when only its stored INCLUDE value changes (key-stable, value-only update).
         var changedIndexes: [(name: String, oldKey: [UInt8], newKey: [UInt8], keyChanged: Bool)] = []

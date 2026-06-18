@@ -60,15 +60,15 @@ public enum FTSTokenizerFactory {
         guard let name = spec.first?.lowercased() else { return Unicode61Tokenizer() }
         let arguments = Array(spec.dropFirst())
         switch name {
-        case "unicode61":
-            return try Unicode61Tokenizer(arguments: arguments)
-        case "porter":
-            let base = try make(arguments.isEmpty ? ["unicode61"] : arguments)
-            return PorterTokenizer(base: base)
-        case "trigram":
-            return try TrigramTokenizer(arguments: arguments)
-        default:
-            throw DBError.sqlUnsupported("fts5 tokenizer '\(name)'")
+            case "unicode61":
+                return try Unicode61Tokenizer(arguments: arguments)
+            case "porter":
+                let base = try make(arguments.isEmpty ? ["unicode61"] : arguments)
+                return PorterTokenizer(base: base)
+            case "trigram":
+                return try TrigramTokenizer(arguments: arguments)
+            default:
+                throw DBError.sqlUnsupported("fts5 tokenizer '\(name)'")
         }
     }
 }

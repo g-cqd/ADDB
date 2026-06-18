@@ -37,11 +37,11 @@ import ADFCore
         _ value: Value, collation: Collation, to key: inout [UInt8]
     ) throws(DBError) {
         switch value {
-        case .null: appendNull(to: &key)
-        case .integer(let v): appendInteger(v, to: &key)
-        case .real(let d): try appendReal(d, to: &key)
-        case .text(let s): appendTextBytes(s.utf8, collation: collation, to: &key)
-        case .blob(let b): appendBlobBytes(b, to: &key)
+            case .null: appendNull(to: &key)
+            case .integer(let v): appendInteger(v, to: &key)
+            case .real(let d): try appendReal(d, to: &key)
+            case .text(let s): appendTextBytes(s.utf8, collation: collation, to: &key)
+            case .blob(let b): appendBlobBytes(b, to: &key)
         }
     }
 
@@ -114,7 +114,7 @@ import ADFCore
         var values: [Value] = []
         values.reserveCapacity(columns)
         var offset = 0
-        for _ in 0..<columns {
+        for _ in 0 ..< columns {
             values.append(unsafe try decodeField(key, &offset))
         }
         return values
@@ -127,22 +127,22 @@ import ADFCore
         let tag = unsafe key[offset]
         offset += 1
         switch tag {
-        case Tag.null:
-            return .null
-        case Tag.integer:
-            return .integer(Int64(bitPattern: unsafe try readBE(key, &offset) ^ 0x8000_0000_0000_0000))
-        case Tag.real:
-            // Invert `monotoneBits`: high bit set ⇒ originally non-negative (clear it);
-            // else originally negative (bit-complement).
-            let bits = unsafe try readBE(key, &offset)
-            let original = (bits & 0x8000_0000_0000_0000) != 0 ? (bits & 0x7FFF_FFFF_FFFF_FFFF) : ~bits
-            return .real(Double(bitPattern: original))
-        case Tag.text, Tag.textNocase:
-            return unsafe .text(String(decoding: try readEscaped(key, &offset), as: UTF8.self))
-        case Tag.blob:
-            return unsafe .blob(try readEscaped(key, &offset))
-        default:
-            throw DBError.integrityFailure("key: unknown field tag \(tag)")
+            case Tag.null:
+                return .null
+            case Tag.integer:
+                return .integer(Int64(bitPattern: unsafe try readBE(key, &offset) ^ 0x8000_0000_0000_0000))
+            case Tag.real:
+                // Invert `monotoneBits`: high bit set ⇒ originally non-negative (clear it);
+                // else originally negative (bit-complement).
+                let bits = unsafe try readBE(key, &offset)
+                let original = (bits & 0x8000_0000_0000_0000) != 0 ? (bits & 0x7FFF_FFFF_FFFF_FFFF) : ~bits
+                return .real(Double(bitPattern: original))
+            case Tag.text, Tag.textNocase:
+                return unsafe .text(String(decoding: try readEscaped(key, &offset), as: UTF8.self))
+            case Tag.blob:
+                return unsafe .blob(try readEscaped(key, &offset))
+            default:
+                throw DBError.integrityFailure("key: unknown field tag \(tag)")
         }
     }
 

@@ -26,14 +26,14 @@ public struct Unicode61Tokenizer: FTSTokenizer {
             let value = arguments[index + 1]
             index += 2
             switch key {
-            case "remove_diacritics":
-                guard let level = Int(value), (0...2).contains(level) else {
-                    throw DBError.sqlUnsupported("unicode61 remove_diacritics '\(value)'")
-                }
-                removeDiacritics = level
-            default:
-                // tokenchars / separators / categories not needed by the consumer yet.
-                throw DBError.sqlUnsupported("unicode61 option '\(key)'")
+                case "remove_diacritics":
+                    guard let level = Int(value), (0 ... 2).contains(level) else {
+                        throw DBError.sqlUnsupported("unicode61 remove_diacritics '\(value)'")
+                    }
+                    removeDiacritics = level
+                default:
+                    // tokenchars / separators / categories not needed by the consumer yet.
+                    throw DBError.sqlUnsupported("unicode61 option '\(key)'")
             }
         }
         self.removeDiacritics = removeDiacritics
@@ -79,9 +79,9 @@ public struct Unicode61Tokenizer: FTSTokenizer {
     /// `nil` if it's a separator.
     static func asciiTokenFold(_ byte: UInt8) -> UInt8? {
         switch byte {
-        case 0x41...0x5A: return byte | 0x20  // A–Z → a–z
-        case 0x61...0x7A, 0x30...0x39: return byte  // a–z, 0–9
-        default: return nil
+            case 0x41 ... 0x5A: return byte | 0x20  // A–Z → a–z
+            case 0x61 ... 0x7A, 0x30 ... 0x39: return byte  // a–z, 0–9
+            default: return nil
         }
     }
 
@@ -112,15 +112,15 @@ public struct Unicode61Tokenizer: FTSTokenizer {
     /// (input is already lowercased). Returns `nil` to keep the scalar.
     static func latinBase(_ scalar: Unicode.Scalar) -> Unicode.Scalar? {
         switch scalar.value {
-        case 0x00E0...0x00E5: return "a"  // à á â ã ä å
-        case 0x00E7: return "c"  // ç
-        case 0x00E8...0x00EB: return "e"  // è é ê ë
-        case 0x00EC...0x00EF: return "i"  // ì í î ï
-        case 0x00F1: return "n"  // ñ
-        case 0x00F2...0x00F6, 0x00F8: return "o"  // ò ó ô õ ö ø
-        case 0x00F9...0x00FC: return "u"  // ù ú û ü
-        case 0x00FD, 0x00FF: return "y"  // ý ÿ
-        default: return nil
+            case 0x00E0 ... 0x00E5: return "a"  // à á â ã ä å
+            case 0x00E7: return "c"  // ç
+            case 0x00E8 ... 0x00EB: return "e"  // è é ê ë
+            case 0x00EC ... 0x00EF: return "i"  // ì í î ï
+            case 0x00F1: return "n"  // ñ
+            case 0x00F2 ... 0x00F6, 0x00F8: return "o"  // ò ó ô õ ö ø
+            case 0x00F9 ... 0x00FC: return "u"  // ù ú û ü
+            case 0x00FD, 0x00FF: return "y"  // ý ÿ
+            default: return nil
         }
     }
 }

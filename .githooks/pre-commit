@@ -1,15 +1,24 @@
 #!/bin/sh
-# ADSQL pre-commit hook — formatting + internal-tag gate (check-only).
+# Shared pre-commit hook — formatting gate + shipped-library discipline + internal-tag check.
 #
 # Enable once per clone:   git config core.hooksPath .githooks
 # Auto-fix formatting:     swift package --allow-writing-to-package-directory format
 #
 # Runs the same `lint` command plugin CI uses, so local and CI rules can't drift.
 set -e
+
+# The ADBuildTools plugins are a dev-only dependency, gated behind the repo's `*_DEV` env var (so
+# downstream consumers never resolve them). Read that var name from `.adbuildtools.json` and set it,
+# so `swift package lint` can resolve the command plugin locally.
+dev=$(grep -o '"devEnv"[[:space:]]*:[[:space:]]*"[^"]*"' .adbuildtools.json 2>/dev/null \
+    | sed 's/.*"\([A-Za-z0-9_]*\)"$/\1/' || true)
+if [ -n "$dev" ]; then export "$dev=1"; fi
+
 echo "pre-commit: swift package lint"
 swift package lint
 
-# Block newly added TODO/FIXME and internal provenance citations (RFC 00xx,
-# Review NNNN, milestone/finding tags). Diff-based, so it only flags regressions.
-echo "pre-commit: internal-tag check (staged)"
-"$(dirname "$0")/check-tags.sh" staged
+# Block newly added TODO/FIXME and internal provenance citations. Diff-based, so it only flags regressions.
+if [ -x "$(dirname "$0")/check-tags.sh" ]; then
+    echo "pre-commit: internal-tag check (staged)"
+    "$(dirname "$0")/check-tags.sh" staged
+fi

@@ -20,11 +20,11 @@ extension Value {
     /// SQLite text rendering of a value (for ||, CAST AS TEXT, LIKE).
     @_spi(ADDBEngine) public static func textify(_ value: Value) -> String {
         switch value {
-        case .null: return ""  // callers handle NULL before textify
-        case .integer(let v): return String(v)
-        case .real(let d): return realToText(d)
-        case .text(let s): return s
-        case .blob(let b): return String(decoding: b, as: UTF8.self)
+            case .null: return ""  // callers handle NULL before textify
+            case .integer(let v): return String(v)
+            case .real(let d): return realToText(d)
+            case .text(let s): return s
+            case .blob(let b): return String(decoding: b, as: UTF8.self)
         }
     }
 
@@ -44,13 +44,14 @@ extension Value {
 
     private static func format(_ d: Double, precision: Int) -> String {
         var buffer = [CChar](repeating: 0, count: 48)
-        let result = "%.\(precision)g".withCString { fmt in
-            unsafe withVaList([d]) { args in
-                buffer.withUnsafeMutableBufferPointer { out in
-                    unsafe vsnprintf(out.baseAddress!, out.count, fmt, args)
+        let result = "%.\(precision)g"
+            .withCString { fmt in
+                unsafe withVaList([d]) { args in
+                    buffer.withUnsafeMutableBufferPointer { out in
+                        unsafe vsnprintf(out.baseAddress!, out.count, fmt, args)
+                    }
                 }
             }
-        }
         // `vsnprintf` returns < 0 only on an encoding error, which cannot happen for a
         // finite `d` and a `%g` format (callers already handle NaN/Inf). Fall back to
         // the standard-library rendering rather than crash if it ever does.
@@ -101,7 +102,7 @@ extension Value {
             }
         }
         guard sawDigit else { return .integer(0) }
-        let text = String(decoding: bytes[start..<i], as: UTF8.self)
+        let text = String(decoding: bytes[start ..< i], as: UTF8.self)
         if !isReal, let v = Int64(text) { return .integer(v) }
         return .real(Double(text) ?? 0)
     }
@@ -109,36 +110,36 @@ extension Value {
     /// Numeric coercion for arithmetic operands.
     @_spi(ADDBEngine) public static func toNumeric(_ value: Value) -> Value {
         switch value {
-        case .integer, .real, .null: return value
-        case .text(let s): return numericPrefix(s)
-        case .blob: return .integer(0)
+            case .integer, .real, .null: return value
+            case .text(let s): return numericPrefix(s)
+            case .blob: return .integer(0)
         }
     }
 
     @_spi(ADDBEngine) public static func cast(_ value: Value, to type: ColumnType) -> Value {
         if value.isNull { return .null }
         switch type {
-        case .integer:
-            switch toNumeric(value) {
-            case .integer(let v): return .integer(v)
-            case .real(let d):
-                if d.isNaN { return .integer(0) }
-                if d <= -9.223372036854776e18 { return .integer(.min) }
-                if d >= 9.223372036854776e18 { return .integer(.max) }
-                return .integer(Int64(d))  // truncates toward zero
-            default: return .integer(0)
-            }
-        case .real:
-            switch toNumeric(value) {
-            case .integer(let v): return .real(Double(v))
-            case .real(let d): return .real(d)
-            default: return .real(0)
-            }
-        case .text:
-            return .text(textify(value))
-        case .blob:
-            if case .blob = value { return value }
-            return .blob(Array(textify(value).utf8))
+            case .integer:
+                switch toNumeric(value) {
+                    case .integer(let v): return .integer(v)
+                    case .real(let d):
+                        if d.isNaN { return .integer(0) }
+                        if d <= -9.223372036854776e18 { return .integer(.min) }
+                        if d >= 9.223372036854776e18 { return .integer(.max) }
+                        return .integer(Int64(d))  // truncates toward zero
+                    default: return .integer(0)
+                }
+            case .real:
+                switch toNumeric(value) {
+                    case .integer(let v): return .real(Double(v))
+                    case .real(let d): return .real(d)
+                    default: return .real(0)
+                }
+            case .text:
+                return .text(textify(value))
+            case .blob:
+                if case .blob = value { return value }
+                return .blob(Array(textify(value).utf8))
         }
     }
 }

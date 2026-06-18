@@ -33,11 +33,10 @@ public final class SchemaCache: Sendable {
         if let loaded {
             records.withLock { state in
                 if state.generation != meta.generation {
-                    if state.generation < meta.generation {
-                        state = Records(generation: meta.generation)
-                    } else {
+                    guard state.generation < meta.generation else {
                         return
                     }
+                    state = Records(generation: meta.generation)
                 }
                 state.tables[name] = loaded
             }
@@ -56,11 +55,10 @@ public final class SchemaCache: Sendable {
         if let loaded {
             records.withLock { state in
                 if state.generation != meta.generation {
-                    if state.generation < meta.generation {
-                        state = Records(generation: meta.generation)
-                    } else {
+                    guard state.generation < meta.generation else {
                         return
                     }
+                    state = Records(generation: meta.generation)
                 }
                 state.indexes[name] = loaded
             }

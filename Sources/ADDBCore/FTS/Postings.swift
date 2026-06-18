@@ -60,7 +60,7 @@ public enum FTSPostings {
         var index = 0
         while index < postings.count {
             let end = min(index + blockSize, postings.count)
-            let block = postings[index..<end]
+            let block = postings[index ..< end]
             let firstDocId = block.first!.docid
             let lastDocId = block.last!.docid
             var maxTotalTF: UInt32 = 0
@@ -80,11 +80,11 @@ public enum FTSPostings {
             }
             ForPacking.appendPackedGaps(gaps, to: &out)
             for posting in block {
-                for column in 0..<columns {
+                for column in 0 ..< columns {
                     Varint.append(UInt64(column < posting.fieldTFs.count ? posting.fieldTFs[column] : 0), to: &out)
                 }
                 if storePositions {
-                    for column in 0..<columns {
+                    for column in 0 ..< columns {
                         let positions = column < posting.positions.count ? posting.positions[column] : []
                         Varint.append(UInt64(positions.count), to: &out)
                         var previousPosition: UInt32 = 0
@@ -114,7 +114,7 @@ public enum FTSPostings {
             throw DBError.integrityFailure("fts postings: implausible block count")
         }
         var result: [FTSPosting] = []
-        for _ in 0..<Int(blockCount) {
+        for _ in 0 ..< Int(blockCount) {
             guard let rawDocCount = Varint.read(bytes, &offset),
                 let firstZigzag = Varint.read(bytes, &offset),
                 Varint.read(bytes, &offset) != nil,  // lastDocId — skip metadata
@@ -136,10 +136,10 @@ public enum FTSPostings {
                     into: &docids)
             else { throw DBError.integrityFailure("fts postings: truncated docid gaps") }
 
-            for docIndex in 0..<docCount {
+            for docIndex in 0 ..< docCount {
                 var fieldTFs: [UInt32] = []
                 fieldTFs.reserveCapacity(columns)
-                for _ in 0..<columns {
+                for _ in 0 ..< columns {
                     guard let tf = Varint.read(bytes, &offset) else {
                         throw DBError.integrityFailure("fts postings: truncated field tf")
                     }
@@ -148,13 +148,13 @@ public enum FTSPostings {
                 var positions: [[UInt32]] = []
                 if storePositions {
                     positions.reserveCapacity(columns)
-                    for _ in 0..<columns {
+                    for _ in 0 ..< columns {
                         guard let count = Varint.read(bytes, &offset) else {
                             throw DBError.integrityFailure("fts postings: truncated position count")
                         }
                         var column: [UInt32] = []
                         var previousPosition: UInt32 = 0
-                        for _ in 0..<Int(count) {
+                        for _ in 0 ..< Int(count) {
                             guard let gap = Varint.read(bytes, &offset) else {
                                 throw DBError.integrityFailure("fts postings: truncated position")
                             }
@@ -277,7 +277,7 @@ public enum FTSPostings {
             // further bytes, so a corrupt docCount would otherwise drive an unbounded
             // append (OOM). Even degenerate duplicates cannot exceed the block's bits.
             guard gapCount <= bytes.count * 8 else { return false }
-            for _ in 0..<gapCount { docids.append(docid) }
+            for _ in 0 ..< gapCount { docids.append(docid) }
             return true
         }
 
@@ -292,7 +292,7 @@ public enum FTSPostings {
         let mask: UInt64 = gapBits == 64 ? ~0 : (UInt64(1) << gapBits) - 1
 
         var bitPos = 0
-        for _ in 0..<gapCount {
+        for _ in 0 ..< gapCount {
             // Extract `gapBits` LSB-first from the byte stream starting at `base`. Load
             // up to 8 bytes spanning the field (branchless within the field) and shift.
             let byteIndex = base + (bitPos >> 3)

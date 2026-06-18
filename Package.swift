@@ -24,8 +24,9 @@ let strictSettings: [SwiftSetting] =
     [
         .swiftLanguageMode(.v6),
         .enableUpcomingFeature("ExistentialAny"),
+        .enableUpcomingFeature("InferIsolatedConformances"),
         .enableUpcomingFeature("InternalImportsByDefault"),
-        .enableUpcomingFeature("MemberImportVisibility"),
+        .enableUpcomingFeature("MemberImportVisibility")
     ] + werrorSettings
 
 // Opt-in Instruments signposts: `ADDB_SIGNPOSTS=1` activates the (otherwise no-op)
@@ -40,7 +41,7 @@ let signpostSettings: [SwiftSetting] =
 let kernelSettings: [SwiftSetting] =
     strictSettings + [
         .strictMemorySafety(),
-        .enableExperimentalFeature("Lifetimes"),
+        .enableExperimentalFeature("Lifetimes")
     ] + signpostSettings
 
 // Compile-time type-check timing warnings (flag slow expressions / function bodies).
@@ -48,7 +49,7 @@ let kernelSettings: [SwiftSetting] =
 let timingWarningFlags: [SwiftSetting] = [
     .unsafeFlags([
         "-Xfrontend", "-warn-long-function-bodies=100",
-        "-Xfrontend", "-warn-long-expression-type-checking=100",
+        "-Xfrontend", "-warn-long-expression-type-checking=100"
     ])
 ]
 
@@ -56,10 +57,9 @@ let timingWarningFlags: [SwiftSetting] = [
 let testSettings: [SwiftSetting] =
     strictSettings + timingWarningFlags + [.unsafeFlags(["-enable-actor-data-race-checks"])]
 
-// Dev-only tooling is gated behind `ADDB_DEV` so packages that depend on ADDB never
-// resolve it. The `format` / `lint` command plugins carry no external dependencies,
-// so they are always available; build-time lint enforcement (`LintBuild`) attaches
-// to the libraries only in dev/CI.
+// Dev-only tooling is gated behind `ADDB_DEV` so packages that depend on ADDB never resolve it. The
+// shared ADBuildTools `format` / `lint` / `LintBuild` plugins resolve only with the flag set (CI and the
+// git hooks set it).
 let isDev = Context.environment["ADDB_DEV"] != nil
 
 // Opt-in `-enable-testing` for ADDBCore (`ADDB_TESTING=1`), so the separate ADSQL
@@ -82,6 +82,14 @@ let adfoundationDependency: Package.Dependency = {
 
 var packageDependencies: [Package.Dependency] = [adfoundationDependency]
 if isDev {
+    // Shared lint/format tooling (Format/Lint/LintBuild plugins + canonical `.swift-format`). Dev-only,
+    // resolved from a local checkout via `ADBUILDTOOLS_PATH`, otherwise the published `main` branch.
+    if let path = Context.environment["ADBUILDTOOLS_PATH"], !path.isEmpty {
+        packageDependencies.append(.package(path: path))
+    } else {
+        packageDependencies.append(
+            .package(url: "https://github.com/g-cqd/ADBuildTools.git", branch: "main"))
+    }
     packageDependencies.append(
         .package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.0.0"))
     // ordo-one's statistically-rigorous benchmark framework (p-percentile latencies + malloc
@@ -92,7 +100,8 @@ if isDev {
         .package(url: "https://github.com/ordo-one/benchmark", from: "1.4.0"))
 }
 
-let libraryBuildPlugins: [Target.PluginUsage] = isDev ? ["LintBuild"] : []
+let libraryBuildPlugins: [Target.PluginUsage] =
+    isDev ? [.plugin(name: "LintBuild", package: "ADBuildTools")] : []
 
 let package = Package(
     name: "ADDB",
@@ -104,7 +113,7 @@ let package = Package(
         .iOS(.v26),
         .tvOS(.v26),
         .watchOS(.v26),
-        .visionOS(.v26),
+        .visionOS(.v26)
     ],
     products: [
         // The database product: a thin public façade that re-exports the engine's
@@ -113,7 +122,7 @@ let package = Package(
         // The engine module itself. The separate `ADSQL` package links this and
         // imports its `@_spi(ADDBEngine)` surface (the broad engine API the SQL
         // layer drives). General consumers should prefer the `ADDB` façade.
-        .library(name: "ADDBCore", targets: ["ADDBCore"]),
+        .library(name: "ADDBCore", targets: ["ADDBCore"])
     ],
     dependencies: packageDependencies,
     targets: [
@@ -124,7 +133,7 @@ let package = Package(
             name: "ADDBCore",
             dependencies: [
                 .product(name: "ADFCore", package: "ADFoundation"),
-                .product(name: "ADFIO", package: "ADFoundation"),
+                .product(name: "ADFIO", package: "ADFoundation")
             ],
             swiftSettings: kernelSettings + testingSettings,
             plugins: libraryBuildPlugins),
@@ -140,20 +149,9 @@ let package = Package(
         .testTarget(
             name: "ADDBCoreTests",
             dependencies: ["ADDBCore"],
-            swiftSettings: testSettings),
+            swiftSettings: testSettings)
 
-        // Developer tooling. Command plugins are dependency-free (they drive the
-        // toolchain's bundled `swift format`), so they impose nothing on consumers.
-        .plugin(
-            name: "Format",
-            capability: .command(
-                intent: .custom(verb: "format", description: "Format Swift sources with swift-format"),
-                permissions: [.writeToPackageDirectory(reason: "Format Swift sources with swift-format")])),
-        .plugin(
-            name: "Lint",
-            capability: .command(
-                intent: .custom(verb: "lint", description: "Check formatting (swift-format strict)"))),
-        .plugin(name: "LintBuild", capability: .buildTool()),
+        // Format / lint / LintBuild come from the shared ADBuildTools dev dependency.
     ]
 )
 
@@ -166,7 +164,7 @@ if isDev {
             name: "ADDBSuite",
             dependencies: [
                 "ADDBCore",
-                .product(name: "Benchmark", package: "benchmark"),
+                .product(name: "Benchmark", package: "benchmark")
             ],
             path: "Benchmarks/ADDBSuite",
             swiftSettings: strictSettings,

@@ -24,8 +24,8 @@ import ADFCore
 
     static func entryKey(gen: UInt64, seq: UInt16) -> [UInt8] {
         var key = [UInt8](repeating: 0, count: keySize)
-        withUnsafeBytes(of: gen.bigEndian) { unsafe key.replaceSubrange(0..<8, with: $0) }
-        withUnsafeBytes(of: seq.bigEndian) { unsafe key.replaceSubrange(8..<10, with: $0) }
+        withUnsafeBytes(of: gen.bigEndian) { unsafe key.replaceSubrange(0 ..< 8, with: $0) }
+        withUnsafeBytes(of: seq.bigEndian) { unsafe key.replaceSubrange(8 ..< 10, with: $0) }
         return key
     }
 
@@ -91,7 +91,7 @@ import ADFCore
             }
             var pages: [UInt64] = []
             pages.reserveCapacity(count)
-            for i in 0..<count {
+            for i in 0 ..< count {
                 unsafe pages.append(
                     UInt64(littleEndian: bytes.loadUnaligned(fromByteOffset: 4 + 8 * i, as: UInt64.self)))
             }
@@ -102,7 +102,7 @@ import ADFCore
         pages.reserveCapacity(count)
         var offset = 4
         var previous: UInt64 = 0
-        for i in 0..<count {
+        for i in 0 ..< count {
             guard let delta = unsafe readVarint(bytes, &offset) else {
                 throw DBError.integrityFailure("free entry varint truncated")
             }
@@ -171,7 +171,7 @@ import ADFCore
             writtenPendingFree = ctx.pendingFree.count
             var index = 0
             while index < fresh.count {
-                let chunk = fresh[index..<min(index + pagesPerEntry, fresh.count)]
+                let chunk = fresh[index ..< min(index + pagesPerEntry, fresh.count)]
                 try putEntry(ctx, &free, gen: commitGen, seq: genSeq, pages: chunk)
                 genSeq += 1
                 index += chunk.count
@@ -201,7 +201,7 @@ import ADFCore
         var zeroSeq: UInt16 = 0
         var index = 0
         while index < pool.count {
-            let chunk = pool[index..<min(index + pagesPerEntry, pool.count)]
+            let chunk = pool[index ..< min(index + pagesPerEntry, pool.count)]
             try putEntry(ctx, &free, gen: 0, seq: zeroSeq, pages: chunk)
             zeroSeq += 1
             index += chunk.count

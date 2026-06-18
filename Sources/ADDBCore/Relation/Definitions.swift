@@ -109,21 +109,21 @@ public struct TableDefinition: Equatable, Sendable {
             }
             if let defaultValue = column.defaultValue {
                 switch defaultValue {
-                case .datetimeNow:
-                    guard column.type == .text else {
-                        throw DBError.invalidDefinition(
-                            "table \(name).\(column.name): datetime('now') default requires TEXT")
-                    }
-                case .value(.null):
-                    guard !column.notNull else {
-                        throw DBError.invalidDefinition(
-                            "table \(name).\(column.name): NULL default on NOT NULL column")
-                    }
-                case .value(let value):
-                    if let type = value.columnType, type != column.type {
-                        throw DBError.invalidDefinition(
-                            "table \(name).\(column.name): default type \(value.typeName) ≠ \(column.type.name)")
-                    }
+                    case .datetimeNow:
+                        guard column.type == .text else {
+                            throw DBError.invalidDefinition(
+                                "table \(name).\(column.name): datetime('now') default requires TEXT")
+                        }
+                    case .value(.null):
+                        guard !column.notNull else {
+                            throw DBError.invalidDefinition(
+                                "table \(name).\(column.name): NULL default on NOT NULL column")
+                        }
+                    case .value(let value):
+                        if let type = value.columnType, type != column.type {
+                            throw DBError.invalidDefinition(
+                                "table \(name).\(column.name): default type \(value.typeName) ≠ \(column.type.name)")
+                        }
                 }
             }
         }

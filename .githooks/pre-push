@@ -1,5 +1,5 @@
 #!/bin/sh
-# ADSQL pre-push hook — run the test suite before publishing.
+# Shared pre-push hook — run the test suite before publishing.
 #
 # Enable once per clone:   git config core.hooksPath .githooks
 echo "pre-push: swift test"

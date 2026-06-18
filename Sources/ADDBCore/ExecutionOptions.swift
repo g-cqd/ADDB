@@ -66,10 +66,10 @@ public struct ExecutionOptions: Sendable, Equatable {
     /// and insert strategies are runtime-only and never change a plan.
     @_spi(ADDBEngine) public var planningTag: Int {
         switch join {
-        case .nestedLoop: 0
-        case .hash: 1
-        case .merge: 2
-        case .auto: 3
+            case .nestedLoop: 0
+            case .hash: 1
+            case .merge: 2
+            case .auto: 3
         }
     }
 }

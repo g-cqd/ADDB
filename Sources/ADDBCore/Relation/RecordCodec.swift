@@ -35,22 +35,22 @@ import ADFCore
         Varint.append(UInt64(values.count), to: &out)
         for value in values {
             switch value {
-            case .null:
-                out.append(CellTag.null)
-            case .integer(let v):
-                out.append(CellTag.integer)
-                Varint.append(Varint.zigzag(v), to: &out)
-            case .real(let d):
-                out.append(CellTag.real)
-                withUnsafeBytes(of: d.bitPattern.littleEndian) { unsafe out.append(contentsOf: $0) }
-            case .text(let s):
-                out.append(CellTag.text)
-                Varint.append(UInt64(s.utf8.count), to: &out)
-                out.append(contentsOf: s.utf8)
-            case .blob(let b):
-                out.append(CellTag.blob)
-                Varint.append(UInt64(b.count), to: &out)
-                out.append(contentsOf: b)
+                case .null:
+                    out.append(CellTag.null)
+                case .integer(let v):
+                    out.append(CellTag.integer)
+                    Varint.append(Varint.zigzag(v), to: &out)
+                case .real(let d):
+                    out.append(CellTag.real)
+                    withUnsafeBytes(of: d.bitPattern.littleEndian) { unsafe out.append(contentsOf: $0) }
+                case .text(let s):
+                    out.append(CellTag.text)
+                    Varint.append(UInt64(s.utf8.count), to: &out)
+                    out.append(contentsOf: s.utf8)
+                case .blob(let b):
+                    out.append(CellTag.blob)
+                    Varint.append(UInt64(b.count), to: &out)
+                    out.append(contentsOf: b)
             }
         }
     }
@@ -62,7 +62,7 @@ import ADFCore
         }
         var values: [Value] = []
         values.reserveCapacity(Int(rawCount))
-        for _ in 0..<rawCount {
+        for _ in 0 ..< rawCount {
             unsafe values.append(try decodeOne(bytes, &offset))
         }
         return values
@@ -79,7 +79,7 @@ import ADFCore
         }
         var offsets: [Int] = []
         offsets.reserveCapacity(Int(rawCount))
-        for _ in 0..<rawCount {
+        for _ in 0 ..< rawCount {
             offsets.append(offset)
             unsafe try skipOne(bytes, &offset)
         }
@@ -107,11 +107,11 @@ import ADFCore
             let stored = unsafe try readHeader(bytes, &offset)
             if index >= stored {
                 switch columns[index].defaultValue {
-                case .value(let v): return v
-                case .datetimeNow, nil: return .null
+                    case .value(let v): return v
+                    case .datetimeNow, nil: return .null
                 }
             }
-            for _ in 0..<index { unsafe try skipCell(bytes, &offset) }
+            for _ in 0 ..< index { unsafe try skipCell(bytes, &offset) }
             return unsafe try decodeCell(bytes, at: offset)
         }
     }
@@ -156,7 +156,7 @@ import ADFCore
         var offset = 0
         let stored = unsafe try readHeader(bytes, &offset)
         guard index < stored else { return try body(nil) }
-        for _ in 0..<index { unsafe try skipCell(bytes, &offset) }
+        for _ in 0 ..< index { unsafe try skipCell(bytes, &offset) }
         guard offset < bytes.count else {
             throw DBError.integrityFailure("row record: truncated cell")
         }
@@ -167,7 +167,7 @@ import ADFCore
         else {
             throw DBError.integrityFailure("row record: truncated cell payload")
         }
-        let payload = unsafe UnsafeRawBufferPointer(rebasing: bytes[offset..<offset + Int(length)])
+        let payload = unsafe UnsafeRawBufferPointer(rebasing: bytes[offset ..< offset + Int(length)])
         return unsafe try body(payload)
     }
 
@@ -215,36 +215,36 @@ import ADFCore
         let tag = unsafe bytes[offset]
         offset += 1
         switch tag {
-        case CellTag.null:
-            return .null
-        case CellTag.integer:
-            guard let raw = unsafe Varint.read(bytes, &offset) else {
-                throw DBError.integrityFailure("row record: truncated integer")
-            }
-            return .integer(Varint.unzigzag(raw))
-        case CellTag.real:
-            guard offset + 8 <= bytes.count else {
-                throw DBError.integrityFailure("row record: truncated real")
-            }
-            let bits = unsafe UInt64(littleEndian: bytes.loadUnaligned(fromByteOffset: offset, as: UInt64.self))
-            offset += 8
-            return .real(Double(bitPattern: bits))
-        case CellTag.text:
-            guard let length = unsafe Varint.read(bytes, &offset), length <= UInt64(bytes.count - offset) else {
-                throw DBError.integrityFailure("row record: truncated text")
-            }
-            let slice = unsafe bytes[offset..<offset + Int(length)]
-            offset += Int(length)
-            return unsafe .text(String(decoding: slice, as: UTF8.self))
-        case CellTag.blob:
-            guard let length = unsafe Varint.read(bytes, &offset), length <= UInt64(bytes.count - offset) else {
-                throw DBError.integrityFailure("row record: truncated blob")
-            }
-            let value = unsafe Value.blob([UInt8](bytes[offset..<offset + Int(length)]))
-            offset += Int(length)
-            return value
-        default:
-            throw DBError.integrityFailure("row record: unknown cell tag \(tag)")
+            case CellTag.null:
+                return .null
+            case CellTag.integer:
+                guard let raw = unsafe Varint.read(bytes, &offset) else {
+                    throw DBError.integrityFailure("row record: truncated integer")
+                }
+                return .integer(Varint.unzigzag(raw))
+            case CellTag.real:
+                guard offset + 8 <= bytes.count else {
+                    throw DBError.integrityFailure("row record: truncated real")
+                }
+                let bits = unsafe UInt64(littleEndian: bytes.loadUnaligned(fromByteOffset: offset, as: UInt64.self))
+                offset += 8
+                return .real(Double(bitPattern: bits))
+            case CellTag.text:
+                guard let length = unsafe Varint.read(bytes, &offset), length <= UInt64(bytes.count - offset) else {
+                    throw DBError.integrityFailure("row record: truncated text")
+                }
+                let slice = unsafe bytes[offset ..< offset + Int(length)]
+                offset += Int(length)
+                return unsafe .text(String(decoding: slice, as: UTF8.self))
+            case CellTag.blob:
+                guard let length = unsafe Varint.read(bytes, &offset), length <= UInt64(bytes.count - offset) else {
+                    throw DBError.integrityFailure("row record: truncated blob")
+                }
+                let value = unsafe Value.blob([UInt8](bytes[offset ..< offset + Int(length)]))
+                offset += Int(length)
+                return value
+            default:
+                throw DBError.integrityFailure("row record: unknown cell tag \(tag)")
         }
     }
 
@@ -258,24 +258,24 @@ import ADFCore
         let tag = unsafe bytes[offset]
         offset += 1
         switch tag {
-        case CellTag.null:
-            return
-        case CellTag.integer:
-            guard unsafe Varint.read(bytes, &offset) != nil else {
-                throw DBError.integrityFailure("row record: truncated integer")
-            }
-        case CellTag.real:
-            guard offset + 8 <= bytes.count else {
-                throw DBError.integrityFailure("row record: truncated real")
-            }
-            offset += 8
-        case CellTag.text, CellTag.blob:
-            guard let length = unsafe Varint.read(bytes, &offset), length <= UInt64(bytes.count - offset) else {
-                throw DBError.integrityFailure("row record: truncated cell payload")
-            }
-            offset += Int(length)
-        default:
-            throw DBError.integrityFailure("row record: unknown cell tag \(tag)")
+            case CellTag.null:
+                return
+            case CellTag.integer:
+                guard unsafe Varint.read(bytes, &offset) != nil else {
+                    throw DBError.integrityFailure("row record: truncated integer")
+                }
+            case CellTag.real:
+                guard offset + 8 <= bytes.count else {
+                    throw DBError.integrityFailure("row record: truncated real")
+                }
+                offset += 8
+            case CellTag.text, CellTag.blob:
+                guard let length = unsafe Varint.read(bytes, &offset), length <= UInt64(bytes.count - offset) else {
+                    throw DBError.integrityFailure("row record: truncated cell payload")
+                }
+                offset += Int(length)
+            default:
+                throw DBError.integrityFailure("row record: unknown cell tag \(tag)")
         }
     }
 }

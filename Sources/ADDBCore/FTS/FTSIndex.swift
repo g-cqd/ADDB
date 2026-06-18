@@ -80,7 +80,7 @@ import ADFCore
             }
             var fieldLengths = [UInt32](repeating: 0, count: columns)
             var termInfo: [[UInt8]: TermAccumulator] = [:]
-            for column in 0..<min(columns, doc.columnTexts.count) {
+            for column in 0 ..< min(columns, doc.columnTexts.count) {
                 try tokenizer.tokenize(Array(doc.columnTexts[column].utf8)) { (token) throws(DBError) in
                     fieldLengths[column] += 1
                     guard !token.term.isEmpty, token.term.count <= maxTermBytes else { return }
@@ -98,10 +98,11 @@ import ADFCore
                 }
             }
             for (term, info) in termInfo {
-                termPostings[term, default: []].append(
-                    FTSPosting(
-                        docid: doc.docid, fieldTFs: info.fieldTFs,
-                        positions: storePositions ? info.positions : []))
+                termPostings[term, default: []]
+                    .append(
+                        FTSPosting(
+                            docid: doc.docid, fieldTFs: info.fieldTFs,
+                            positions: storePositions ? info.positions : []))
             }
             forwards.append((doc.docid, fieldLengths, Array(termInfo.keys)))
         }
@@ -131,7 +132,7 @@ import ADFCore
                     while start < combined.count {
                         let end = min(start + FTSPostings.blockSize, combined.count)
                         try writeBlock(
-                            ctx, &postings, term: term, blockNo: no, Array(combined[start..<end]),
+                            ctx, &postings, term: term, blockNo: no, Array(combined[start ..< end]),
                             columns: columns, positions: storePositions)
                         no += 1
                         start = end
@@ -157,7 +158,7 @@ import ADFCore
                 ctx, &stats, key: KeyCodec.rowKey(fwd.docid),
                 value: encodeForward(fieldLengths: fwd.fieldLengths, terms: fwd.terms))
             global.docCount += 1
-            for column in 0..<min(columns, fwd.fieldLengths.count) {
+            for column in 0 ..< min(columns, fwd.fieldLengths.count) {
                 global.totalFieldLengths[column] += UInt64(fwd.fieldLengths[column])
             }
         }
@@ -214,7 +215,7 @@ import ADFCore
                 ctx, postings, term: term, columns: columns, positions: storePositions)
             list.removeAll { $0.docid == docid }
             // Drop the term's existing blocks, then re-pack what remains.
-            for no in 0...lastNo { _ = try Relation.deleteBytes(ctx, &postings, key: blockKey(term, no)) }
+            for no in 0 ... lastNo { _ = try Relation.deleteBytes(ctx, &postings, key: blockKey(term, no)) }
             if list.isEmpty {
                 _ = try Relation.deleteBytes(ctx, &dict, key: term)
             } else {
@@ -226,7 +227,7 @@ import ADFCore
         _ = try Relation.deleteBytes(ctx, &stats, key: docKey)
         var global = try readGlobal(ctx, stats, columns: columns)
         if global.docCount > 0 { global.docCount -= 1 }
-        for column in 0..<min(columns, forward.fieldLengths.count) {
+        for column in 0 ..< min(columns, forward.fieldLengths.count) {
             let length = UInt64(forward.fieldLengths[column])
             global.totalFieldLengths[column] =
                 global.totalFieldLengths[column] >= length ? global.totalFieldLengths[column] - length : 0
@@ -357,7 +358,7 @@ import ADFCore
                 throw DBError.integrityFailure("fts forward: missing field count")
             }
             var total = 0.0
-            for _ in 0..<fieldCount {
+            for _ in 0 ..< fieldCount {
                 guard let length = unsafe Varint.read(raw, &offset) else {
                     throw DBError.integrityFailure("fts forward: truncated field length")
                 }
@@ -460,7 +461,7 @@ import ADFCore
     @inline(__always)
     private static func rawHasPrefix(_ key: UnsafeRawBufferPointer, _ prefix: [UInt8]) -> Bool {
         guard key.count >= prefix.count else { return false }
-        for index in 0..<prefix.count where unsafe key[index] != prefix[index] { return false }
+        for index in 0 ..< prefix.count where unsafe key[index] != prefix[index] { return false }
         return true
     }
 
@@ -506,7 +507,7 @@ import ADFCore
         while start < list.count {
             let end = min(start + FTSPostings.blockSize, list.count)
             try writeBlock(
-                ctx, &handle, term: term, blockNo: no, Array(list[start..<end]), columns: columns,
+                ctx, &handle, term: term, blockNo: no, Array(list[start ..< end]), columns: columns,
                 positions: positions)
             no += 1
             start = end
@@ -520,7 +521,7 @@ import ADFCore
         _ list: [FTSPosting], columns: Int, positions: Bool
     ) throws(DBError) {
         let newLastNo = blockNo(forDF: UInt64(list.count))
-        for no in 0...max(oldLastNo, newLastNo) {
+        for no in 0 ... max(oldLastNo, newLastNo) {
             _ = try Relation.deleteBytes(ctx, &handle, key: blockKey(term, no))
         }
         try writePacked(ctx, &handle, term: term, list, columns: columns, positions: positions)
@@ -589,7 +590,7 @@ import ADFCore
             throw DBError.integrityFailure("fts forward: missing field count")
         }
         var fieldLengths: [UInt32] = []
-        for _ in 0..<Int(fieldCount) {
+        for _ in 0 ..< Int(fieldCount) {
             guard let length = Varint.read(bytes, &offset) else {
                 throw DBError.integrityFailure("fts forward: truncated field length")
             }
@@ -599,11 +600,11 @@ import ADFCore
             throw DBError.integrityFailure("fts forward: missing term count")
         }
         var terms: [[UInt8]] = []
-        for _ in 0..<Int(termCount) {
+        for _ in 0 ..< Int(termCount) {
             guard let length = Varint.read(bytes, &offset), offset + Int(length) <= bytes.count else {
                 throw DBError.integrityFailure("fts forward: truncated term")
             }
-            terms.append(Array(bytes[offset..<offset + Int(length)]))
+            terms.append(Array(bytes[offset ..< offset + Int(length)]))
             offset += Int(length)
         }
         return (fieldLengths, terms)

@@ -25,7 +25,7 @@ public struct PorterTokenizer: FTSTokenizer {
 enum Porter {
     static func stem(_ word: [UInt8]) -> [UInt8] {
         guard word.count > 2 else { return word }
-        for byte in word where !(0x61...0x7A).contains(byte) { return word }  // ASCII a–z only
+        for byte in word where !(0x61 ... 0x7A).contains(byte) { return word }  // ASCII a–z only
         var stemmer = PorterStemmer(b: word)
         stemmer.step1a()
         stemmer.step1b()
@@ -51,9 +51,9 @@ private struct PorterStemmer {
 
     func isConsonant(_ index: Int) -> Bool {
         switch b[index] {
-        case Self.a, Self.e, Self.i, Self.o, Self.u: return false
-        case Self.y: return index == 0 ? true : !isConsonant(index - 1)
-        default: return true
+            case Self.a, Self.e, Self.i, Self.o, Self.u: return false
+            case Self.y: return index == 0 ? true : !isConsonant(index - 1)
+            default: return true
         }
     }
 
@@ -72,7 +72,7 @@ private struct PorterStemmer {
     }
 
     func containsVowel(_ n: Int) -> Bool {
-        for index in 0..<n where !isConsonant(index) { return true }
+        for index in 0 ..< n where !isConsonant(index) { return true }
         return false
     }
 
@@ -110,7 +110,8 @@ private struct PorterStemmer {
         else if ends("ies") {
             b.removeLast(2)
         }  // ies → i
-        else if ends("ss") { /* keep */
+        else if ends("ss") {
+            // keep
         } else if ends("s") {
             b.removeLast(1)
         }
@@ -157,7 +158,7 @@ private struct PorterStemmer {
             ("izer", "ize"), ("abli", "able"), ("alli", "al"), ("entli", "ent"), ("eli", "e"),
             ("ousli", "ous"), ("ization", "ize"), ("ation", "ate"), ("ator", "ate"),
             ("alism", "al"), ("iveness", "ive"), ("fulness", "ful"), ("ousness", "ous"),
-            ("aliti", "al"), ("iviti", "ive"), ("biliti", "ble"),
+            ("aliti", "al"), ("iviti", "ive"), ("biliti", "ble")
         ]
         for (suffix, replacement) in rules where ends(suffix) {
             if measure(b.count - suffix.utf8.count) > 0 { replaceSuffix(suffix.utf8.count, replacement) }
@@ -168,7 +169,7 @@ private struct PorterStemmer {
     mutating func step3() {
         let rules: [(String, String)] = [
             ("icate", "ic"), ("ative", ""), ("alize", "al"), ("iciti", "ic"),
-            ("ical", "ic"), ("ful", ""), ("ness", ""),
+            ("ical", "ic"), ("ful", ""), ("ness", "")
         ]
         for (suffix, replacement) in rules where ends(suffix) {
             if measure(b.count - suffix.utf8.count) > 0 { replaceSuffix(suffix.utf8.count, replacement) }
@@ -180,7 +181,7 @@ private struct PorterStemmer {
         // "ement" before "ment" before "ent"; "ion" handled separately (needs s/t).
         let suffixes = [
             "al", "ance", "ence", "er", "ic", "able", "ible", "ant", "ement", "ment", "ent",
-            "ou", "ism", "ate", "iti", "ous", "ive", "ize",
+            "ou", "ism", "ate", "iti", "ous", "ive", "ize"
         ]
         for suffix in suffixes where ends(suffix) {
             if measure(b.count - suffix.utf8.count) > 1 { b.removeLast(suffix.utf8.count) }

@@ -80,16 +80,16 @@ import ADFCore
             let valueLen = unsafe Int(page.loadLE16(at + 3))
             let keyStart = at + 5
             return unsafe LeafCell(
-                key: UnsafeRawBufferPointer(rebasing: page[keyStart..<keyStart + keyLen]),
+                key: UnsafeRawBufferPointer(rebasing: page[keyStart ..< keyStart + keyLen]),
                 inlineValue: UnsafeRawBufferPointer(
-                    rebasing: page[keyStart + keyLen..<keyStart + keyLen + valueLen]),
+                    rebasing: page[keyStart + keyLen ..< keyStart + keyLen + valueLen]),
                 overflowHead: 0, overflowLength: 0)
         }
         let valueLen = unsafe page.loadLE32(at + 3)
         let head = unsafe page.loadLE64(at + 7)
         let keyStart = at + 15
         return unsafe LeafCell(
-            key: UnsafeRawBufferPointer(rebasing: page[keyStart..<keyStart + keyLen]),
+            key: UnsafeRawBufferPointer(rebasing: page[keyStart ..< keyStart + keyLen]),
             inlineValue: nil, overflowHead: head, overflowLength: valueLen)
     }
 
@@ -99,7 +99,7 @@ import ADFCore
     ) -> UnsafeRawBufferPointer {
         let at = unsafe cellStart(page, index)
         let keyLen = unsafe Int(page.loadLE16(at))
-        return unsafe UnsafeRawBufferPointer(rebasing: page[at + 10..<at + 10 + keyLen])
+        return unsafe UnsafeRawBufferPointer(rebasing: page[at + 10 ..< at + 10 + keyLen])
     }
 
     @inline(__always)
@@ -117,7 +117,7 @@ import ADFCore
         let flags = unsafe page[at]
         let keyLen = unsafe Int(page.loadLE16(at + 1))
         let keyStart = at + (flags & leafOverflowFlag == 0 ? 5 : 15)
-        return unsafe UnsafeRawBufferPointer(rebasing: page[keyStart..<keyStart + keyLen])
+        return unsafe UnsafeRawBufferPointer(rebasing: page[keyStart ..< keyStart + keyLen])
     }
 
     /// Total encoded size of the cell at `index` (used by removal accounting
@@ -125,15 +125,15 @@ import ADFCore
     @_spi(ADDBEngine) public static func cellLength(_ page: UnsafeRawBufferPointer, _ index: Int) -> Int {
         let at = unsafe cellStart(page, index)
         switch unsafe PageHeader.pageType(page) {
-        case .branch:
-            return unsafe branchCellSize(keyLen: Int(page.loadLE16(at)))
-        default:
-            let flags = unsafe page[at]
-            let keyLen = unsafe Int(page.loadLE16(at + 1))
-            if flags & leafOverflowFlag == 0 {
-                return unsafe inlineLeafCellSize(keyLen: keyLen, valueLen: Int(page.loadLE16(at + 3)))
-            }
-            return overflowLeafCellSize(keyLen: keyLen)
+            case .branch:
+                return unsafe branchCellSize(keyLen: Int(page.loadLE16(at)))
+            default:
+                let flags = unsafe page[at]
+                let keyLen = unsafe Int(page.loadLE16(at + 1))
+                if flags & leafOverflowFlag == 0 {
+                    return unsafe inlineLeafCellSize(keyLen: keyLen, valueLen: Int(page.loadLE16(at + 3)))
+                }
+                return overflowLeafCellSize(keyLen: keyLen)
         }
     }
 
@@ -187,16 +187,16 @@ import ADFCore
 
         var cellBodySize: Int {
             switch self {
-            case .inline(let v): return 4 + v.count  // valueLen u16 + value, after flags+keyLen
-            case .overflow: return 14  // valueLen u32 + head u64, after flags+keyLen
+                case .inline(let v): return 4 + v.count  // valueLen u16 + value, after flags+keyLen
+                case .overflow: return 14  // valueLen u32 + head u64, after flags+keyLen
             }
         }
     }
 
     @_spi(ADDBEngine) public static func leafCellSize(keyLen: Int, value: LeafValue) -> Int {
         switch value {
-        case .inline(let v): return inlineLeafCellSize(keyLen: keyLen, valueLen: v.count)
-        case .overflow: return overflowLeafCellSize(keyLen: keyLen)
+            case .inline(let v): return inlineLeafCellSize(keyLen: keyLen, valueLen: v.count)
+            case .overflow: return overflowLeafCellSize(keyLen: keyLen)
         }
     }
 
@@ -205,18 +205,18 @@ import ADFCore
         key: UnsafeRawBufferPointer, value: LeafValue
     ) {
         switch value {
-        case .inline(let v):
-            unsafe page[offset] = 0
-            unsafe page.storeLE16(UInt16(key.count), at: offset + 1)
-            unsafe page.storeLE16(UInt16(v.count), at: offset + 3)
-            unsafe copyBytes(into: page, at: offset + 5, from: key)
-            unsafe copyBytes(into: page, at: offset + 5 + key.count, from: v)
-        case .overflow(let head, let length):
-            unsafe page[offset] = leafOverflowFlag
-            unsafe page.storeLE16(UInt16(key.count), at: offset + 1)
-            unsafe page.storeLE32(length, at: offset + 3)
-            unsafe page.storeLE64(head, at: offset + 7)
-            unsafe copyBytes(into: page, at: offset + 15, from: key)
+            case .inline(let v):
+                unsafe page[offset] = 0
+                unsafe page.storeLE16(UInt16(key.count), at: offset + 1)
+                unsafe page.storeLE16(UInt16(v.count), at: offset + 3)
+                unsafe copyBytes(into: page, at: offset + 5, from: key)
+                unsafe copyBytes(into: page, at: offset + 5 + key.count, from: v)
+            case .overflow(let head, let length):
+                unsafe page[offset] = leafOverflowFlag
+                unsafe page.storeLE16(UInt16(key.count), at: offset + 1)
+                unsafe page.storeLE32(length, at: offset + 3)
+                unsafe page.storeLE64(head, at: offset + 7)
+                unsafe copyBytes(into: page, at: offset + 15, from: key)
         }
     }
 
@@ -234,7 +234,7 @@ import ADFCore
         into page: UnsafeMutableRawBufferPointer, at offset: Int, from source: UnsafeRawBufferPointer
     ) {
         guard unsafe !source.isEmpty else { return }
-        unsafe UnsafeMutableRawBufferPointer(rebasing: page[offset..<offset + source.count])
+        unsafe UnsafeMutableRawBufferPointer(rebasing: page[offset ..< offset + source.count])
             .copyMemory(from: source)
     }
 
@@ -249,11 +249,10 @@ import ADFCore
         let ro = UnsafeRawBufferPointer(page)
         let need = size + Format.slotSize
         if unsafe PageHeader.freeSpace(ro) < need {
-            if unsafe PageHeader.freeSpace(ro) + PageHeader.fragmentedBytes(ro) >= need {
-                unsafe compact(page)
-            } else {
+            guard unsafe PageHeader.freeSpace(ro) + PageHeader.fragmentedBytes(ro) >= need else {
                 return false
             }
+            unsafe compact(page)
         }
         let count = unsafe PageHeader.cellCount(ro)
         let newOffset = unsafe PageHeader.cellAreaStart(ro) - size
@@ -329,13 +328,13 @@ import ADFCore
         let ro = unsafe scratch.readOnly
         let count = unsafe PageHeader.cellCount(ro)
         var writeEnd = Format.pageSize
-        for i in 0..<count {
+        for i in 0 ..< count {
             let length = unsafe cellLength(ro, i)
             let src = unsafe PageHeader.slotOffset(ro, i)
             writeEnd -= length
             unsafe copyBytes(
                 into: page, at: writeEnd,
-                from: UnsafeRawBufferPointer(rebasing: ro[src..<src + length]))
+                from: UnsafeRawBufferPointer(rebasing: ro[src ..< src + length]))
             unsafe PageHeader.setSlotOffset(page, i, writeEnd)
         }
         unsafe PageHeader.setCellAreaStart(page, writeEnd)
@@ -348,7 +347,7 @@ import ADFCore
     @inline(__always)
     static func cellBytes(_ page: UnsafeRawBufferPointer, _ i: Int) -> UnsafeRawBufferPointer {
         let offset = unsafe PageHeader.slotOffset(page, i)
-        return unsafe UnsafeRawBufferPointer(rebasing: page[offset..<offset + cellLength(page, i)])
+        return unsafe UnsafeRawBufferPointer(rebasing: page[offset ..< offset + cellLength(page, i)])
     }
 
     /// Key bytes of a standalone leaf-cell buffer, viewed in place.
@@ -356,26 +355,26 @@ import ADFCore
     static func leafCellKeyBytes(_ cell: UnsafeRawBufferPointer) -> UnsafeRawBufferPointer {
         let keyStart = unsafe cell[0] & leafOverflowFlag == 0 ? 5 : 15
         let keyLen = unsafe Int(cell.loadLE16(1))
-        return unsafe UnsafeRawBufferPointer(rebasing: cell[keyStart..<keyStart + keyLen])
+        return unsafe UnsafeRawBufferPointer(rebasing: cell[keyStart ..< keyStart + keyLen])
     }
 
     /// Key bytes of a standalone branch-cell buffer, viewed in place.
     @inline(__always)
     static func branchCellKeyBytes(_ cell: UnsafeRawBufferPointer) -> UnsafeRawBufferPointer {
         let keyLen = unsafe Int(cell.loadLE16(0))
-        return unsafe UnsafeRawBufferPointer(rebasing: cell[10..<10 + keyLen])
+        return unsafe UnsafeRawBufferPointer(rebasing: cell[10 ..< 10 + keyLen])
     }
 
     static func keyOfCellImage(_ cell: [UInt8], type: PageType) -> [UInt8] {
         cell.withUnsafeBytes { raw in
             switch type {
-            case .branch:
-                let keyLen = unsafe Int(raw.loadLE16(0))
-                return [UInt8](cell[10..<10 + keyLen])
-            default:
-                let keyLen = unsafe Int(raw.loadLE16(1))
-                let keyStart = unsafe raw[0] & leafOverflowFlag == 0 ? 5 : 15
-                return [UInt8](cell[keyStart..<keyStart + keyLen])
+                case .branch:
+                    let keyLen = unsafe Int(raw.loadLE16(0))
+                    return [UInt8](cell[10 ..< 10 + keyLen])
+                default:
+                    let keyLen = unsafe Int(raw.loadLE16(1))
+                    let keyStart = unsafe raw[0] & leafOverflowFlag == 0 ? 5 : 15
+                    return [UInt8](cell[keyStart ..< keyStart + keyLen])
             }
         }
     }
@@ -393,9 +392,9 @@ import ADFCore
             unsafe p == index ? newCellSize : cellLength(original, p < index ? p : p - 1)
         }
         var total = 0
-        for p in 0..<logical { total += sizeOf(p) + Format.slotSize }
+        for p in 0 ..< logical { total += sizeOf(p) + Format.slotSize }
         var acc = 0
-        for p in 0..<logical {
+        for p in 0 ..< logical {
             acc += sizeOf(p) + Format.slotSize
             if acc * 2 >= total { return min(max(p + 1, 1), logical - 1) }
         }
@@ -441,10 +440,12 @@ import ADFCore
         return newCell.withUnsafeBytes { (newBytes: UnsafeRawBufferPointer) -> [UInt8] in
             unsafe PageHeader.initialize(left, type: .leaf)
             unsafe PageHeader.initialize(right, type: .leaf)
-            var leftEnd = Format.pageSize, rightEnd = Format.pageSize
-            var leftSlot = 0, rightSlot = 0
+            var leftEnd = Format.pageSize
+            var rightEnd = Format.pageSize
+            var leftSlot = 0
+            var rightSlot = 0
             var separator: [UInt8] = []
-            for p in 0..<logical {
+            for p in 0 ..< logical {
                 let bytes = unsafe p == index ? newBytes : cellBytes(src, p < index ? p : p - 1)
                 if p < split {
                     leftEnd -= bytes.count
@@ -498,8 +499,9 @@ import ADFCore
 
             unsafe PageHeader.initialize(left, type: .branch)
             unsafe PageHeader.setLink(left, leftmost)
-            var leftEnd = Format.pageSize, leftSlot = 0
-            for p in 0..<mid {
+            var leftEnd = Format.pageSize
+            var leftSlot = 0
+            for p in 0 ..< mid {
                 let bytes = unsafe p == index ? newBytes : cellBytes(src, p < index ? p : p - 1)
                 leftEnd -= bytes.count
                 unsafe copyBytes(into: left, at: leftEnd, from: bytes)
@@ -511,8 +513,9 @@ import ADFCore
 
             unsafe PageHeader.initialize(right, type: .branch)
             unsafe PageHeader.setLink(right, promotedChild)
-            var rightEnd = Format.pageSize, rightSlot = 0
-            for p in (mid + 1)..<logical {
+            var rightEnd = Format.pageSize
+            var rightSlot = 0
+            for p in (mid + 1) ..< logical {
                 let bytes = unsafe p == index ? newBytes : cellBytes(src, p < index ? p : p - 1)
                 rightEnd -= bytes.count
                 unsafe copyBytes(into: right, at: rightEnd, from: bytes)

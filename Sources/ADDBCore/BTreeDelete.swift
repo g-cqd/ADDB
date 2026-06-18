@@ -284,7 +284,7 @@ extension BTree {
 
     static func cellImage(_ page: UnsafeRawBufferPointer, _ index: Int) -> [UInt8] {
         let offset = unsafe PageHeader.slotOffset(page, index)
-        return unsafe [UInt8](page[offset..<offset + Node.cellLength(page, index)])
+        return unsafe [UInt8](page[offset ..< offset + Node.cellLength(page, index)])
     }
 
     private static func appendCellImage(_ image: [UInt8], to buf: PageBuf) {
@@ -303,7 +303,7 @@ extension BTree {
     }
 
     private static func appendAllCells(from source: UnsafeRawBufferPointer, to buf: PageBuf) {
-        for i in unsafe 0..<PageHeader.cellCount(source) {
+        for i in unsafe 0 ..< PageHeader.cellCount(source) {
             let offset = unsafe PageHeader.slotOffset(source, i)
             let length = unsafe Node.cellLength(source, i)
             let ok = unsafe Node.insertCell(
@@ -311,7 +311,7 @@ extension BTree {
             ) { page, dst in
                 unsafe Node.copyBytes(
                     into: page, at: dst,
-                    from: UnsafeRawBufferPointer(rebasing: source[offset..<offset + length]))
+                    from: UnsafeRawBufferPointer(rebasing: source[offset ..< offset + length]))
             }
             precondition(ok, "merge size was pre-checked")
         }

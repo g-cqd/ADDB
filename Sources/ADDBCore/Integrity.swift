@@ -70,7 +70,7 @@ public enum Integrity {
         for name in relationState.ftsRecords.keys.sorted() {
             let record = relationState.ftsRecords[name]!
             for (label, handle) in [
-                ("dict", record.dict), ("postings", record.postings), ("stats", record.stats),
+                ("dict", record.dict), ("postings", record.postings), ("stats", record.stats)
             ] {
                 let report = try BTree.validate(
                     resolver: resolver, tree: handle, verifyChecksums: verifyChecksums)
@@ -85,7 +85,7 @@ public enum Integrity {
             freeListed += 1
         }
         guard seen.count == Int(meta.pageCount) else {
-            let missing = (0..<meta.pageCount).filter { !seen.contains($0) }
+            let missing = (0 ..< meta.pageCount).filter { !seen.contains($0) }
             throw DBError.integrityFailure(
                 "leaked pages: \(Array(missing.prefix(20))) (\(missing.count) of \(meta.pageCount))")
         }
@@ -113,7 +113,7 @@ public enum Integrity {
     /// and per-table entry counts must equal row counts for every index.
     static func deepCheck(
         resolver: some PageResolver, state: RelationState
-    ) throws(DBError) -> Void {
+    ) throws(DBError) {
         for indexName in state.indexRecords.keys.sorted() {
             let index = state.indexRecords[indexName]!
             guard let tableName = state.tableName(for: index.tableId),

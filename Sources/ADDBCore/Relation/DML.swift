@@ -26,9 +26,9 @@ extension Relation {
                 value = provided
             } else {
                 switch column.defaultValue {
-                case .value(let v): value = v
-                case .datetimeNow: value = .text(CivilTime.utcNowString())
-                case nil: value = .null
+                    case .value(let v): value = v
+                    case .datetimeNow: value = .text(CivilTime.utcNowString())
+                    case nil: value = .null
                 }
             }
             if case .real(let d) = value, d.isNaN {
@@ -81,9 +81,9 @@ extension Relation {
                 value = supplied
             } else {
                 switch column.defaultValue {
-                case .value(let v): value = v
-                case .datetimeNow: value = .text(CivilTime.utcNowString())
-                case nil: value = .null
+                    case .value(let v): value = v
+                    case .datetimeNow: value = .text(CivilTime.utcNowString())
+                    case nil: value = .null
                 }
             }
             if case .real(let d) = value, d.isNaN {
@@ -131,8 +131,8 @@ extension Relation {
         }
         while row.count < columns.count {
             switch columns[row.count].defaultValue {
-            case .value(let v): row.append(v)
-            case .datetimeNow, nil: row.append(.null)
+                case .value(let v): row.append(v)
+                case .datetimeNow, nil: row.append(.null)
             }
         }
         if let aliasIndex = table.definition.rowidAliasIndex {
@@ -400,25 +400,25 @@ extension Relation {
 
         if !conflicts.isEmpty {
             switch onConflict {
-            case .abort:
-                throw DBError.uniqueViolation(table: tableName, index: conflicts[0].index)
-            case .ignore:
-                // SQLite consumes no rowid/sequence on an ignored insert: the local
-                // state copy (with its allocation) is simply discarded.
-                return nil
-            case .replace:
-                ctx.relation = state
-                var victims = Set(conflicts.map(\.rowid))
-                victims.remove(rowid)  // same-rowid victim handled by overwrite below
-                for victim in victims.sorted() {
-                    _ = try delete(ctx, from: tableName, rowid: victim)
-                }
-                // Same-rowid conflict: remove the old row's index entries first.
-                if conflicts.contains(where: { $0.rowid == rowid }) {
-                    _ = try delete(ctx, from: tableName, rowid: rowid)
-                }
-                state = ctx.relation!
-                table = state.tableRecords[tableName]!
+                case .abort:
+                    throw DBError.uniqueViolation(table: tableName, index: conflicts[0].index)
+                case .ignore:
+                    // SQLite consumes no rowid/sequence on an ignored insert: the local
+                    // state copy (with its allocation) is simply discarded.
+                    return nil
+                case .replace:
+                    ctx.relation = state
+                    var victims = Set(conflicts.map(\.rowid))
+                    victims.remove(rowid)  // same-rowid victim handled by overwrite below
+                    for victim in victims.sorted() {
+                        _ = try delete(ctx, from: tableName, rowid: victim)
+                    }
+                    // Same-rowid conflict: remove the old row's index entries first.
+                    if conflicts.contains(where: { $0.rowid == rowid }) {
+                        _ = try delete(ctx, from: tableName, rowid: rowid)
+                    }
+                    state = ctx.relation!
+                    table = state.tableRecords[tableName]!
             }
         }
 

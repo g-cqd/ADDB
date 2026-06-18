@@ -219,10 +219,10 @@ import Synchronization
                 return s.queue.removeFirst()
             }
             switch consume popped {
-            case .none:
-                if state.withLock({ $0.shuttingDown }) { return }
-            case .some(let job):
-                runAndComplete(job)
+                case .none:
+                    if state.withLock({ $0.shuttingDown }) { return }
+                case .some(let job):
+                    runAndComplete(job)
             }
         }
     }

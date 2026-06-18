@@ -1,5 +1,5 @@
 #!/bin/sh
-# Internal-tag lint gate for ADSQL.
+# Internal-tag lint gate for the g-cqd Swift family.
 #
 # Two checks over Swift sources:
 #   1. TODO / FIXME markers — must stay at zero. Track work in issues/commits,

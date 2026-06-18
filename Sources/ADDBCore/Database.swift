@@ -421,23 +421,24 @@ public struct ReadTxn: ~Copyable {
                     return
                 }
                 switch ref {
-                case .inline(let bytes):
-                    // `bytes` is already a RawSpan bound to the resolver (BTree.get), so
-                    // it hands straight to the body — valid for this scope.
-                    result = .success(try body(bytes))
-                case .overflow:
-                    let copied = try BTree.copyValue(ref, resolver: resolver)
-                    var inner: Result<R, DBError>?
-                    copied.withUnsafeBytes { raw in
-                        do throws(DBError) {
-                            // raw is owned by `copied`, alive for this withUnsafeBytes scope.
-                            inner = unsafe .success(
-                                try Self.withRawSpan(over: raw) { (span: RawSpan) throws(DBError) in try body(span) })
-                        } catch {
-                            inner = .failure(error)
+                    case .inline(let bytes):
+                        // `bytes` is already a RawSpan bound to the resolver (BTree.get), so
+                        // it hands straight to the body — valid for this scope.
+                        result = .success(try body(bytes))
+                    case .overflow:
+                        let copied = try BTree.copyValue(ref, resolver: resolver)
+                        var inner: Result<R, DBError>?
+                        copied.withUnsafeBytes { raw in
+                            do throws(DBError) {
+                                // raw is owned by `copied`, alive for this withUnsafeBytes scope.
+                                inner = unsafe .success(
+                                    try Self.withRawSpan(over: raw) { (span: RawSpan) throws(DBError) in try body(span)
+                                    })
+                            } catch {
+                                inner = .failure(error)
+                            }
                         }
-                    }
-                    result = inner
+                        result = inner
                 }
             } catch {
                 result = .failure(error)
