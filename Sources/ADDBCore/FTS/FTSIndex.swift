@@ -34,6 +34,21 @@ import ADFCore
         let columnTexts: [String]
     }
 
+    /// Per-term, per-document accumulator used while tokenizing one document in a batch. A *reference
+    /// type* on purpose: the hot per-token writes (`fieldTFs[col] += 1`, `positions[col].append(...)`)
+    /// mutate its uniquely-referenced arrays in place. The previous value-tuple-in-a-dictionary form
+    /// (`termInfo[term]!.positions[col].append(...)`) re-hashed the term up to three times per token
+    /// and could copy-on-write the nested `[[UInt32]]` on every append; a class fetched once per token
+    /// removes both costs. Lives only for the duration of one `addBatch` call.
+    private final class TermAccumulator {
+        var fieldTFs: [UInt32]
+        var positions: [[UInt32]]
+        init(columns: Int) {
+            fieldTFs = [UInt32](repeating: 0, count: columns)
+            positions = Array(repeating: [UInt32](), count: columns)
+        }
+    }
+
     /// Indexes a BATCH of documents in one coalesced pass (the memtable flush).
     /// Tokenizes every doc, accumulates `term → [posting]` across the whole batch,
     /// then merges each term's postings into the tree ONCE — O(distinct terms)
@@ -53,7 +68,9 @@ import ADFCore
         var stats = record.stats
         var termPostings: [[UInt8]: [FTSPosting]] = [:]
         var forwards: [(docid: Int64, fieldLengths: [UInt32], terms: [[UInt8]])] = []
+        forwards.reserveCapacity(docs.count)
         var seen = Set<Int64>()
+        seen.reserveCapacity(docs.count)
         for doc in docs {
             guard seen.insert(doc.docid).inserted,
                 try Relation.getBytes(ctx, stats, key: KeyCodec.rowKey(doc.docid)) == nil
@@ -62,19 +79,22 @@ import ADFCore
                     "fts \(record.definition.name): docid \(doc.docid) already indexed")
             }
             var fieldLengths = [UInt32](repeating: 0, count: columns)
-            var termInfo: [[UInt8]: (fieldTFs: [UInt32], positions: [[UInt32]])] = [:]
+            var termInfo: [[UInt8]: TermAccumulator] = [:]
             for column in 0..<min(columns, doc.columnTexts.count) {
                 try tokenizer.tokenize(Array(doc.columnTexts[column].utf8)) { (token) throws(DBError) in
                     fieldLengths[column] += 1
                     guard !token.term.isEmpty, token.term.count <= maxTermBytes else { return }
-                    if termInfo[token.term] == nil {
-                        termInfo[token.term] = (
-                            fieldTFs: [UInt32](repeating: 0, count: columns),
-                            positions: Array(repeating: [UInt32](), count: columns)
-                        )
+                    // One hash lookup per token; the class reference then mutates its own
+                    // uniquely-referenced arrays in place (no dictionary write-back, no CoW).
+                    let accum: TermAccumulator
+                    if let existing = termInfo[token.term] {
+                        accum = existing
+                    } else {
+                        accum = TermAccumulator(columns: columns)
+                        termInfo[token.term] = accum
                     }
-                    termInfo[token.term]!.fieldTFs[column] += 1
-                    if storePositions { termInfo[token.term]!.positions[column].append(UInt32(token.position)) }
+                    accum.fieldTFs[column] += 1
+                    if storePositions { accum.positions[column].append(UInt32(token.position)) }
                 }
             }
             for (term, info) in termInfo {
