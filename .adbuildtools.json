@@ -2,5 +2,8 @@
     "devEnv": "ADDB_DEV",
     "shippedTargets": ["Sources/ADDBCore", "Sources/ADDB"],
     "strtodBan": false,
-    "forceUnwrapBan": false
+    "forceUnwrapBan": false,
+    "prngBan": true,
+    "untypedThrowsBan": true,
+    "wallClockBan": true
 }
