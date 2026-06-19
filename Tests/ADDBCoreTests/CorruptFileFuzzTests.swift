@@ -1,3 +1,4 @@
+import ADTestKit
 import Foundation
 import Testing
 
@@ -12,41 +13,12 @@ import Testing
 
 @Suite("ADDB corrupt-file fuzz")
 struct ADDBCorruptFileFuzzTests {
-    /// A unique scratch path; the engine owns the file plus its `-wal`/`-shm`/`-lock`
-    /// siblings, so the helper removes all of them.
-    private func withTempPath(_ body: (String) throws -> Void) rethrows {
-        let path = FileManager.default.temporaryDirectory
-            .appendingPathComponent("addb-fuzz-\(UUID().uuidString).db").path
-        defer {
-            for suffix in ["", "-wal", "-shm", "-lock"] {
-                try? FileManager.default.removeItem(atPath: path + suffix)
-            }
-        }
-        try body(path)
-    }
+    // The deterministic generator and the scratch-path helper are now the shared
+    // `ADTestKit.SeededRNG` (its `next` / `next(upTo:)` stream is byte-for-byte the old
+    // local `SplitMix64`, so this seed reproduces the identical corpus) and
+    // `ADTestKit.withTempPath` (same `-wal`/`-shm`/`-lock` sibling cleanup).
 
     private func key(_ s: String) -> [UInt8] { Array(s.utf8) }
-
-    /// SplitMix64 — a tiny, self-contained, deterministic generator. Seeded
-    /// explicitly (NOT `SystemRandomNumberGenerator`) so a failing iteration
-    /// reproduces bit-for-bit from the constant seed below. One `UInt64` of state,
-    /// the published SplitMix64 mixing function.
-    private struct SplitMix64 {
-        private var state: UInt64
-        init(seed: UInt64) { state = seed }
-        mutating func next() -> UInt64 {
-            state = state &+ 0x9E37_79B9_7F4A_7C15
-            var z = state
-            z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
-            z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
-            return z ^ (z >> 31)
-        }
-        /// Uniform-enough value in `0 ..< bound` for fuzzing (bound is small).
-        mutating func next(upTo bound: Int) -> Int {
-            precondition(bound > 0)
-            return Int(next() % UInt64(bound))
-        }
-    }
 
     /// A pristine valid database plus the metadata the fuzz loop needs.
     private struct Corpus {
@@ -108,7 +80,7 @@ struct ADDBCorruptFileFuzzTests {
     /// `url`, returning the mutation list (offset, byte) so a trap can be reported as
     /// a precise repro.
     private func mutate(
-        _ pristine: [UInt8], metaEnd: Int, count: Int, rng: inout SplitMix64, to url: URL
+        _ pristine: [UInt8], metaEnd: Int, count: Int, rng: inout SeededRNG, to url: URL
     ) throws -> [(offset: Int, value: UInt8)] {
         let nodeRegionWidth = pristine.count - metaEnd
         var mutated = pristine
@@ -195,7 +167,7 @@ struct ADDBCorruptFileFuzzTests {
         let structuralIterations = 4000
         let reassemblyIterations = 1000
 
-        try withTempPath { buildPath in
+        try withTempPath(prefix: "addb-fuzz") { buildPath in
             let corpus = try buildCorpus(at: buildPath)
             let pristine = corpus.bytes
 
@@ -212,7 +184,7 @@ struct ADDBCorruptFileFuzzTests {
             let inlineSample = Swift.stride(from: 0, to: corpus.inlineKeys.count, by: stride)
                 .map { corpus.inlineKeys[$0] }
 
-            var rng = SplitMix64(seed: seed)
+            var rng = SeededRNG(seed: seed)
             // A trap aborts the process, so the surviving signal is the (seed,
             // iteration) pair plus the exact mutation list. Setting `ADDB_FUZZ_TRACE`
             // prints each iteration's mutations *before* it is exercised, so a crash
@@ -225,7 +197,7 @@ struct ADDBCorruptFileFuzzTests {
                 print("FUZZ \(phase) i=\(iteration) seed=0x\(String(seed, radix: 16)) muts=[\(list)]")
             }
 
-            try withTempPath { scratchPath in
+            try withTempPath(prefix: "addb-fuzz") { scratchPath in
                 let scratchURL = URL(fileURLWithPath: scratchPath)
 
                 for iteration in 0 ..< structuralIterations {

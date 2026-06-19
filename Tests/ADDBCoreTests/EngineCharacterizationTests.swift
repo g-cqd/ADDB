@@ -1,3 +1,4 @@
+import ADTestKit
 import Foundation
 import Testing
 
@@ -11,24 +12,11 @@ import Testing
 
 @Suite("ADDB engine characterization")
 struct ADDBEngineCharacterizationTests {
-    /// A unique scratch path; the engine owns the file plus its `-wal`/`-shm`/`-lock`
-    /// siblings, so the helper removes all of them.
-    private func withTempPath(_ body: (String) throws -> Void) rethrows {
-        let path = FileManager.default.temporaryDirectory
-            .appendingPathComponent("addb-\(UUID().uuidString).db").path
-        defer {
-            for suffix in ["", "-wal", "-shm", "-lock"] {
-                try? FileManager.default.removeItem(atPath: path + suffix)
-            }
-        }
-        try body(path)
-    }
-
     private func key(_ s: String) -> [UInt8] { Array(s.utf8) }
 
     @Test("open creates a database with the requested path")
     func openCreates() throws {
-        try withTempPath { path in
+        try withTemporaryFilePath { path in
             let db = try Database.open(at: path)
             defer { db.close() }
             #expect(db.path == path)
@@ -37,7 +25,7 @@ struct ADDBEngineCharacterizationTests {
 
     @Test("put then get round-trips the value")
     func putGetRoundTrip() throws {
-        try withTempPath { path in
+        try withTemporaryFilePath { path in
             let db = try Database.open(at: path)
             defer { db.close() }
             try db.writeSync { (txn) throws(DBError) in
@@ -50,7 +38,7 @@ struct ADDBEngineCharacterizationTests {
 
     @Test("delete reports prior existence and removes the key")
     func deleteSemantics() throws {
-        try withTempPath { path in
+        try withTemporaryFilePath { path in
             let db = try Database.open(at: path)
             defer { db.close() }
             try db.writeSync { (txn) throws(DBError) in try txn.put(key("k"), key("v")) }
@@ -65,7 +53,7 @@ struct ADDBEngineCharacterizationTests {
 
     @Test("committed data survives a reopen")
     func persistenceAcrossReopen() throws {
-        try withTempPath { path in
+        try withTemporaryFilePath { path in
             let writer = try Database.open(at: path)
             try writer.writeSync { (txn) throws(DBError) in try txn.put(key("durable"), key("yes")) }
             writer.close()
@@ -79,7 +67,7 @@ struct ADDBEngineCharacterizationTests {
 
     @Test("count reflects the number of stored keys")
     func countTracksKeys() throws {
-        try withTempPath { path in
+        try withTemporaryFilePath { path in
             let db = try Database.open(at: path)
             defer { db.close() }
             try db.writeSync { (txn) throws(DBError) in
@@ -91,7 +79,7 @@ struct ADDBEngineCharacterizationTests {
 
     @Test("a write advances the generation")
     func writeAdvancesGeneration() throws {
-        try withTempPath { path in
+        try withTemporaryFilePath { path in
             let db = try Database.open(at: path)
             defer { db.close() }
             let before = db.generation
@@ -102,7 +90,7 @@ struct ADDBEngineCharacterizationTests {
 
     @Test("a forward cursor scan yields keys in ascending order")
     func cursorScanIsOrdered() throws {
-        try withTempPath { path in
+        try withTemporaryFilePath { path in
             let db = try Database.open(at: path)
             defer { db.close() }
             try db.writeSync { (txn) throws(DBError) in
@@ -126,7 +114,7 @@ struct ADDBEngineCharacterizationTests {
 
     @Test("integrity verification passes on a freshly written database")
     func integrityHolds() throws {
-        try withTempPath { path in
+        try withTemporaryFilePath { path in
             let db = try Database.open(at: path)
             defer { db.close() }
             try db.writeSync { (txn) throws(DBError) in
@@ -139,7 +127,7 @@ struct ADDBEngineCharacterizationTests {
 
     @Test("a corrupt node page is rejected, never trapped or mis-read")
     func corruptNodePageIsRejected() throws {
-        try withTempPath { path in
+        try withTemporaryFilePath { path in
             do {
                 let db = try Database.open(at: path)
                 defer { db.close() }

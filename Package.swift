@@ -1,4 +1,4 @@
-// swift-tools-version: 6.3
+// swift-tools-version: 6.4
 import PackageDescription
 
 // ADDB — the embedded database engine: storage (COW B+tree over mmap, MVCC), the
@@ -98,6 +98,15 @@ if isDev {
     // packages depending on ADDB never resolve it.
     packageDependencies.append(
         .package(url: "https://github.com/ordo-one/benchmark", from: "1.4.0"))
+    // ADTestKit — the shared AD-family testing architecture (SeededRNG, Fuzz/ByteMutator,
+    // TempFiles, oracles, async/time tools). Test-only and dev-gated, so library consumers
+    // of ADDB never resolve it. Local checkout via `ADTESTKIT_PATH`, else the published `main`.
+    if let path = Context.environment["ADTESTKIT_PATH"], !path.isEmpty {
+        packageDependencies.append(.package(path: path))
+    } else {
+        packageDependencies.append(
+            .package(url: "https://github.com/g-cqd/ADTestKit.git", branch: "main"))
+    }
 }
 
 let libraryBuildPlugins: [Target.PluginUsage] =
@@ -159,6 +168,10 @@ let package = Package(
 // CoW-sensitive paths so a reintroduced copy can't silently regress. Runs via
 // `ADDB_DEV=1 swift package benchmark`.
 if isDev {
+    // Wire the dev-only ADTestKit into the test target (downstream lib consumers never see it).
+    if let tests = package.targets.first(where: { $0.name == "ADDBCoreTests" }) {
+        tests.dependencies.append(.product(name: "ADTestKit", package: "ADTestKit"))
+    }
     package.targets.append(
         .executableTarget(
             name: "ADDBSuite",
