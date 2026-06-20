@@ -18,7 +18,6 @@ import Testing
 /// "disable FKs, rebuild parent, re-enable" recipe is unavailable — reshaping a
 /// parent additionally requires rebuilding its children. See
 /// ``RecreateAndCopy`` for that documented limitation.
-@Suite("Migrate")
 struct RecreateAndCopyTests {
     /// Builds a v1 schema: a `doc` parent (rowid alias `id`) and a `note` child
     /// that OWNS the FK (`note.doc_id REFERENCES doc`). The recreate-and-copy
@@ -66,8 +65,8 @@ struct RecreateAndCopyTests {
         return temp
     }
 
-    @Test("recreate-and-copy adds a column while preserving rowids and FK integrity")
-    func recreateAndCopyPreservesRowidsAndForeignKeys() throws {
+    @Test
+    func `recreate-and-copy adds a column while preserving rowids and FK integrity`() throws {
         let temp = try seededDatabase()
         defer { temp.teardown() }
         let db = temp.db
@@ -169,8 +168,8 @@ struct RecreateAndCopyTests {
         #expect(try db.scalarInt("SELECT COUNT(*) FROM note_fts WHERE rowid = 200") == 1)
     }
 
-    @Test("recreate-and-copy can transform a column value during the copy")
-    func recreateAndCopyTransformsValues() throws {
+    @Test
+    func `recreate-and-copy can transform a column value during the copy`() throws {
         let temp = try TempDatabase()
         defer { temp.teardown() }
         let db = temp.db
@@ -202,8 +201,8 @@ struct RecreateAndCopyTests {
         #expect(try db.scalarInt("SELECT score FROM item WHERE id = 6") == 7)
     }
 
-    @Test("recreate-and-copy rolls back wholesale when a later step fails")
-    func recreateAndCopyRollsBackOnFailure() throws {
+    @Test
+    func `recreate-and-copy rolls back wholesale when a later step fails`() throws {
         let temp = try seededDatabase()
         defer { temp.teardown() }
         let db = temp.db
@@ -262,8 +261,8 @@ struct RecreateAndCopyTests {
         #expect(try db.columnInts("SELECT rowid FROM note_fts ORDER BY rowid") == [7, 8, 42])
     }
 
-    @Test("an empty column mapping is rejected and rolls the transaction back")
-    func emptyMappingRejected() throws {
+    @Test
+    func `an empty column mapping is rejected and rolls the transaction back`() throws {
         let temp = try TempDatabase()
         defer { temp.teardown() }
         let db = temp.db
