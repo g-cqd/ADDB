@@ -34,7 +34,6 @@ extension PageBuf {
     }
 }
 
-@Suite("Meta codec")
 struct MetaCodecTests {
     func makeMeta(generation: UInt64) -> Meta {
         Meta(
@@ -119,7 +118,6 @@ struct MetaCodecTests {
     }
 }
 
-@Suite("Page header")
 struct PageHeaderTests {
     @Test func initializeAndRoundTrip() {
         let buf = PageBuf(zeroed: false)
