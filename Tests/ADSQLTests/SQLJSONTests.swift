@@ -10,7 +10,6 @@ import Testing
 /// path walk, SQL value mapping, and the scalar functions). End-to-end use is exercised
 /// through json_extract / json_each in the acceptance and compound suites; these pin the
 /// tricky escape/path/number edges and the new function surface.
-@Suite("SQLJSON")
 struct SQLJSONTests {
     @Test func mapsScalarsWithSQLiteValueRules() throws {
         #expect(try SQLJSON.toSQL(SQLJSON.parse("null")) == .null)
