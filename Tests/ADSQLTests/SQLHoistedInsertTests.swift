@@ -16,7 +16,6 @@ import Testing
 /// the OR IGNORE/ABORT discard paths (which must leave ctx.relation intact, since
 /// the alias is dropped only *after* them) and DDL mid-transaction (which must
 /// invalidate the cached roster so a newly created index still gets maintained).
-@Suite("SQL hoisted insert")
 struct SQLHoistedInsertTests {
     // A three-index shape (mirrors the apple-docs bench): a unique key, a single-
     // column index, and a composite — so the roster has >1 entry and a stable order.
