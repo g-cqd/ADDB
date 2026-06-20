@@ -13,7 +13,6 @@ import Testing
 /// single-doc blocks, and the 63/64-bit extremes that exercise the cross-byte
 /// spill path. A packer/unpacker mismatch silently corrupts retrieval, so this
 /// pins the format byte-for-byte.
-@Suite("FTS5 — F6g frame-of-reference docid-gap packing")
 struct FTSForPackingTests {
     /// Round-trips a raw gap vector through `appendPackedGaps` → `decodeDocids`,
     /// asserting the reconstructed docids equal the prefix-sum of the gaps onto a
