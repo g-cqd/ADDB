@@ -26,7 +26,6 @@ import Testing
 ///
 /// The shared corpus, manifest, import harness, probes, and the SQLite oracle live
 /// in `AppleDocsFixture` (also used by the `SearchPagesFramedTests`).
-@Suite("apple-docs main query parity")
 struct AppleDocsMainQueryTests {
     // MARK: - The §2.2 / §2.3 query surface (string-built so each clause is explicit)
 
