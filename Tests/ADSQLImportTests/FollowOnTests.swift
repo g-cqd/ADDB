@@ -9,7 +9,6 @@ import Testing
 
 /// Follow-on robustness for the importer: explicit-index port, the
 /// empty-target idempotency guard, and import determinism.
-@Suite("SQLite import — follow-on")
 struct ImportFollowOnTests {
     private var manifest: ImportManifest {
         ImportManifest(ftsTables: [
