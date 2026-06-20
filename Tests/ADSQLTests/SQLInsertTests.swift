@@ -43,7 +43,6 @@ private enum InsertFixture {
     }
 }
 
-@Suite("SQL INSERT")
 struct SQLInsertTests {
     /// The same INSERT script run against both engines must leave identical
     /// table state.
