@@ -61,7 +61,6 @@ extension Database {
     /// Runs on the serial writer queue (mutually exclusive with `writeSync`).
     private func drainPendingWrites() {
         let maxBatchRequests = 128
-
         while true {
             let batch: [PendingWrite] = pendingWrites.withLock { queue in
                 let take = min(queue.count, maxBatchRequests)
@@ -71,17 +70,7 @@ extension Database {
             }
             if batch.isEmpty { return }
 
-            readerTable.sweepStaleSlots()
-            let foreignMin = readerTable.minimumGeneration() ?? UInt64.max
-            let snapshot: (Meta, UInt64, (any FTSEvaluation)?)? = shared.withLock { state in
-                guard !state.closed else { return nil }
-                let localMin = state.readers.keys.min() ?? UInt64.max
-                return (
-                    state.meta, state.meta.reclaimLimit(minReader: min(localMin, foreignMin)),
-                    state.ftsEvaluator
-                )
-            }
-            guard let (meta, reclaimLimit, fts) = snapshot else {
+            guard let (meta, reclaimLimit, fts) = reclaimSnapshot() else {
                 for item in batch { item.fail(.databaseClosed) }
                 continue
             }
@@ -100,46 +89,73 @@ extension Database {
             }
             let baselineMain = ctx.meta.mainTree
 
-            var completions: [(DBError?) -> Void] = []
-            for item in batch {
-                let restore = TxnRestorePoint(ctx: ctx)
-                ctx.beginRequestScope()
-                if let completion = item.attempt(ctx) {
-                    completions.append(completion)
-                } else {
-                    ctx.rollbackRequestScope()
-                    restore.apply(to: ctx)
-                }
-            }
-            // Leave request scoping before catalog/free-list serialization.
-            ctx.requestEpoch = 0
+            let completions = applyBatch(batch, ctx)
+            ctx.requestEpoch = 0  // Leave request scoping before catalog/free-list serialization.
             do throws(DBError) {
                 try ctx.participant?.serialize(into: ctx)
             } catch {
                 for completion in completions { completion(error) }
                 continue
             }
-
             if completions.isEmpty { continue }
-            // Read-only batch: nothing to persist, nothing to sync.
-            if ctx.meta.mainTree == baselineMain && ctx.pendingFree.isEmpty && ctx.dirty.isEmpty {
-                for completion in completions { completion(nil) }
-                continue
-            }
+            commitBatch(ctx, completions, mainUnchanged: ctx.meta.mainTree == baselineMain)
+        }
+    }
 
-            do throws(DBError) {
-                try FreeList.serialize(ctx: ctx)
-                guard Int(ctx.allocator.highWater) * Format.pageSize <= options.maxMapSize else {
-                    throw DBError.mapFull
-                }
-                let newMeta = try Committer.commit(
-                    ctx: ctx, channel: channel, durability: options.durability)
-                shared.withLock { $0.meta = newMeta }
-                if let state = ctx.relation { relationSchemaCache.publish(state.schema) }
-                for completion in completions { completion(nil) }
-            } catch {
-                for completion in completions { completion(error) }
+    /// Sweeps stale reader slots and snapshots the committed meta + the page-reclaim limit (the oldest
+    /// generation any live reader — local or cross-process — still needs); nil when the database closed.
+    private func reclaimSnapshot() -> (Meta, UInt64, (any FTSEvaluation)?)? {
+        readerTable.sweepStaleSlots()
+        let foreignMin = readerTable.minimumGeneration() ?? UInt64.max
+        return shared.withLock { state in
+            guard !state.closed else { return nil }
+            let localMin = state.readers.keys.min() ?? UInt64.max
+            return (
+                state.meta, state.meta.reclaimLimit(minReader: min(localMin, foreignMin)),
+                state.ftsEvaluator
+            )
+        }
+    }
+
+    /// Runs each request as a stacked micro-transaction, rolling back the ones that opt out; returns the
+    /// completion handlers of those that committed into the shared batch context.
+    private func applyBatch(_ batch: [PendingWrite], _ ctx: TxnContext) -> [(DBError?) -> Void] {
+        var completions: [(DBError?) -> Void] = []
+        for item in batch {
+            let restore = TxnRestorePoint(ctx: ctx)
+            ctx.beginRequestScope()
+            if let completion = item.attempt(ctx) {
+                completions.append(completion)
+            } else {
+                ctx.rollbackRequestScope()
+                restore.apply(to: ctx)
             }
+        }
+        return completions
+    }
+
+    /// Serializes the free list and commits the batch (a fresh meta page + fsync per the durability
+    /// mode), or short-circuits a read-only batch; every completion fires with the outcome.
+    private func commitBatch(
+        _ ctx: TxnContext, _ completions: [(DBError?) -> Void], mainUnchanged: Bool
+    ) {
+        // Read-only batch: nothing to persist, nothing to sync.
+        if mainUnchanged && ctx.pendingFree.isEmpty && ctx.dirty.isEmpty {
+            for completion in completions { completion(nil) }
+            return
+        }
+        do throws(DBError) {
+            try FreeList.serialize(ctx: ctx)
+            guard Int(ctx.allocator.highWater) * Format.pageSize <= options.maxMapSize else {
+                throw DBError.mapFull
+            }
+            let newMeta = try Committer.commit(
+                ctx: ctx, channel: channel, durability: options.durability)
+            shared.withLock { $0.meta = newMeta }
+            if let state = ctx.relation { relationSchemaCache.publish(state.schema) }
+            for completion in completions { completion(nil) }
+        } catch {
+            for completion in completions { completion(error) }
         }
     }
 }
