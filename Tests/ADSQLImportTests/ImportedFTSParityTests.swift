@@ -16,7 +16,6 @@ import Testing
 /// 2. the **ranked row order** of `ORDER BY <rank>` with **no explicit rowid
 /// tiebreak** — including ties, which now order ascending-rowid like SQLite
 /// (the bounded-top-N upper-bound insert fix), matching the WAND path.
-@Suite("Imported FTS bm25 parity")
 struct ImportedFTSParityTests {
     private let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
     private let queries = ["swift", "uikit", "advanced", "patterns", "view", "data", "async", "basic"]
