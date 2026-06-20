@@ -9,7 +9,6 @@ import Testing
 
 /// Correlated and uncorrelated scalar subqueries over roots(id, slug) and
 /// pages(id, root_id, title): root 1 has two pages, root 2 one, root 3 none.
-@Suite("SQL scalar subqueries")
 struct SQLSubqueryTests {
     private static let setup = [
         "CREATE TABLE roots(id INTEGER PRIMARY KEY, slug TEXT)",
