@@ -97,7 +97,7 @@ jobs:
     name: Build & test (Linux, ${{ matrix.arch }})
     continue-on-error: true
     runs-on: ${{ matrix.runner }}
-    container: swiftlang/swift:nightly-jammy
+    container: swiftlang/swift:nightly-6.4-jammy
     strategy:
       fail-fast: false
       matrix:

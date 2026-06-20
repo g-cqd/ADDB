@@ -1,3 +1,5 @@
+public import ADSQLModel
+
 /// Deletion with merge-or-borrow rebalancing.
 ///
 /// A node falling under quarter-page payload (or emptied) merges with a

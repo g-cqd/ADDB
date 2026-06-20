@@ -1,3 +1,5 @@
+public import ADSQLModel
+
 /// The `unicode61` tokenizer: split on non-token characters, case-fold, and
 /// optionally remove diacritics — the SQLite FTS5 default tokenizer and the base
 /// under `porter`. A "token character" is a Unicode letter or number; runs of

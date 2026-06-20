@@ -1,4 +1,5 @@
 public import ADFIO
+public import ADSQLModel
 
 /// Abstraction over the file the engine writes through. Production uses
 /// `FileChannel`; crash-injection tests substitute a journaling channel that
@@ -7,7 +8,7 @@ public import ADFIO
 /// Reads in normal operation go through the shared mmap, not this protocol;
 /// `pread` exists for the `.pread` read path (escape hatch + differential
 /// oracle) and for tooling.
-public protocol StorageChannel: AnyObject, Sendable {
+@_spi(ADDBEngine) public protocol StorageChannel: AnyObject, Sendable {
     /// File descriptor of the real on-disk file (used for mmap).
     var fileDescriptor: Int32 { get }
 

@@ -1,3 +1,5 @@
+public import ADSQLModel
+
 /// Per-transaction relational state and the catalog lifecycle.
 ///
 /// A write transaction loads the full catalog from its own snapshot on first

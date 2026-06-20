@@ -8,10 +8,19 @@
 /// as SQLite does ("YYYY-MM-DD HH:MM:SS"). Civil-date math is the classic
 /// days-from-civil/civil-from-days algorithm (Howard Hinnant).
 public enum CivilTime {
-    public static func utcNowString() -> String {
+    /// The live UTC wall clock as Unix epoch seconds — the injection default. A test
+    /// passes a fixed provider instead to pin `datetime('now')` with no real clock.
+    /// Structural seam (a `@Sendable () -> Int64`), so the engine stays dependency-free.
+    public static let liveEpochSeconds: @Sendable () -> Int64 = {
         var ts = timespec()
         unsafe clock_gettime(CLOCK_REALTIME, &ts)
-        return string(forEpochSeconds: Int64(ts.tv_sec))
+        return Int64(ts.tv_sec)
+    }
+
+    /// `datetime('now')` formatted as SQLite does. `now` is injectable (defaulting to
+    /// the live clock), so the produced timestamp can be pinned deterministically.
+    public static func utcNowString(now: @Sendable () -> Int64 = liveEpochSeconds) -> String {
+        string(forEpochSeconds: now())
     }
 
     public static func string(forEpochSeconds seconds: Int64) -> String {

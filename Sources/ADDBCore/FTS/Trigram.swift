@@ -1,3 +1,5 @@
+public import ADSQLModel
+
 /// The `trigram` tokenizer: every overlapping run of three characters is a
 /// term (the basis for substring / `LIKE`-style matching), case-folded unless
 /// `case_sensitive 1`. Positions are window indices; each term's source span

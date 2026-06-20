@@ -1,3 +1,5 @@
+public import ADSQLModel
+
 /// A per-document relevance scorer prepared for one MATCH query, returned by an
 /// ``FTSEvaluation``. It holds whatever per-query state the implementation needs
 /// (resolved query leaves, a reused stats cursor) so the executor's per-document

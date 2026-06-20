@@ -1,3 +1,5 @@
+public import ADSQLModel
+
 /// The `porter` tokenizer: runs a base tokenizer (default `unicode61`) then
 /// applies the **classic Porter (1980) stemmer** to each ASCII term. SQLite
 /// FTS5's `porter` uses the original Porter algorithm, so this matches it for

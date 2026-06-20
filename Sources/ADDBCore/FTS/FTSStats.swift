@@ -1,4 +1,5 @@
 import ADFCore
+public import ADSQLModel
 
 /// Doc/field length statistics for bm25f length normalization. Per-doc
 /// field lengths live in the stats tree keyed by docid; a single global row

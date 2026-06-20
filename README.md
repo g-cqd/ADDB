@@ -1,74 +1,108 @@
 # ADDB
 
-A from-scratch, pure-Swift embedded database for macOS. **ADDB** is the storage
-engine — copy-on-write B+tree over mmap, single-writer / wait-free-reader MVCC,
-crash-safe by construction (committed pages are immutable; recovery is picking the
-newest checksum-valid meta page) — and **ADSQL** is the SQLite-grammar query layer
-and result-builder DSL on top, with full-text search and JSON as opt-in modules.
+A from-scratch, pure-Swift **embedded storage engine** for Apple platforms (and
+Linux). ADDB is the storage kernel only — a copy-on-write B+tree over `mmap`,
+single-writer / wait-free-reader MVCC with snapshot isolation, crash-safe by
+construction, plus the relational model (tables / indexes / foreign keys) and a
+full-text-search index on the same on-disk format.
 
-Status: storage kernel, relational layer, and the SQL front end (M4/M4.5)
-complete; a scan-engine performance pass (M4.6) is active, with first-class
-FTS/vector indexes (M5) next, on the same on-disk format. See
-[`ROADMAP.md`](ROADMAP.md) — the single source of truth for the architecture,
-milestone status, the vs-SQLite scorecard, and the prioritized backlog.
+There is **no SQL and no JSON here**. The SQLite-grammar query layer, the
+result-builder DSL, the `@Table` / `#SQL` macros, and the json1 surface live in
+the separate **[ADSQL](https://github.com/g-cqd/ADSQL)** package, which consumes
+this engine through its `@_spi(ADDBEngine)` surface. JSON is owned by
+**[ADJSON](https://github.com/g-cqd/ADJSON)**.
 
-- Platform: macOS 15 floor (device platforms at the 2025 generation); arm64 + x86_64
-- Toolchain: Swift 6.x — `.v6` language mode, complete strict concurrency, SE-0458 strict memory safety
-- Dependencies: none at runtime beyond the standard library (`Synchronization`, Darwin/Glibc) — the engine and SQL core are dependency-free; JSON support (opt-in `ADSQLJSON`) adds ADJSONCore, and the `@Table` / `#SQL` macros use swift-syntax at build time only
-- Durability profiles: `.barrier` (F_BARRIERFSYNC, default), `.full`
-  (F_FULLFSYNC), `.none` (bench)
+- Platform: macOS 15 floor; device platforms (iOS / tvOS / watchOS / visionOS)
+  at the 2025 generation; Linux x64 + arm64. arm64 + x86_64.
+- Toolchain: Swift 6.x — `.v6` language mode, complete strict concurrency,
+  SE-0458 strict memory safety, experimental lifetime dependence.
+- Dependency: **only [ADFoundation](https://github.com/g-cqd/ADFoundation)** —
+  its `ADFCore` byte/number kernel and `ADFIO` POSIX storage. No swift-syntax,
+  no JSON, no SQL in the shipped graph.
+- Durability profiles: `.barrier` (`F_BARRIERFSYNC`, default), `.full`
+  (`F_FULLFSYNC`), `.none` (bench).
+
+## Products
+
+ADDB ships two library products — both pure engine, no language layer:
+
+- **`ADDB`** — a thin public façade that re-exports the engine's curated
+  `public` API (`@_exported import ADDBCore`). Use this if you want the database
+  engine without SQL.
+- **`ADDBCore`** — the engine module itself. Its `@_spi(ADDBEngine) public`
+  surface is the broad, low-level API that a query layer (ADSQL) drives; its
+  plain `public` surface is the curated façade API. General consumers should
+  prefer the `ADDB` façade.
+
+> **Why the SPI seam?** ADSQL used to live in the same package as the engine and
+> reached engine internals with package-wide `@testable`/`package` access. ADDB
+> and ADSQL are now **two separate packages**, and `package` access cannot cross
+> a package boundary — so the engine deliberately exposes the surface ADSQL needs
+> as `@_spi(ADDBEngine)`, and offers opt-in `-enable-testing` (`ADDB_TESTING=1`)
+> so ADSQL's white-box tests can `@testable import ADDBCore` across the boundary.
+
+## Architecture
+
+### Storage kernel
+- **COW B+tree over `mmap`** — 16 KiB logical pages, **XXH64** per-page
+  checksums, overflow-page chains for large values, a page allocator + free-list
+  that reclaims pages once no reader can still see them.
+- Committed pages are **immutable**; a write transaction copies-on-write the
+  pages it touches.
+
+### Durability & concurrency
+- **Single-writer / wait-free-reader MVCC** with snapshot isolation. Readers run
+  lock-free against an immutable committed snapshot; one writer at a time mutates
+  via a dedicated writer thread. A cross-process reader table + writer lock
+  coordinate multiple processes.
+- **Group commit** batches concurrent write requests; per-request undo lets one
+  request roll back without aborting the batch.
+- **Crash-safe by construction** — recovery is simply *picking the newest
+  checksum-valid meta page* (meta ping-pong + one barrier). No WAL, no replay.
+- O(1) atomic snapshots via APFS `clonefile(2)` (with a portable copy fallback).
+
+### Relational model
+- Strict typed `Value` / columns; order-preserving `KeyCodec`; `RecordCodec`;
+  a catalog with transactional DDL; DML with conflict policies + secondary-index
+  maintenance; foreign keys (`ON DELETE CASCADE` / `RESTRICT`); deep integrity
+  checks (index ⇄ row bijection) via `verifyIntegrity`.
+
+### Full-text-search index
+- The on-disk FTS index (postings codec with frame-of-reference bit-packing, one
+  block per key, O(n) incremental build) and ranked top-k via **block-max WAND**.
+  The query-language surface for it (`CREATE VIRTUAL TABLE … USING fts5`, the
+  `MATCH` operator, `bm25` / `bm25f`) lives in ADSQL's `ADSQLFullTextSearch`.
+
+### Safety model
+- **Module-wide strict memory safety** (SE-0458): every unsafe construct is
+  explicitly `unsafe` or encapsulated by a `@safe` type, so any *new* unsafe use
+  is compiler-flagged.
+- `~Escapable` / `~Copyable` + `RawSpan` lifetime dependencies bind page views to
+  their snapshot (`Cursor`, `ReadTxn` / `WriteTxn`, `RowView`, `ValueRef`) — they
+  cannot outlive it.
+- **Typed throws** (`throws(DBError)`); `Synchronization` `Mutex` / `Atomic` for
+  in-process state.
 
 ## Layout
-
-The package is split into a storage engine, a SQL language layer, and opt-in
-query supersets:
 
 - `Sources/ADDBCore` — the engine: VFS, pager, COW B+tree, MVCC transactions,
   free-list, commit protocol, recovery, integrity, the relational layer
   (tables / indexes / foreign keys), and the FTS index.
-- `Sources/ADDB` — public engine façade (`@_exported import ADDBCore`).
-- `Sources/ADSQL` — the SQL language: lexer / parser / planner / executor, plus
-  the result-builder DSL and the `@Table` / `#SQL` macros (`Sources/ADSQLMacros`).
-- `Sources/ADSQLFullTextSearch`, `Sources/ADSQLJSON` — opt-in supersets that
-  re-export ADSQL and add `MATCH` / rank / bm25 and the json1 surface.
-- `Sources/ADSQLImport` · `ADSQLSearch` · `ADSQLTool` · `ADSQLBench` — SQLite
-  import, the apple-docs search path, the CLI, and the benchmark harness.
-- `Tests/ADDBTests` — the SQLite-differential suite; `Tests/ADDBTestSupport` —
-  shared SQLite oracle, reference model store, seeded op generator, and the
-  simulated disk for crash injection.
+- `Sources/ADDB` — the public engine façade (`@_exported import ADDBCore`).
+- `Tests/ADDBCoreTests` — engine characterization tests that pin the externally
+  observable behavior of the storage / relational engine, so the package is
+  verifiable on its own. The deep SQL-over-engine differential coverage lives in
+  the sibling **ADSQL** package's integration suite.
 
 ## Benchmarks
 
-`swift run -c release ADSQLBench` compares against system SQLite (WAL,
-apple-docs production pragmas) on a document_chunks-shaped dataset
-(200k–858k rows, ~580 B values). On an M-series 10-core machine, 200k rows:
+The vs-SQLite benchmark harness lives in the **ADSQL** package (`ADSQLBench`,
+which exercises this engine through the SQL layer). The engine's own
+allocation / throughput guards (`Benchmarks/ADDBSuite`, ordo-one) run via:
 
-| Scenario | ADDB | SQLite (WAL) | Δ |
-|---|---|---|---|
-| cold open → first get (p50) | 31 µs | 399 µs | **13×** |
-| point get p50 (uniform) | 0.9 µs | 3.6 µs | **4×** |
-| full scan | 4.3 GB/s | 4.2 GB/s | ≈ |
-| 16 readers during write churn | 1.04 M reads/s, p99 243 µs | 349 k reads/s, p99 466 µs | **3× / ½ tail** |
-| batch upsert ×64 (ordered durability)¹ | 96–110 k rows/s | 108 k rows/s | ≈ |
-| batch upsert ×64 (no sync) | 374 k rows/s | 142 k rows/s | **2.6×** |
-| bulk load 200k rows | 488 k rows/s | 171 k rows/s | **2.9×** |
-
-¹ ADDB `.barrier` (one F_BARRIERFSYNC per commit, crash-consistent by
-construction) vs SQLite `synchronous=FULL` (fsync per WAL commit) — the
-closest durability semantics on macOS.
-
-Relational layer (M3), documents-shaped table with 5 secondary indexes,
-200k rows (`ADSQLBench table`):
-
-| Scenario | ADDB | SQLite | Δ |
-|---|---|---|---|
-| rowid point get (p50 / p99.9) | 1.0 µs / 24 µs | 2.4 µs / 170 µs | **2.4× / 7×** |
-| unique-key probe (p50) | 1.1 µs | 1.3 µs | ≈+ |
-| batch insert ×512 (5-index maintenance) | 101 k rows/s | 128 k rows/s | 0.79× ² |
-| index range scan (33k rows) | 1.1 M rows/s | 2.8 M rows/s | 0.39× ² |
-
-² Known headroom, addressed by the M4 executor: per-row dictionary
-assembly on insert, eager full-row materialization on scans.
+```sh
+ADDB_DEV=1 swift package benchmark
+```
 
 ## Develop
 
@@ -77,3 +111,5 @@ swift build
 swift test
 swift test --sanitize=thread   # concurrency lane
 ```
+
+See [`ROADMAP.md`](ROADMAP.md) for the engine roadmap and milestone status.

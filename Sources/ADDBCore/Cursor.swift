@@ -1,3 +1,5 @@
+public import ADSQLModel
+
 /// Ordered iteration over one tree snapshot. The cursor keeps a root-to-leaf
 /// path of (page, index) frames — COW trees have no sibling links, so leaf
 /// hops walk back through the recorded branches.

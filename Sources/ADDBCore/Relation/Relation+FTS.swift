@@ -1,3 +1,5 @@
+import ADSQLModel
+
 /// FTS5 index maintenance for the storage layer (split from
 /// Relation.swift). `ftsAdd`/`ftsRemove` and the dictionary + postings + stats
 /// tree updates that keep an FTS5 virtual table's three trees consistent as

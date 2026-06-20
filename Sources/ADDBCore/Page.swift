@@ -74,7 +74,7 @@ import ADFCore
     // encoding, identical to the former `UnsafeMutableRawBufferPointer` codec.
     @_spi(ADDBEngine) public static func initialize(_ page: inout MutableRawSpan, type: PageType) {
         precondition(page.byteCount == Format.pageSize)
-        unsafe page.withUnsafeMutableBytes { buf in
+        page.withUnsafeMutableBytes { buf in
             unsafe buf.initializeMemory(as: UInt8.self, repeating: 0)
             return
         }
@@ -109,7 +109,7 @@ import ADFCore
 
     /// Stamps the page checksum. Called exactly once per dirty page at commit.
     @_spi(ADDBEngine) public static func stampChecksum(_ page: inout MutableRawSpan, pageNo: UInt64) {
-        let digest = unsafe page.withUnsafeBytes { (ro: UnsafeRawBufferPointer) in
+        let digest = page.withUnsafeBytes { (ro: UnsafeRawBufferPointer) in
             unsafe XXH64.hash(UnsafeRawBufferPointer(rebasing: ro[8...]), seed: pageNo)
         }
         page.storeLE64(digest, at: Offset.checksum)

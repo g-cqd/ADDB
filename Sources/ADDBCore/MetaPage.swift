@@ -1,4 +1,5 @@
 import ADFCore
+public import ADSQLModel
 
 #if canImport(Darwin)
     import Darwin
@@ -84,7 +85,7 @@ import ADFCore
     /// meaningful; the rest stays as-is, normally zero).
     @_spi(ADDBEngine) public func encode(into buffer: inout MutableRawSpan, pageNo: UInt64) {
         precondition(buffer.byteCount == Format.pageSize)
-        unsafe buffer.withUnsafeMutableBytes { buf in
+        buffer.withUnsafeMutableBytes { buf in
             Format.magicBytes.withUnsafeBytes { magic in
                 unsafe UnsafeMutableRawBufferPointer(rebasing: buf[Offset.magic ..< Offset.formatVersion])
                     .copyMemory(from: magic)
@@ -104,7 +105,7 @@ import ADFCore
         for i in (Offset.freeEntryCount + 8) ..< Offset.reservedEnd {
             buffer.storeBytes(of: 0, toByteOffset: i, as: UInt8.self)
         }
-        let digest = unsafe buffer.withUnsafeBytes { (ro: UnsafeRawBufferPointer) in
+        let digest = buffer.withUnsafeBytes { (ro: UnsafeRawBufferPointer) in
             unsafe XXH64.hash(UnsafeRawBufferPointer(rebasing: ro[0 ..< Offset.checksum]), seed: pageNo)
         }
         buffer.storeLE64(digest, at: Offset.checksum)

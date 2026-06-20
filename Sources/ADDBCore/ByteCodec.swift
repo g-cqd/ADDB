@@ -1,3 +1,5 @@
+public import ADSQLModel
+
 /// `withUnsafeBytes` variants that thread the engine's typed `DBError` through the closure — the one
 /// DB-specific byte shim. LEB128 varints, little/big-endian loads/stores, and xxHash64 now live in
 /// ``ADFCore`` (the single implementation shared with ADJSON); callers `import ADFCore` directly.

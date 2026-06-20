@@ -1,4 +1,5 @@
 public import ADFIO
+public import ADSQLModel
 
 /// POSIX-backed `StorageChannel`. Wraps ADFIO's ``PosixFile`` (the positioned
 /// read/write, vectored write, durability, and space-management mechanics) and

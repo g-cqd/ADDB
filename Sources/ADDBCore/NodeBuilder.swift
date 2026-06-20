@@ -1,4 +1,5 @@
 import ADFCore
+public import ADSQLModel
 
 #if canImport(Darwin)
     import Darwin
@@ -295,7 +296,7 @@ import ADFCore
         into page: inout MutableRawSpan, at offset: Int, from source: UnsafeRawBufferPointer
     ) {
         guard unsafe !source.isEmpty else { return }
-        unsafe page.withUnsafeMutableBytes { buf in
+        page.withUnsafeMutableBytes { buf in
             unsafe UnsafeMutableRawBufferPointer(rebasing: buf[offset ..< offset + source.count])
                 .copyMemory(from: source)
             return
@@ -312,14 +313,14 @@ import ADFCore
     ) -> Bool {
         let need = size + Format.slotSize
         // Header reads-during-write go through the page's read-only view.
-        let (freeSpace, fragmented) = unsafe page.withUnsafeBytes { (ro: UnsafeRawBufferPointer) in
+        let (freeSpace, fragmented) = page.withUnsafeBytes { (ro: UnsafeRawBufferPointer) in
             unsafe (PageHeader.freeSpace(ro), PageHeader.fragmentedBytes(ro))
         }
         if freeSpace < need {
             guard freeSpace + fragmented >= need else { return false }
             compact(&page)
         }
-        let (count, cellAreaStart) = unsafe page.withUnsafeBytes { (ro: UnsafeRawBufferPointer) in
+        let (count, cellAreaStart) = page.withUnsafeBytes { (ro: UnsafeRawBufferPointer) in
             unsafe (PageHeader.cellCount(ro), PageHeader.cellAreaStart(ro))
         }
         let newOffset = cellAreaStart - size
@@ -331,7 +332,7 @@ import ADFCore
         if count > index {
             let src = slotBase + index * Format.slotSize
             let len = (count - index) * Format.slotSize
-            unsafe page.withUnsafeMutableBytes { buf in
+            page.withUnsafeMutableBytes { buf in
                 unsafe memmove(buf.baseAddress! + src + Format.slotSize, buf.baseAddress! + src, len)
                 return
             }
@@ -364,7 +365,7 @@ import ADFCore
     /// (or reclaiming directly when it borders the cell area start).
     @_spi(ADDBEngine) public static func removeCell(_ page: inout MutableRawSpan, at index: Int) {
         let (count, offset, length, cellAreaStart, fragmented) =
-            unsafe page.withUnsafeBytes { (ro: UnsafeRawBufferPointer) in
+            page.withUnsafeBytes { (ro: UnsafeRawBufferPointer) in
                 unsafe (
                     PageHeader.cellCount(ro), PageHeader.slotOffset(ro, index), cellLength(ro, index),
                     PageHeader.cellAreaStart(ro), PageHeader.fragmentedBytes(ro)
@@ -376,7 +377,7 @@ import ADFCore
         if index < count - 1 {
             let dst = slotBase + index * Format.slotSize
             let len = (count - 1 - index) * Format.slotSize
-            unsafe page.withUnsafeMutableBytes { buf in
+            page.withUnsafeMutableBytes { buf in
                 unsafe memmove(buf.baseAddress! + dst, buf.baseAddress! + dst + Format.slotSize, len)
                 return
             }
@@ -393,7 +394,7 @@ import ADFCore
     @_spi(ADDBEngine) public static func branchSetChild(
         _ page: inout MutableRawSpan, at index: Int, child: UInt64
     ) {
-        let offset = unsafe page.withUnsafeBytes { (ro: UnsafeRawBufferPointer) in
+        let offset = page.withUnsafeBytes { (ro: UnsafeRawBufferPointer) in
             unsafe PageHeader.slotOffset(ro, index)
         }
         page.storeLE64(child, at: offset + 2)
@@ -404,7 +405,7 @@ import ADFCore
     /// Rewrites the cell area densely (slot order preserved), clearing
     /// fragmentation. Uses a scratch copy of the page.
     @_spi(ADDBEngine) public static func compact(_ page: inout MutableRawSpan) {
-        let scratch = unsafe page.withUnsafeBytes { (ro: UnsafeRawBufferPointer) in
+        let scratch = page.withUnsafeBytes { (ro: UnsafeRawBufferPointer) in
             unsafe PageBuf(copying: ro)
         }
         let ro = unsafe scratch.readOnly

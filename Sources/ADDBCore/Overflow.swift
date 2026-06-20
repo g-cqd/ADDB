@@ -1,3 +1,5 @@
+public import ADSQLModel
+
 /// Overflow chains hold values whose leaf cell would exceed
 /// `Format.maxInlineCellSize`. Each overflow page stores up to
 /// `Format.overflowCapacity` payload bytes; the header link field points to

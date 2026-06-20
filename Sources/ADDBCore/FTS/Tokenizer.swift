@@ -1,3 +1,5 @@
+public import ADSQLModel
+
 /// FTS tokenization. A `Tokenizer` turns a column's UTF-8 bytes into a
 /// stream of terms, each carrying its source byte span (for highlight/snippet)
 /// and its sequential position (for phrase queries). The index build drives

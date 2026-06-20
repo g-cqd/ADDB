@@ -1,3 +1,5 @@
+public import ADSQLModel
+
 /// Row delete + update for the storage layer (split from
 /// DML.swift). `deleteRowCore`/`delete` (the physical single-row delete with index
 /// maintenance + ON DELETE cascade/restrict actions) and the two-phase row

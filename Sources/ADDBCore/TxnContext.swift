@@ -1,3 +1,5 @@
+public import ADSQLModel
+
 /// Resolves page numbers to page bytes. Read transactions resolve straight
 /// from committed storage; write transactions overlay their dirty table.
 @_spi(ADDBEngine) public protocol PageResolver {
@@ -40,6 +42,20 @@ extension PageSource {
     @_spi(ADDBEngine) public func prefetch(fromPage: UInt64, count: Int) {}
     @inline(__always)
     @_spi(ADDBEngine) public var prefetchWindow: Int { 0 }
+}
+
+/// Storage→relational seam. The relational layer's per-transaction state rides a write transaction
+/// behind this protocol, so storage drives its rollback (`captureState`/`restoreState`) and commit
+/// (`serialize`) WITHOUT naming `RelationState`/`Value`/`Catalog`. The concrete participant lives in
+/// the relational module (`RelationParticipant`) — mirroring the established `TriggerFiring` /
+/// `FTSEvaluation` seams that already keep storage from naming the SQL/query types.
+@_spi(ADDBEngine) public protocol RelationalParticipant: AnyObject {
+    /// Commit: serialize accumulated relational changes (catalog, sequences) into the txn's pages.
+    func serialize(into ctx: TxnContext) throws(DBError)
+    /// Rollback: capture the participant's state for a stacked-request restore point.
+    func captureState() -> Any?
+    /// Rollback: restore a previously captured state.
+    func restoreState(_ token: Any?)
 }
 
 /// Page allocation state for one write transaction. Fresh pages (allocated
@@ -117,9 +133,12 @@ extension PageSource {
     /// Default off → the per-row reference path.
     var insertHoistEnabled = false
 
-    /// Relational state (catalog, handles, sequences), loaded lazily on first
-    /// relational use. Value-typed: TxnRestorePoint snapshots it by copy.
-    @_spi(ADDBEngine) public internal(set) var relation: RelationState?
+    /// The relational layer's per-transaction state, held OPAQUELY behind the
+    /// `RelationalParticipant` seam so storage never names `RelationState`/`Value`. The relational
+    /// module installs a participant lazily (via the `relation` accessor in `RelationParticipant.swift`)
+    /// on first relational use; storage only drives its snapshot/restore (request rollback) and
+    /// serialize (commit). Writer-confined.
+    @_spi(ADDBEngine) public var participant: (any RelationalParticipant)?
 
     /// Active NEW/OLD row frame while a trigger body executes. The write
     /// path consults it so trigger-body expressions can read `new.col`/`old.col`;
@@ -142,6 +161,11 @@ extension PageSource {
     /// touches an FTS table's MATCH source on the overlay sees the same evaluator a
     /// read would.
     @_spi(ADDBEngine) public var ftsEvaluator: (any FTSEvaluation)?
+
+    /// The wall clock the `.datetimeNow` column default resolves against (epoch
+    /// seconds), copied from `Database.options.now` at context creation so a pinned
+    /// test clock reaches the engine's default resolver. Defaults to the live clock.
+    @_spi(ADDBEngine) public var now: @Sendable () -> Int64 = CivilTime.liveEpochSeconds
 
     /// Group-commit nesting: stacked micro-transactions bump the epoch; pages
     /// dirtied by earlier requests are cloned on first touch so a failing

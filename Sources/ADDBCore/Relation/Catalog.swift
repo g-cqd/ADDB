@@ -1,4 +1,5 @@
 import ADFCore
+public import ADSQLModel
 
 /// Catalog persistence: system rows in the main tree under the reserved
 /// 0x00 prefix.

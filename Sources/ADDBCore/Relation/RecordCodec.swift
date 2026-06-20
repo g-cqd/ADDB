@@ -1,4 +1,5 @@
 import ADFCore
+public import ADSQLModel
 
 /// Row record codec (table-tree values): varint column count followed by
 /// sequential tagged cells. Rows whose stored count is below the schema's

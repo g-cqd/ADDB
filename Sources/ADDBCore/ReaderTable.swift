@@ -1,4 +1,5 @@
 import ADFIO
+public import ADSQLModel
 
 #if canImport(Darwin)
     import Darwin

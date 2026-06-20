@@ -1,3 +1,5 @@
+public import ADSQLModel
+
 /// The storage layer's hook into the SQL trigger engine. The relational DML
 /// path persists triggers as opaque text and never parses or evaluates them;
 /// when rows change it calls a registered `TriggerFiring` (the SQL layer's

@@ -1,3 +1,4 @@
+public import ADSQLModel
 import Dispatch
 import Synchronization
 
@@ -90,6 +91,7 @@ extension Database {
             ctx.insertHoistEnabled = options.execution.insert == .hoisted
             ctx.triggerEngine = triggerEngineBox.withLock { $0 }
             ctx.ftsEvaluator = fts
+            ctx.now = options.now
             do throws(DBError) {
                 try FreeList.harvest(ctx: ctx, upTo: reclaimLimit)
             } catch {
@@ -111,13 +113,11 @@ extension Database {
             }
             // Leave request scoping before catalog/free-list serialization.
             ctx.requestEpoch = 0
-            if ctx.relation != nil {
-                do throws(DBError) {
-                    try Relation.serializeState(ctx: ctx)
-                } catch {
-                    for completion in completions { completion(error) }
-                    continue
-                }
+            do throws(DBError) {
+                try ctx.participant?.serialize(into: ctx)
+            } catch {
+                for completion in completions { completion(error) }
+                continue
             }
 
             if completions.isEmpty { continue }
@@ -150,14 +150,16 @@ struct TxnRestorePoint {
     let pendingFree: [UInt64]
     let pool: [UInt64]
     let highWater: UInt64
-    let relation: RelationState?
+    /// Opaque relational snapshot captured via the `RelationalParticipant` seam, so the rollback
+    /// point never names `RelationState`.
+    let participantToken: Any?
 
     init(ctx: TxnContext) {
         self.meta = ctx.meta
         self.pendingFree = ctx.pendingFree
         self.pool = ctx.allocator.pool
         self.highWater = ctx.allocator.highWater
-        self.relation = ctx.relation
+        self.participantToken = ctx.participant?.captureState()
     }
 
     /// Restores scalar state; page buffers are restored by
@@ -167,6 +169,6 @@ struct TxnRestorePoint {
         ctx.pendingFree = pendingFree
         ctx.allocator.pool = pool
         ctx.allocator.highWater = highWater
-        ctx.relation = relation
+        ctx.participant?.restoreState(participantToken)
     }
 }

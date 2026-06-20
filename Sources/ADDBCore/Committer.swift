@@ -1,4 +1,5 @@
 public import ADFIO
+public import ADSQLModel
 
 /// The commit protocol. Committed pages are immutable, so the only ordering
 /// that matters is "all data pages before the meta flip":

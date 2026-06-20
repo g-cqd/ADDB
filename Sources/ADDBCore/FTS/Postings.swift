@@ -1,4 +1,5 @@
 import ADFCore
+public import ADSQLModel
 
 /// FTS postings. A term's posting list is the docid-ascending sequence
 /// of documents containing it, each carrying per-field term frequencies (for

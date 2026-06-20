@@ -1,4 +1,5 @@
 public import ADFIO
+public import ADSQLModel
 import Dispatch
 public import Synchronization
 
@@ -29,6 +30,11 @@ public struct DatabaseOptions: Sendable {
     /// format is crash-safe by construction and reads are the hot path;
     /// `verifyIntegrity` remains the on-demand whole-file check.
     public var verifyChecksumsOnRead: Bool
+    /// The wall clock `datetime('now')` / `CURRENT_TIMESTAMP` defaults resolve against,
+    /// as Unix epoch seconds. Defaults to the live clock; a test passes a fixed provider
+    /// to pin time deterministically. Structural seam (a `@Sendable () -> Int64`), so the
+    /// engine carries no test dependency.
+    public var now: @Sendable () -> Int64
 
     public init(
         durability: DurabilityProfile = .barrier,
@@ -37,7 +43,8 @@ public struct DatabaseOptions: Sendable {
         createIfMissing: Bool = true,
         scanReadaheadBytes: Int = 16 << 20,
         execution: ExecutionOptions = .default,
-        verifyChecksumsOnRead: Bool = false
+        verifyChecksumsOnRead: Bool = false,
+        now: @escaping @Sendable () -> Int64 = CivilTime.liveEpochSeconds
     ) {
         self.durability = durability
         self.maxMapSize = maxMapSize
@@ -46,6 +53,7 @@ public struct DatabaseOptions: Sendable {
         self.scanReadaheadBytes = scanReadaheadBytes
         self.execution = execution
         self.verifyChecksumsOnRead = verifyChecksumsOnRead
+        self.now = now
     }
 }
 
@@ -335,14 +343,13 @@ public final class Database: Sendable {
         ctx.insertHoistEnabled = options.execution.insert == .hoisted
         ctx.triggerEngine = triggerEngineBox.withLock { $0 }
         ctx.ftsEvaluator = fts
+        ctx.now = options.now
         try FreeList.harvest(ctx: ctx, upTo: reclaimLimit)
         let baselineMain = ctx.meta.mainTree
 
         let txn = WriteTxn(ctx: ctx)
         let result = try body(txn)
-        if ctx.relation != nil {
-            try Relation.serializeState(ctx: ctx)
-        }
+        try ctx.participant?.serialize(into: ctx)
 
         // Nothing user-visible changed: drop the transaction entirely (harvest
         // churn was memory-only).

@@ -1,3 +1,5 @@
+public import ADSQLModel
+
 /// Row-level operations: insert/update/delete with strict typing, defaults,
 /// conflict policies, and index maintenance. All semantics mirror SQLite
 /// where externally visible (NULLs never collide in UNIQUE indexes, NaN
@@ -9,7 +11,8 @@ extension Relation {
     /// strict types enforced, NaN normalized to NULL. Returns the explicit
     /// rowid when the rowid-alias column was supplied.
     static func assembleRow(
-        table: Catalog.TableRecord, values: [String: Value]
+        table: Catalog.TableRecord, values: [String: Value],
+        now: @Sendable () -> Int64 = CivilTime.liveEpochSeconds
     ) throws(DBError) -> (row: [Value], explicitRowid: Int64?) {
         let definition = table.definition
         for name in values.keys where definition.columnIndex(of: name) == nil {
@@ -27,7 +30,7 @@ extension Relation {
             } else {
                 switch column.defaultValue {
                     case .value(let v): value = v
-                    case .datetimeNow: value = .text(CivilTime.utcNowString())
+                    case .datetimeNow: value = .text(CivilTime.utcNowString(now: now))
                     case nil: value = .null
                 }
             }
@@ -65,7 +68,8 @@ extension Relation {
     /// caller validates the slots once (a slot out of range traps; INSERT
     /// validates column names before building slots).
     static func assembleRowOrdered(
-        table: Catalog.TableRecord, columnSlots: [Int], values: [Value]
+        table: Catalog.TableRecord, columnSlots: [Int], values: [Value],
+        now: @Sendable () -> Int64 = CivilTime.liveEpochSeconds
     ) throws(DBError) -> (row: [Value], explicitRowid: Int64?) {
         let definition = table.definition
         let aliasIndex = definition.rowidAliasIndex
@@ -82,7 +86,7 @@ extension Relation {
             } else {
                 switch column.defaultValue {
                     case .value(let v): value = v
-                    case .datetimeNow: value = .text(CivilTime.utcNowString())
+                    case .datetimeNow: value = .text(CivilTime.utcNowString(now: now))
                     case nil: value = .null
                 }
             }
@@ -331,7 +335,7 @@ extension Relation {
         guard let table = state.tableRecords[tableName] else {
             throw DBError.noSuchTable(tableName)
         }
-        let (row, explicitRowid) = try assembleRow(table: table, values: values)
+        let (row, explicitRowid) = try assembleRow(table: table, values: values, now: ctx.now)
         return try insertCore(
             ctx, into: tableName, row: row, explicitRowid: explicitRowid, onConflict: onConflict)
     }
@@ -349,7 +353,7 @@ extension Relation {
             throw DBError.noSuchTable(tableName)
         }
         let (row, explicitRowid) = try assembleRowOrdered(
-            table: table, columnSlots: columnSlots, values: values)
+            table: table, columnSlots: columnSlots, values: values, now: ctx.now)
         return try insertCore(
             ctx, into: tableName, row: row, explicitRowid: explicitRowid, onConflict: onConflict)
     }

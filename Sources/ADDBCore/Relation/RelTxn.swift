@@ -1,3 +1,4 @@
+public import ADSQLModel
 import Synchronization
 
 /// Latest-schema cache shared by readers. MVCC-correct: a transaction reads
@@ -9,7 +10,7 @@ import Synchronization
 /// COMMITTED GENERATION: any read at generation G can reuse a record loaded
 /// by another read at G, eliminating per-call catalog descents on hot read
 /// paths. A new commit simply starts a fresh per-generation map.
-public final class SchemaCache: Sendable {
+@_spi(ADDBEngine) public final class SchemaCache: Sendable {
     private let cached = Mutex<Schema?>(nil)
     private struct Records {
         var generation: UInt64

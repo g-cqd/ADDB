@@ -1,3 +1,5 @@
+public import ADSQLModel
+
 /// Production page source: committed pages served zero-copy from the shared
 /// mapping. Correctness of bounds comes from reading only page numbers
 /// reachable from a committed meta (pages `[0, meta.pageCount)` always lie

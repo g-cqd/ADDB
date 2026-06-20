@@ -1,6 +1,9 @@
-/// ON DELETE actions. foreign keys reference the parent's rowid (the
-/// INTEGER PRIMARY KEY alias) through exactly one child column — the shape
-/// apple-docs uses everywhere (`document_id REFERENCES documents(id)`).
+public import ADSQLModel
+
+/// ON DELETE actions. Foreign keys reference the parent's rowid (the
+/// INTEGER PRIMARY KEY alias) through exactly one child column — the engine
+/// supports single-column rowid references only (e.g. `child_id REFERENCES
+/// parent(id)`); composite and non-rowid foreign keys are out of scope.
 ///
 /// Cascades require an index whose leading column is the FK column; unlike
 /// SQLite there is no full-scan fallback — a missing index is a typed error

@@ -1,4 +1,5 @@
 import ADFIO
+public import ADSQLModel
 
 /// Read-only shared mapping of the database file.
 ///
@@ -13,7 +14,7 @@ import ADFIO
 /// The database file is never truncated while mapped (free pages are recycled
 /// instead; compaction is an offline copy), which is what makes handing out
 /// borrowed views of mapped pages sound.
-public final class MMap: @unchecked Sendable {
+@_spi(ADDBEngine) public final class MMap: @unchecked Sendable {
     private let map: RawFileMap
     public var capacity: Int { map.capacity }
 

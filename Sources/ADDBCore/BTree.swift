@@ -1,3 +1,5 @@
+public import ADSQLModel
+
 /// The copy-on-write B+tree. Writes shadow every page on the descent path
 /// (COW-once-per-transaction: a page already owned by the transaction is
 /// mutated in place), so committed pages are never touched and readers on

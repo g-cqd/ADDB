@@ -1,3 +1,5 @@
+public import ADSQLModel
+
 /// A materialized table row.
 public struct Row: Equatable, Sendable {
     public let rowid: Int64
@@ -42,7 +44,7 @@ public struct Row: Equatable, Sendable {
 /// *enforces* that it cannot outlive that borrow (`@safe`
 /// previously only asserted this). A scan reads columns through it on demand;
 /// trying to store or return one fails to compile.
-public struct RowView: ~Copyable, ~Escapable {
+@_spi(ADDBEngine) public struct RowView: ~Copyable, ~Escapable {
     public let rowid: Int64
     let definition: TableDefinition
     let span: RawSpan
