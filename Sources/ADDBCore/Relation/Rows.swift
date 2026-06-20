@@ -248,46 +248,12 @@ public struct Row: Equatable, Sendable {
         _ body: (Int64, UnsafeRawBufferPointer) throws(DBError) -> Bool
     ) throws(DBError) {
         switch mode {
-            case .table:
-                while !exhausted {
-                    let step: Bool? =
-                        unsafe try cursor.withCurrent { (key, ref) throws(DBError) -> Bool? in
-                            if let upperKey, unsafe !Self.inBounds(key, below: upperKey) { return nil }
-                            guard let rowid = unsafe KeyCodec.rowid(fromSuffixOf: key) else {
-                                throw DBError.integrityFailure("malformed key in \(table.definition.name)")
-                            }
-                            return unsafe try BTree.withValueBytes(ref, resolver: resolver) { span throws(DBError) in
-                                unsafe try body(rowid, span)
-                            }
-                        } ?? nil
-                    guard let proceed = step else {
-                        exhausted = true
-                        return
-                    }
-                    if !proceed { return }
-                    exhausted = !(try cursor.next())
-                }
-            case .index where coveringIncludes != nil:
-                // Index-only scan: every needed column lives in the entry's covering
-                // value, so serve it straight from the index leaf — no table descent.
-                while !exhausted {
-                    let step: Bool? =
-                        unsafe try cursor.withCurrent { (key, ref) throws(DBError) -> Bool? in
-                            if let upperKey, unsafe !Self.inBounds(key, below: upperKey) { return nil }
-                            guard let rowid = unsafe KeyCodec.rowid(fromSuffixOf: key) else {
-                                throw DBError.integrityFailure("malformed key in \(table.definition.name)")
-                            }
-                            return unsafe try BTree.withValueBytes(ref, resolver: resolver) { span throws(DBError) in
-                                unsafe try body(rowid, span)
-                            }
-                        } ?? nil
-                    guard let proceed = step else {
-                        exhausted = true
-                        return
-                    }
-                    if !proceed { return }
-                    exhausted = !(try cursor.next())
-                }
+            case .table,
+                .index where coveringIncludes != nil:
+                // Direct scan: table rows, or — for a covering index — every needed
+                // column served straight from the index entry's value (no table
+                // descent). Both serve the current cursor entry identically.
+                try scanDirect(body)
             case .index:
                 // Index entries within a probe arrive in (columns…, rowid) order, so the
                 // rowids are ascending; a warm table cursor (`seekForward`) skips the
@@ -331,6 +297,33 @@ public struct Row: Equatable, Sendable {
                     if !proceed { return }
                     exhausted = !(try cursor.next())
                 }
+        }
+    }
+
+    /// Direct in-bounds scan over the current cursor: decodes each entry's rowid,
+    /// spans its value (table row or covering-index value), and feeds `(rowid, span)`
+    /// to `body` until it returns false or the probe's upper bound is crossed. Shared
+    /// by the `.table` and covering-`.index` modes (identical per-entry handling).
+    private mutating func scanDirect(
+        _ body: (Int64, UnsafeRawBufferPointer) throws(DBError) -> Bool
+    ) throws(DBError) {
+        while !exhausted {
+            let step: Bool? =
+                unsafe try cursor.withCurrent { (key, ref) throws(DBError) -> Bool? in
+                    if let upperKey, unsafe !Self.inBounds(key, below: upperKey) { return nil }
+                    guard let rowid = unsafe KeyCodec.rowid(fromSuffixOf: key) else {
+                        throw DBError.integrityFailure("malformed key in \(table.definition.name)")
+                    }
+                    return unsafe try BTree.withValueBytes(ref, resolver: resolver) { span throws(DBError) in
+                        unsafe try body(rowid, span)
+                    }
+                } ?? nil
+            guard let proceed = step else {
+                exhausted = true
+                return
+            }
+            if !proceed { return }
+            exhausted = !(try cursor.next())
         }
     }
 
