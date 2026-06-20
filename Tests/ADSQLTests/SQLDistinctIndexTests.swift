@@ -75,7 +75,6 @@ private enum DistinctFixture {
     }
 }
 
-@Suite("SQL DISTINCT over indexes")
 struct SQLDistinctIndexTests {
     static let queries: [String] = [
         "SELECT DISTINCT framework FROM items",  // BINARY text + NULL → index path
