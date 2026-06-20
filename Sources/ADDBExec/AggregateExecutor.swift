@@ -70,10 +70,10 @@ extension SelectExecutor {
         }
 
         try forEachFilteredRow(
-            plan, tables: catalog.tables, index: catalog.index, joinIndexes: catalog.joinIndexes,
-            ftsRecords: catalog.ftsRecords,
-            resolver: resolver, context: context, env: scanEnv, paramsEnv: paramsEnv, execution: execution,
-            foldedWhere: foldedWhere, foldedJoinOn: foldedJoinOn
+            plan, catalog: catalog, resolver: resolver,
+            scanEnv: ScanEnv(context: context, env: scanEnv, paramsEnv: paramsEnv),
+            execution: execution,
+            folded: FoldedPredicates(whereClause: foldedWhere, joinOn: foldedJoinOn)
         ) { () throws(DBError) in
             let key: GroupKey
             if noGroupBy {

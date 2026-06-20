@@ -38,7 +38,9 @@ enum SelectExecutor {
         }
         if plan.isJoin {
             return try runJoin(
-                plan, tables: tables, index: index, joinIndexes: joinIndexes, ftsRecords: ftsRecords,
+                plan,
+                catalog: QueryCatalog(
+                    tables: tables, index: index, joinIndexes: joinIndexes, ftsRecords: ftsRecords),
                 resolver: resolver, params: params, outer: outer, subquery: subquery, execution: execution,
                 mergeIndexes: mergeIndexes)
         }
