@@ -1,15 +1,12 @@
 import Synchronization
 
-/// Frontend-visible signatures of custom (extension-registered) aggregates: name → accepted argument
-/// arity. The binder validates a custom-aggregate call against this WITHOUT the engine's accumulator
-/// factory (which stays in the ADDB package's `ADDBExec.SQLAggregateRegistry`). The execution side
-/// registers each aggregate's arity here and installs `prepareHook` so a first lookup triggers the
-/// lazy builtin registration.
-///
-/// Big-bang note: the engine-side wiring — `SQLAggregateRegistry.register` also calling
-/// `AggregateSignatures.register`, and `SQLFunctions.ensureBuiltinsRegistered` installed via
-/// `installPrepareHook` — is added when the executor is reconnected. Until then custom aggregates
-/// bind only after their arity is registered.
+/// The binder's view of custom (extension-registered) aggregates: name → accepted argument arity. The
+/// binder validates a custom-aggregate call against this *signature* table before planning, separately
+/// from the executor's accumulator factory in ``SQLAggregateRegistry``. The two stay in sync because
+/// `SQLAggregateRegistry.register` mirrors every aggregate's arity here on registration (e.g. when
+/// `ADSQLJSON.enableJSON()` registers `json_group_array`), so a custom aggregate *binds* as soon as
+/// it's enabled. `installPrepareHook` lets the execution side trigger lazy builtin registration on a
+/// first lookup if needed.
 public enum AggregateSignatures {
     private struct State {
         var arities: [String: ClosedRange<Int>] = [:]

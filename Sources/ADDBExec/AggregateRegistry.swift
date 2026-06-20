@@ -44,6 +44,9 @@ package enum SQLAggregateRegistry {
     package static func register(_ name: String, _ descriptor: AggregateDescriptor) {
         let key = name.uppercased()
         descriptors.withLock { if $0[key] == nil { $0[key] = descriptor } }
+        // Mirror the arity into the binder's signature table so a custom aggregate is *bound*, not
+        // just executed — the binder validates calls against `AggregateSignatures` before planning.
+        AggregateSignatures.register(name, argCount: descriptor.argCount)
     }
 
     /// Convenience registration from an arity + accumulator factory.

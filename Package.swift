@@ -1,4 +1,5 @@
 // swift-tools-version: 6.4
+import CompilerPluginSupport
 import PackageDescription
 
 // ADDB — the database ENGINE + execution. POST-INVERSION it DEPENDS ON the engine-free ADSQL frontend
@@ -35,7 +36,8 @@ var packageDependencies: [Package.Dependency] = [
     localOrMain("ADFOUNDATION_PATH", "ADFoundation"),
     localOrMain("ADJSON_PATH", "ADJSON"),
     localOrMain("ADCONCURRENCY_PATH", "ADConcurrency"),
-    .package(url: "https://github.com/apple/swift-collections.git", from: "1.1.0")
+    .package(url: "https://github.com/apple/swift-collections.git", from: "1.1.0"),
+    .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "603.0.0"),
 ]
 if isDev {
     packageDependencies.append(localOrMain("ADBUILDTOOLS_PATH", "ADBuildTools"))
@@ -53,10 +55,21 @@ let adfCore: Target.Dependency = .product(name: "ADFCore", package: "ADFoundatio
 let adfIO: Target.Dependency = .product(name: "ADFIO", package: "ADFoundation")
 let adjsonCore: Target.Dependency = .product(name: "ADJSONCore", package: "ADJSON")
 let orderedCollections: Target.Dependency = .product(name: "OrderedCollections", package: "swift-collections")
+// swift-syntax runtime libraries — linked ONLY into test targets that exercise @Table, so the
+// ADSQLMacros plugin's SwiftSyntax symbols resolve when the macro object is pulled into a test bundle.
+let swiftSyntaxRuntime: [Target.Dependency] = [
+    .product(name: "SwiftSyntax", package: "swift-syntax"),
+    .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
+    .product(name: "SwiftParser", package: "swift-syntax"),
+]
 
 // Test targets are dev-only (they pull in the DEV-ONLY ADTestKit). The SQL-engine + integration
 // suites (ADSQLTests, FTS/Import/Migrate) are re-homed here from the old ADSQL package incrementally;
 // ADDBCoreTests (storage-engine characterization) is the first re-enabled guardrail.
+// Test targets use a lighter setting set (no InternalImportsByDefault/MemberImportVisibility) — the
+// re-homed suites carry broad `@testable` imports and the strict upcoming-feature gates only add
+// import-bookkeeping noise with no safety value in test code.
+let testSettings: [SwiftSetting] = [.swiftLanguageMode(.v6)]
 var testTargets: [Target] = []
 if isDev {
     testTargets.append(
@@ -69,6 +82,52 @@ if isDev {
             name: "ADDBSmokeTests",
             dependencies: ["ADDB", adsqlModel, adTestKit],
             swiftSettings: strictSettings))
+    // Shared fixture (MemKernel, ModelStore, SQLiteMirror, corpora) — a library target so the
+    // re-homed suites can `@testable import` it. Re-homed from the old ADSQL package post-inversion.
+    testTargets.append(
+        .target(
+            name: "ADDBTestSupport",
+            dependencies: [
+                "ADDBCore", "ADDBExec", "ADSQLJSON", "CSQLite", adsql, adsqlModel, adTestKit,
+            ],
+            path: "Tests/ADDBTestSupport",
+            swiftSettings: testSettings))
+    // The core SQL integration suite (DML/SELECT/joins/aggregates/triggers/…), now exercising the
+    // executor in ADDBExec rather than ADSQL.
+    testTargets.append(
+        .testTarget(
+            name: "ADSQLTests",
+            dependencies: [
+                "ADDBTestSupport", "ADDBCore", "ADDBExec", "ADDBMacros", "ADSQLFullTextSearch",
+                "ADSQLJSON", "CSQLite", adsql, adsqlModel, adfCore, adfIO, adTestKit,
+            ] + swiftSyntaxRuntime,
+            swiftSettings: testSettings))
+    // The full-text-search query suite (MATCH / bm25 / WAND), exercising `ADSQLFullTextSearch`.
+    testTargets.append(
+        .testTarget(
+            name: "ADSQLFullTextSearchTests",
+            dependencies: [
+                "ADDBTestSupport", "ADDBCore", "ADDBExec", "ADSQLFullTextSearch", "CSQLite",
+                adsql, adsqlModel, adfCore, adTestKit,
+            ],
+            swiftSettings: testSettings))
+    // The SQLite-import + apple-docs round-trip suite, exercising `ADSQLImport`.
+    testTargets.append(
+        .testTarget(
+            name: "ADSQLImportTests",
+            dependencies: [
+                "ADDBTestSupport", "ADDBCore", "ADDBExec", "ADSQLImport", "ADSQLFullTextSearch",
+                "ADSQLJSON", "CSQLite", adsql, adsqlModel, adTestKit,
+            ],
+            swiftSettings: testSettings))
+    // The schema-migration suite, exercising `ADSQLMigrate`.
+    testTargets.append(
+        .testTarget(
+            name: "ADSQLMigrateTests",
+            dependencies: [
+                "ADDBTestSupport", "ADDBCore", "ADDBExec", "ADSQLMigrate", adsql, adsqlModel, adTestKit,
+            ],
+            swiftSettings: testSettings))
 }
 
 let package = Package(
@@ -78,6 +137,7 @@ let package = Package(
         .library(name: "ADDB", targets: ["ADDB"]),
         .library(name: "ADDBCore", targets: ["ADDBCore"]),
         .library(name: "ADDBExec", targets: ["ADDBExec"]),
+        .library(name: "ADDBMacros", targets: ["ADDBMacros"]),
         .library(name: "ADSQLFullTextSearch", targets: ["ADSQLFullTextSearch"]),
         .library(name: "ADSQLJSON", targets: ["ADSQLJSON"]),
         .library(name: "ADSQLMigrate", targets: ["ADSQLMigrate"]),
@@ -87,12 +147,32 @@ let package = Package(
     dependencies: packageDependencies,
     targets: [
         .systemLibrary(name: "CSQLite"),
+        // The @Table / #SQL compiler plugin (swift-syntax). Re-homed from ADSQL post-inversion so it
+        // sits beside the @Table declaration (ADDBExec) it expands — the macro targets TableRow/SQLRow.
+        .macro(
+            name: "ADSQLMacros",
+            dependencies: [
+                .product(name: "SwiftSyntax", package: "swift-syntax"),
+                .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
+                .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
+                .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
+                .product(name: "SwiftDiagnostics", package: "swift-syntax"),
+                .product(name: "SwiftParser", package: "swift-syntax"),
+                .product(name: "ADFMacroSupport", package: "ADFoundation"),
+            ],
+            swiftSettings: strictSettings),
         .target(
             name: "ADDBCore", dependencies: [adfCore, adfIO, adsqlModel],
             swiftSettings: kernelSettings, plugins: libraryBuildPlugins),
         .target(
             name: "ADDBExec", dependencies: ["ADDBCore", adsql, adsqlModel, orderedCollections],
             swiftSettings: kernelSettings, plugins: libraryBuildPlugins),
+        // The @Table / #SQL macro sugar — an opt-in layer ABOVE the executor. Isolating the
+        // ADSQLMacros (swift-syntax) plugin dependency here keeps it out of the core's link graph,
+        // so engine / superset / test products never pull swift-syntax. `import ADDBMacros` to use it.
+        .target(
+            name: "ADDBMacros", dependencies: ["ADDBExec", "ADSQLMacros", adsqlModel],
+            swiftSettings: strictSettings, plugins: libraryBuildPlugins),
         .target(
             name: "ADSQLFullTextSearch",
             dependencies: ["ADDBCore", "ADDBExec", adsql, adsqlModel, adfCore],
