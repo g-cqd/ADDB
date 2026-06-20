@@ -10,10 +10,9 @@ import Testing
 /// `DatabaseOptions(now:)` resolves `datetime('now')` against the pinned clock, with no
 /// real-time read. The `now` provider threads `Statement → SQLParameters → SQLEvalEnv →
 /// CivilTime`. The live clock stays the default, so untouched databases are unchanged.
-@Suite("datetime('now') — deterministic Database clock")
 struct DatetimeClockTests {
-    @Test("datetime('now') in a SELECT resolves against the injected clock")
-    func selectDatetimeNowIsDeterministic() throws {
+    @Test
+    func `datetime('now') in a SELECT resolves against the injected clock`() throws {
         let dir = TempDir()
         defer { dir.cleanup() }
         let db = try Database.open(
@@ -26,8 +25,8 @@ struct DatetimeClockTests {
         #expect(rows[0][0] == .text("2021-01-01 00:00:00"))
     }
 
-    @Test("a DEFAULT (datetime('now')) column is pinned to the injected clock")
-    func defaultDatetimeNowIsDeterministic() throws {
+    @Test
+    func `a DEFAULT (datetime('now')) column is pinned to the injected clock`() throws {
         let dir = TempDir()
         defer { dir.cleanup() }
         let db = try Database.open(
