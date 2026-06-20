@@ -47,7 +47,7 @@ private func launchCLI(_ arguments: [String]) throws -> Process {
     return process
 }
 
-@Suite("Cross-process", .serialized)
+@Suite(.serialized)
 struct CrossProcessTests {
     @Test func cliBinaryExists() {
         #expect(FileManager.default.isExecutableFile(atPath: adsqlBinary()))
