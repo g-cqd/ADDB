@@ -221,100 +221,123 @@ enum SQLFunctions {
     static func callCoreScalar(
         _ name: String, args: [SQLExpr], star: Bool, offset: Int, _ env: SQLEvalEnv
     ) throws(DBError) -> Value {
-        func arg(_ i: Int) throws(DBError) -> Value {
-            try SQLEval.evaluate(args[i], env)
+        switch name {
+            case "COALESCE": return try coalesce(args, env)
+            case "LOWER", "UPPER": return try changeCase(name, args, star: star, env)
+            case "LENGTH": return try length(args, star: star, env)
+            case "INSTR": return try instr(args, star: star, env)
+            case "SUBSTR", "SUBSTRING": return try substr(args, star: star, env)
+            default: throw DBError.sqlUnsupported("\(name)() function")
         }
-        func requireArgs(_ counts: ClosedRange<Int>) throws(DBError) {
-            guard !star, counts.contains(args.count) else {
-                throw DBError.sqlBind("\(name)() takes \(counts) arguments")
+    }
+
+    private static func requireArgs(
+        _ name: String, _ args: [SQLExpr], star: Bool, _ counts: ClosedRange<Int>
+    ) throws(DBError) {
+        guard !star, counts.contains(args.count) else {
+            throw DBError.sqlBind("\(name)() takes \(counts) arguments")
+        }
+    }
+
+    private static func coalesce(_ args: [SQLExpr], _ env: SQLEvalEnv) throws(DBError) -> Value {
+        for expr in args {
+            let value = try SQLEval.evaluate(expr, env)
+            if !value.isNull { return value }
+        }
+        return .null
+    }
+
+    private static func changeCase(
+        _ name: String, _ args: [SQLExpr], star: Bool, _ env: SQLEvalEnv
+    ) throws(DBError) -> Value {
+        try requireArgs(name, args, star: star, 1 ... 1)
+        let value = try SQLEval.evaluate(args[0], env)
+        guard case .text(let s) = value else { return value.isNull ? .null : .text(textify(value)) }
+        let folded = String(
+            String.UnicodeScalarView(
+                s.unicodeScalars.map { scalar in
+                    if name == "LOWER" {
+                        return (scalar.value >= 0x41 && scalar.value <= 0x5A)
+                            ? Unicode.Scalar(scalar.value + 0x20)! : scalar
+                    }
+                    return (scalar.value >= 0x61 && scalar.value <= 0x7A)
+                        ? Unicode.Scalar(scalar.value - 0x20)! : scalar
+                }))
+        return .text(folded)
+    }
+
+    private static func length(
+        _ args: [SQLExpr], star: Bool, _ env: SQLEvalEnv
+    ) throws(DBError) -> Value {
+        try requireArgs("LENGTH", args, star: star, 1 ... 1)
+        switch try SQLEval.evaluate(args[0], env) {
+            case .null: return .null
+            case .text(let s): return .integer(Int64(s.count))
+            case .blob(let b): return .integer(Int64(b.count))
+            case .integer(let v): return .integer(Int64(String(v).count))
+            case .real(let d): return .integer(Int64(realToText(d).count))
+        }
+    }
+
+    private static func instr(
+        _ args: [SQLExpr], star: Bool, _ env: SQLEvalEnv
+    ) throws(DBError) -> Value {
+        try requireArgs("INSTR", args, star: star, 2 ... 2)
+        let haystack = try SQLEval.evaluate(args[0], env)
+        let needle = try SQLEval.evaluate(args[1], env)
+        guard !haystack.isNull, !needle.isNull else { return .null }
+        let h = Array(textify(haystack))
+        let n = Array(textify(needle))
+        if n.isEmpty { return .integer(0) }
+        if n.count <= h.count {
+            for start in 0 ... (h.count - n.count) where Array(h[start ..< start + n.count]) == n {
+                return .integer(Int64(start + 1))
             }
         }
+        return .integer(0)
+    }
 
-        switch name {
-            case "COALESCE":
-                for expr in args {
-                    let value = try SQLEval.evaluate(expr, env)
-                    if !value.isNull { return value }
-                }
-                return .null
-            case "LOWER", "UPPER":
-                try requireArgs(1 ... 1)
-                let value = try arg(0)
-                guard case .text(let s) = value else { return value.isNull ? .null : .text(textify(value)) }
-                let folded = String(
-                    String.UnicodeScalarView(
-                        s.unicodeScalars.map { scalar in
-                            if name == "LOWER" {
-                                return (scalar.value >= 0x41 && scalar.value <= 0x5A)
-                                    ? Unicode.Scalar(scalar.value + 0x20)! : scalar
-                            }
-                            return (scalar.value >= 0x61 && scalar.value <= 0x7A)
-                                ? Unicode.Scalar(scalar.value - 0x20)! : scalar
-                        }))
-                return .text(folded)
-            case "LENGTH":
-                try requireArgs(1 ... 1)
-                switch try arg(0) {
-                    case .null: return .null
-                    case .text(let s): return .integer(Int64(s.count))
-                    case .blob(let b): return .integer(Int64(b.count))
-                    case .integer(let v): return .integer(Int64(String(v).count))
-                    case .real(let d): return .integer(Int64(realToText(d).count))
-                }
-            case "INSTR":
-                try requireArgs(2 ... 2)
-                let haystack = try arg(0)
-                let needle = try arg(1)
-                guard !haystack.isNull, !needle.isNull else { return .null }
-                let h = Array(textify(haystack))
-                let n = Array(textify(needle))
-                if n.isEmpty { return .integer(0) }
-                if n.count <= h.count {
-                    for start in 0 ... (h.count - n.count) where Array(h[start ..< start + n.count]) == n {
-                        return .integer(Int64(start + 1))
-                    }
-                }
-                return .integer(0)
-            case "SUBSTR", "SUBSTRING":
-                try requireArgs(2 ... 3)
-                let value = try arg(0)
-                guard !value.isNull else { return .null }
-                let chars = Array(textify(value))
-                guard case .integer(var start) = cast(try arg(1), to: .integer) else { return .null }
-                var length = Int64(chars.count)
-                if args.count == 3 {
-                    guard case .integer(let l) = cast(try arg(2), to: .integer) else { return .null }
-                    length = l
-                }
-                // SQLite 1-based; negative start counts from the end; negative
-                // length takes the |length| characters BEFORE the position.
-                if start < 0 {
-                    start = Int64(chars.count) + start + 1
-                    if start < 1 {
-                        length += start - 1
-                        start = 1
-                    }
-                } else if start == 0 {
-                    if length > 0 { length -= 1 }
-                    start = 1
-                }
-                if length < 0 {
-                    let newStart = start + length
-                    length = -length
-                    start = newStart
-                    if start < 1 {
-                        length += start - 1
-                        start = 1
-                    }
-                }
-                if length < 0 { return .text("") }
-                let from = Int(start) - 1
-                guard from < chars.count, from >= 0 else { return .text("") }
-                let to = min(chars.count, from + Int(length))
-                return .text(String(chars[from ..< max(from, to)]))
-            default:
-                throw DBError.sqlUnsupported("\(name)() function")
+    private static func substr(
+        _ args: [SQLExpr], star: Bool, _ env: SQLEvalEnv
+    ) throws(DBError) -> Value {
+        try requireArgs("SUBSTR", args, star: star, 2 ... 3)
+        let value = try SQLEval.evaluate(args[0], env)
+        guard !value.isNull else { return .null }
+        let chars = Array(textify(value))
+        guard case .integer(var start) = cast(try SQLEval.evaluate(args[1], env), to: .integer)
+        else { return .null }
+        var length = Int64(chars.count)
+        if args.count == 3 {
+            guard case .integer(let l) = cast(try SQLEval.evaluate(args[2], env), to: .integer)
+            else { return .null }
+            length = l
         }
+        // SQLite 1-based; negative start counts from the end; negative
+        // length takes the |length| characters BEFORE the position.
+        if start < 0 {
+            start = Int64(chars.count) + start + 1
+            if start < 1 {
+                length += start - 1
+                start = 1
+            }
+        } else if start == 0 {
+            if length > 0 { length -= 1 }
+            start = 1
+        }
+        if length < 0 {
+            let newStart = start + length
+            length = -length
+            start = newStart
+            if start < 1 {
+                length += start - 1
+                start = 1
+            }
+        }
+        if length < 0 { return .text("") }
+        let from = Int(start) - 1
+        guard from < chars.count, from >= 0 else { return .text("") }
+        let to = min(chars.count, from + Int(length))
+        return .text(String(chars[from ..< max(from, to)]))
     }
 }
 extension SQLFunctions {
