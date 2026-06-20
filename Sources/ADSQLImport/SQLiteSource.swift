@@ -62,10 +62,16 @@ public final class SQLiteSource {
     /// `ColumnType` by SQLite affinity. The sole `INTEGER PRIMARY KEY` column, if
     /// any, is flagged as the rowid alias.
     public func columns(of table: String) throws(DBError) -> [Column] {
-        var raw: [(name: String, type: ColumnType, notNull: Bool, pk: Int32)] = []
+        struct PragmaColumn {
+            let name: String
+            let type: ColumnType
+            let notNull: Bool
+            let pk: Int32
+        }
+        var raw: [PragmaColumn] = []
         try query("PRAGMA table_info(\"\(escapeIdent(table))\")") { stmt in
             raw.append(
-                (
+                PragmaColumn(
                     name: Self.text(stmt, 1),
                     type: Self.affinity(of: Self.text(stmt, 2)),
                     notNull: sqlite3_column_int(stmt, 3) != 0,

@@ -1,5 +1,14 @@
 public import ADSQLModel
 
+/// One index whose entry a row `update` must rewrite: its old/new encoded keys and whether the key
+/// (not just a covering INCLUDE value) changed.
+private struct ChangedIndex {
+    let name: String
+    let oldKey: [UInt8]
+    let newKey: [UInt8]
+    let keyChanged: Bool
+}
+
 /// Row delete + update for the storage layer (split from
 /// DML.swift). `deleteRowCore`/`delete` (the physical single-row delete with index
 /// maintenance + ON DELETE cascade/restrict actions) and the two-phase row
@@ -103,7 +112,7 @@ extension Relation {
             }
         // An entry is rewritten when its key changes, or — for a covering index —
         // when only its stored INCLUDE value changes (key-stable, value-only update).
-        var changedIndexes: [(name: String, oldKey: [UInt8], newKey: [UInt8], keyChanged: Bool)] = []
+        var changedIndexes: [ChangedIndex] = []
         for indexName in ownIndexNames {
             let index = state.indexRecords[indexName]!
             let oldKey = try indexEntryKey(index: index, table: table, row: oldRow, rowid: rowid)
@@ -119,7 +128,8 @@ extension Relation {
             {
                 throw DBError.uniqueViolation(table: tableName, index: indexName)
             }
-            changedIndexes.append((name: indexName, oldKey: oldKey, newKey: newKey, keyChanged: keyChanged))
+            changedIndexes.append(
+                ChangedIndex(name: indexName, oldKey: oldKey, newKey: newKey, keyChanged: keyChanged))
         }
 
         for change in changedIndexes {
