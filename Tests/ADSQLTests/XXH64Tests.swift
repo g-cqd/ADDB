@@ -6,7 +6,6 @@ import Testing
 @_spi(ADDBEngine) @testable import ADDBExec
 @testable import ADSQL
 
-@Suite("XXH64")
 struct XXH64Tests {
     // Reference values cross-checked against Bun.hash.xxHash64 (xxhash C impl).
     static let vectors: [(input: [UInt8], seed: UInt64, expected: UInt64)] = [
