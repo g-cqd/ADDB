@@ -20,7 +20,6 @@ import Testing
 /// covers the eligibility boundary (prefix / phrase / NOT / column filters fall
 /// back, still correct) and edge cases (k ≥ match count, ties, AND with a missing
 /// term).
-@Suite("FTS5 — F6c block-max WAND ranked top-k")
 struct FTSWANDTests {
     /// A corpus dense and varied enough that a single common term spans several
     /// posting blocks (blockSize = 128) and bm25 ordering is non-trivial: term
