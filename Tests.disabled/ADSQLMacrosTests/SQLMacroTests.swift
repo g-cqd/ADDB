@@ -6,7 +6,6 @@ import Testing
 
 @testable import ADSQLMacros
 
-@Suite("ADSQLMacros — #SQL compile-time validation")
 struct SQLMacroTests {
     let macroSpecs: [String: MacroSpec] = ["SQL": MacroSpec(type: SQLMacro.self)]
 
