@@ -50,7 +50,6 @@ private enum MutationFixture {
     }
 }
 
-@Suite("SQL UPDATE / DELETE")
 struct SQLUpdateDeleteTests {
     @Test func mutationScriptMatchesSQLite() throws {
         let dir = TempDir()
