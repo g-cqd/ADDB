@@ -9,7 +9,6 @@ private func terms(_ tokenizer: any FTSTokenizer, _ text: String) throws -> [Str
     try tokenizer.allTokens(text).map { String(decoding: $0.term, as: UTF8.self) }
 }
 
-@Suite("FTS5 — F1 tokenizers")
 struct FTSTokenizerTests {
     // MARK: unicode61
 
