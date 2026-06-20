@@ -88,6 +88,10 @@ enum TableScenario {
         let insertElapsed = nowNanos() - insertStart
         print("  [adsql] table insert    \(formatRate(rows, insertElapsed)) rows/s (5 indexes)")
 
+        try adsqlQueries(db, rows: rows, config: config)
+    }
+
+    private static func adsqlQueries(_ db: Database, rows: Int, config: BenchConfig) throws {
         // Rowid point gets.
         var rng = BenchRNG(seed: 17)
         var rowidHist = LatencyHistogram()
@@ -205,6 +209,12 @@ enum TableScenario {
         let insertElapsed = nowNanos() - insertStart
         print("  [sqlite] table insert    \(formatRate(rows, insertElapsed)) rows/s (5 indexes)")
 
+        sqliteQueries(db, rows: rows, config: config, transient: transient)
+    }
+
+    private static func sqliteQueries(
+        _ db: OpaquePointer?, rows: Int, config: BenchConfig, transient: sqlite3_destructor_type
+    ) {
         var byRowid: OpaquePointer?
         sqlite3_prepare_v3(
             db, "SELECT key, title, framework, kind FROM documents WHERE id = ?1",
