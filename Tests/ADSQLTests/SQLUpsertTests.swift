@@ -9,7 +9,6 @@ import Testing
 
 /// INSERT … ON CONFLICT(target) DO UPDATE, compared against SQLite by applying
 /// the same script to both and diffing the table.
-@Suite("SQL upsert (ON CONFLICT DO UPDATE)")
 struct SQLUpsertTests {
     private static let ddl =
         "CREATE TABLE kv(id INTEGER PRIMARY KEY, k TEXT UNIQUE, hits INTEGER, name TEXT)"
