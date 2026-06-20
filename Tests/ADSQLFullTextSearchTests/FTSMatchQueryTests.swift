@@ -5,7 +5,6 @@ import Testing
 @_spi(ADDBEngine) @testable import ADDBExec
 @testable import ADSQLFullTextSearch
 
-@Suite("FTS5 — F3a MATCH query grammar")
 struct FTSMatchQueryTests {
     private func parse(_ s: String) throws -> FTSQuery { try FTSQuery.parse(s) }
     private func phrase(_ t: String, _ prefix: Bool = false) -> FTSQuery {
