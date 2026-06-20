@@ -13,7 +13,6 @@ import Testing
 /// most relevant docs first (SQLite's negative-ascending convention). Ordering
 /// is checked against a hand-derived oracle and, when the linked sqlite3 has
 /// FTS5, differentially against real SQLite FTS5 top-k rowid order.
-@Suite("FTS5 — F4b rank / bm25() + ORDER BY rank")
 struct FTSRankTests {
     /// `documents_fts(title, body)` (porter) over a `documents(id, key)` base, with
     /// rowid == documents.id. The "swift" docs vary in term frequency, field
