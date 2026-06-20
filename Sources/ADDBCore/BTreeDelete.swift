@@ -130,38 +130,53 @@ extension BTree {
             let rightNo = unsafe Node.branchChild(parentRO, slot + 1)
             try rebalancePair(
                 ctx, tree: &tree, path: path, level: level,
-                leftNo: nodePageNo, leftBuf: nodeBuf, leftIsTarget: true,
-                rightNo: rightNo, rightBuf: nil,
-                parentCellIndex: slot + 1, isLeaf: isLeaf)
+                pair: SiblingPair(
+                    leftNo: nodePageNo, leftBuf: nodeBuf, leftIsTarget: true,
+                    rightNo: rightNo, rightBuf: nil,
+                    parentCellIndex: slot + 1, isLeaf: isLeaf))
         } else if slot >= 0 {
             // Only a left sibling: (left=sibling, right=node), parent cell `slot`.
             let leftNo = unsafe slot == 0 ? PageHeader.link(parentRO) : Node.branchChild(parentRO, slot - 1)
             try rebalancePair(
                 ctx, tree: &tree, path: path, level: level,
-                leftNo: leftNo, leftBuf: nil, leftIsTarget: false,
-                rightNo: nodePageNo, rightBuf: nodeBuf,
-                parentCellIndex: slot, isLeaf: isLeaf)
+                pair: SiblingPair(
+                    leftNo: leftNo, leftBuf: nil, leftIsTarget: false,
+                    rightNo: nodePageNo, rightBuf: nodeBuf,
+                    parentCellIndex: slot, isLeaf: isLeaf))
         }
         // slot == -1 with no cell at 0 cannot occur: branches keep ≥ 1 cell.
     }
 
-    /// Merges or borrows between an adjacent (left, right) pair under the
-    /// parent cell `parentCellIndex` (the cell pointing at `right`). The target
-    /// (underfull) side is `leftIsTarget ? left: right`; its buffer is already
-    /// transaction-owned. The sibling's buffer is nil until shadowed on demand.
+    /// An adjacent (left, right) sibling pair being merged or borrowed across,
+    /// under the parent cell `parentCellIndex` (which points at `right`). The
+    /// target (underfull) side is `leftIsTarget ? left : right`; its buffer is
+    /// already transaction-owned, the sibling's is nil until shadowed on demand.
+    private struct SiblingPair {
+        let leftNo: UInt64
+        let leftBuf: PageBuf?
+        let leftIsTarget: Bool
+        let rightNo: UInt64
+        let rightBuf: PageBuf?
+        let parentCellIndex: Int
+        let isLeaf: Bool
+    }
+
+    /// Merges the pair into one page when their combined payload fits, else
+    /// borrows the richer side's edge cell into the underfull target.
     private static func rebalancePair(
-        _ ctx: TxnContext, tree: inout TreeHandle, path: [PathNode], level: Int,
-        leftNo: UInt64, leftBuf: PageBuf?, leftIsTarget: Bool,
-        rightNo: UInt64, rightBuf: PageBuf?,
-        parentCellIndex: Int, isLeaf: Bool
+        _ ctx: TxnContext, tree: inout TreeHandle, path: [PathNode], level: Int, pair: SiblingPair
     ) throws(DBError) {
+        let leftNo = pair.leftNo
+        let rightNo = pair.rightNo
+        let parentCellIndex = pair.parentCellIndex
+        let isLeaf = pair.isLeaf
         let parent = path[level - 1]
         let separator = unsafe [UInt8](Node.branchKey(parent.buf.readOnly, parentCellIndex))
 
         let leftRO: UnsafeRawBufferPointer =
-            if let leftBuf { unsafe leftBuf.readOnly } else { unsafe try ctx.resolvePage(leftNo) }
+            if let leftBuf = pair.leftBuf { unsafe leftBuf.readOnly } else { unsafe try ctx.resolvePage(leftNo) }
         let rightRO: UnsafeRawBufferPointer =
-            if let rightBuf { unsafe rightBuf.readOnly } else { unsafe try ctx.resolvePage(rightNo) }
+            if let rightBuf = pair.rightBuf { unsafe rightBuf.readOnly } else { unsafe try ctx.resolvePage(rightNo) }
 
         let mergedPayload =
             unsafe payloadBytes(leftRO) + payloadBytes(rightRO)
@@ -193,6 +208,24 @@ extension BTree {
                 nodePageNo: parent.pageNo, nodeBuf: parent.buf, level: level - 1)
             return
         }
+
+        try borrowPair(ctx, tree: &tree, path: path, level: level, pair: pair, separator: separator)
+    }
+
+    /// Borrows the richer side's edge cell into the underfull target (their
+    /// combined payload exceeds a page, so a merge is impossible), then rewrites
+    /// the parent separator to the new boundary key. Both sides are shadowed
+    /// transaction-owned first.
+    private static func borrowPair(
+        _ ctx: TxnContext, tree: inout TreeHandle, path: [PathNode], level: Int,
+        pair: SiblingPair, separator: [UInt8]
+    ) throws(DBError) {
+        let leftNo = pair.leftNo
+        let rightNo = pair.rightNo
+        let parentCellIndex = pair.parentCellIndex
+        let isLeaf = pair.isLeaf
+        let leftIsTarget = pair.leftIsTarget
+        let parent = path[level - 1]
 
         // BORROW the richer side's edge cell into the target.
         let (newLeftNo, leftOwned) = try ctx.shadow(leftNo)
