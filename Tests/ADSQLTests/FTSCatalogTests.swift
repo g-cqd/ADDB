@@ -13,7 +13,6 @@ private func parse(_ sql: String) throws -> SQLStatementAST {
 /// / — `CREATE VIRTUAL TABLE … USING fts5(…)` parsing and the catalog FTS
 /// record (config + three owned trees) round-tripping through disk. No query or
 /// indexing yet — those arrive in –.
-@Suite("FTS5 — F0 (parse + catalog record)")
 struct FTSCatalogTests {
     @Test func parsesSelfContainedAndExternalShapes() throws {
         // self-contained + `porter unicode61` + a column named `key` (a keyword).
