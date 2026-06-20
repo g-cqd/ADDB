@@ -20,7 +20,6 @@ private func selectOf(_ sql: String) throws -> SQLSelect {
     return s
 }
 
-@Suite("SQL parser — statements")
 struct SQLParserStatementTests {
     @Test func blobLiterals() throws {
         let s = try selectOf("SELECT x'00FF', X'cafe', x''")
@@ -358,7 +357,6 @@ struct SQLParserStatementTests {
     }
 }
 
-@Suite("SQL parser — errors")
 struct SQLParserErrorTests {
     static let unsupported: [(String, String)] = [
         ("WITH x AS (SELECT 1) SELECT * FROM x", "WITH"),
