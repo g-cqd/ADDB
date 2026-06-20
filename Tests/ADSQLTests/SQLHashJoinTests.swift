@@ -64,7 +64,6 @@ private enum HashJoinFixture {
     }
 }
 
-@Suite("SQL hash join differential")
 struct SQLHashJoinTests {
     static let joins: [ExecutionOptions.Join] = [.nestedLoop, .hash, .merge, .auto]
 
