@@ -64,7 +64,6 @@ private enum MatrixFixture {
     }
 }
 
-@Suite("SQL strategy matrix — evaluators")
 struct SQLStrategyMatrixTests {
     static let evaluators: [ExecutionOptions.Evaluator] = [.treeWalk, .compiledClosures]
 
