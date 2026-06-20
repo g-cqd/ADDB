@@ -13,7 +13,6 @@ import Testing
 /// splits, deletes (the rootPage cache invalidation), explicit rowids, OR REPLACE,
 /// multi-transaction boundaries, single-txn rollback (the in-place-append undo),
 /// crash-recovery (reopen), and randomized fuzz sequences.
-@Suite("SQL appendCursor")
 struct SQLAppendCursorTests {
     static let ddl = "CREATE TABLE t(id INTEGER PRIMARY KEY, k TEXT NOT NULL, v INTEGER)"
 
