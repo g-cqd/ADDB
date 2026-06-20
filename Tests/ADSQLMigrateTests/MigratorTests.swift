@@ -12,12 +12,11 @@ import Testing
 /// cursor, additive migrations, the column-shape recreate-and-copy path
 /// (rowid + FK preservation, FTS-rebuild-once), no-op re-runs, and
 /// transactional rollback on a throwing body.
-@Suite("Migrate")
 struct MigratorTests {
     // MARK: - schema_version cursor
 
-    @Test("a fresh database reports the baseline version after ensureExists")
-    func freshDatabaseStartsAtBaseline() throws {
+    @Test
+    func `a fresh database reports the baseline version after ensureExists`() throws {
         let temp = try TempDatabase()
         defer { temp.teardown() }
         let db = temp.db
@@ -39,8 +38,8 @@ struct MigratorTests {
 
     // MARK: - additive migration
 
-    @Test("an additive CREATE TABLE migration advances the cursor to 1")
-    func additiveMigrationCreatesTableAndBumpsCursor() throws {
+    @Test
+    func `an additive CREATE TABLE migration advances the cursor to 1`() throws {
         let temp = try TempDatabase()
         defer { temp.teardown() }
         let db = temp.db
@@ -66,8 +65,8 @@ struct MigratorTests {
         #expect(try db.scalarInt("SELECT applied_at FROM schema_version") == 1_700_000_000)
     }
 
-    @Test("two additive migrations apply in ascending order, cursor lands on the last")
-    func multipleAdditiveMigrationsApplyInOrder() throws {
+    @Test
+    func `two additive migrations apply in ascending order, cursor lands on the last`() throws {
         let temp = try TempDatabase()
         defer { temp.teardown() }
         let db = temp.db
@@ -92,8 +91,8 @@ struct MigratorTests {
 
     // MARK: - no-op re-runs
 
-    @Test("re-running a migrator already at the target version does nothing")
-    func reRunAtTargetIsNoOp() throws {
+    @Test
+    func `re-running a migrator already at the target version does nothing`() throws {
         let temp = try TempDatabase()
         defer { temp.teardown() }
         let db = temp.db
@@ -119,8 +118,8 @@ struct MigratorTests {
         #expect(try db.scalarInt("SELECT v FROM t WHERE id = 1") == 42)
     }
 
-    @Test("a partially-migrated database resumes from its recorded version")
-    func partialDatabaseResumes() throws {
+    @Test
+    func `a partially-migrated database resumes from its recorded version`() throws {
         let temp = try TempDatabase()
         defer { temp.teardown() }
         let db = temp.db
@@ -144,8 +143,8 @@ struct MigratorTests {
 
     // MARK: - rollback / atomicity
 
-    @Test("a throwing migration body rolls back: cursor and schema stay at the prior version")
-    func throwingBodyRollsBackAtomically() throws {
+    @Test
+    func `a throwing migration body rolls back: cursor and schema stay at the prior version`() throws {
         let temp = try TempDatabase()
         defer { temp.teardown() }
         let db = temp.db
@@ -187,8 +186,8 @@ struct MigratorTests {
 
     // MARK: - forward-only guard & validation
 
-    @Test("a forward-only migrator refuses a database ahead of its latest migration")
-    func forwardOnlyRefusesNewerDatabase() throws {
+    @Test
+    func `a forward-only migrator refuses a database ahead of its latest migration`() throws {
         let temp = try TempDatabase()
         defer { temp.teardown() }
         let db = temp.db
@@ -217,8 +216,8 @@ struct MigratorTests {
         #expect(outcome.finalVersion == 2)
     }
 
-    @Test("the migrator init rejects duplicate and non-positive versions")
-    func initValidatesVersions() throws {
+    @Test
+    func `the migrator init rejects duplicate and non-positive versions`() throws {
         #expect(throws: MigrationError.duplicateVersion(2)) {
             try Migrator(migrations: [
                 Migration(version: 2) { _ throws(DBError) in },
