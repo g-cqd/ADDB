@@ -20,7 +20,6 @@ import Testing
 
 @_spi(ADDBEngine) @testable import ADDBCore
 
-@Suite("ADDB storage-engine characterization")
 struct StorageEngineCharacterizationTests {
     // MARK: - Helpers
 
@@ -55,8 +54,8 @@ struct StorageEngineCharacterizationTests {
 
     // MARK: - B+tree: insert / split / delete key ordering
 
-    @Test("inserting keys in scrambled order yields a fully ordered B+tree")
-    func insertScrambledKeysOrders() throws {
+    @Test
+    func `inserting keys in scrambled order yields a fully ordered B+tree`() throws {
         try withTempDBPath { path in
             let db = try Database.open(at: path)
             defer { db.close() }
@@ -76,8 +75,8 @@ struct StorageEngineCharacterizationTests {
         }
     }
 
-    @Test("near-page-sized values force leaf splits and grow the tree past one level")
-    func largeValuesForceSplitsAndGrowDepth() throws {
+    @Test
+    func `near-page-sized values force leaf splits and grow the tree past one level`() throws {
         try withTempDBPath { path in
             let db = try Database.open(at: path)
             defer { db.close() }
@@ -106,8 +105,8 @@ struct StorageEngineCharacterizationTests {
         }
     }
 
-    @Test("deleting half the keys preserves order and integrity of the rest")
-    func deleteHalfPreservesOrderAndIntegrity() throws {
+    @Test
+    func `deleting half the keys preserves order and integrity of the rest`() throws {
         try withTempDBPath { path in
             let db = try Database.open(at: path)
             defer { db.close() }
@@ -142,8 +141,8 @@ struct StorageEngineCharacterizationTests {
         }
     }
 
-    @Test("deleting every key empties the tree back to a zero root")
-    func deleteAllEmptiesTree() throws {
+    @Test
+    func `deleting every key empties the tree back to a zero root`() throws {
         try withTempDBPath { path in
             let db = try Database.open(at: path)
             defer { db.close() }
@@ -164,8 +163,8 @@ struct StorageEngineCharacterizationTests {
 
     // MARK: - Freelist: page reuse after deletes
 
-    @Test("freed pages are reused so the file does not grow unboundedly")
-    func freelistReusesPagesAfterDeletes() throws {
+    @Test
+    func `freed pages are reused so the file does not grow unboundedly`() throws {
         try withTempDBPath { path in
             let db = try Database.open(at: path)
             defer { db.close() }
@@ -214,8 +213,8 @@ struct StorageEngineCharacterizationTests {
         }
     }
 
-    @Test("the free tree lists freed pages and integrity accounts for every one")
-    func freelistInspectionAccountsForFreedPages() throws {
+    @Test
+    func `the free tree lists freed pages and integrity accounts for every one`() throws {
         try withTempDBPath { path in
             let db = try Database.open(at: path)
             defer { db.close() }
@@ -249,8 +248,8 @@ struct StorageEngineCharacterizationTests {
 
     // MARK: - Codec round-trips (pure functions, no database)
 
-    @Test("RecordCodec round-trips every storage class")
-    func recordCodecRoundTrips() throws {
+    @Test
+    func `RecordCodec round-trips every storage class`() throws {
         let rows: [[Value]] = [
             [],
             [.null],
@@ -271,8 +270,8 @@ struct StorageEngineCharacterizationTests {
         }
     }
 
-    @Test("KeyCodec is order-preserving and round-trips non-NOCASE fields")
-    func keyCodecOrderAndRoundTrip() throws {
+    @Test
+    func `KeyCodec is order-preserving and round-trips non-NOCASE fields`() throws {
         // Order-preservation across storage classes: NULL < INTEGER < REAL < TEXT < BLOB,
         // and within a class the encoded memcmp order matches the typed order.
         let ascending: [Value] = [
@@ -304,8 +303,8 @@ struct StorageEngineCharacterizationTests {
         }
     }
 
-    @Test("Meta encodes into a page and decodes back identically with a valid checksum")
-    func metaPageCodecRoundTrips() throws {
+    @Test
+    func `Meta encodes into a page and decodes back identically with a valid checksum`() throws {
         let meta = Meta(
             generation: 42, rootPage: 7, freeRootPage: 9, pageCount: 128,
             kvCount: 1000, treeDepth: 3, flags: 0, freeDepth: 2, freeEntryCount: 5)
@@ -326,8 +325,8 @@ struct StorageEngineCharacterizationTests {
         #expect(wrongSeed == .corrupt)
     }
 
-    @Test("page checksums verify when intact and fail on a single flipped byte")
-    func pageChecksumDetectsTampering() throws {
+    @Test
+    func `page checksums verify when intact and fail on a single flipped byte`() throws {
         let buf = PageBuf()
         // Build a plausible leaf page body, then stamp its checksum.
         buf.withMutableBytes { page in
@@ -349,8 +348,8 @@ struct StorageEngineCharacterizationTests {
 
     // MARK: - Overflow pages for large values
 
-    @Test("a value larger than the inline limit spills to an overflow chain and round-trips")
-    func largeValueUsesOverflowAndRoundTrips() throws {
+    @Test
+    func `a value larger than the inline limit spills to an overflow chain and round-trips`() throws {
         try withTempDBPath { path in
             let db = try Database.open(at: path)
             defer { db.close() }
@@ -376,8 +375,8 @@ struct StorageEngineCharacterizationTests {
         }
     }
 
-    @Test("overwriting an overflow value with a small one reclaims the chain")
-    func overwriteOverflowWithInlineReleasesChain() throws {
+    @Test
+    func `overwriting an overflow value with a small one reclaims the chain`() throws {
         try withTempDBPath { path in
             let db = try Database.open(at: path)
             defer { db.close() }
@@ -398,8 +397,8 @@ struct StorageEngineCharacterizationTests {
 
     // MARK: - MVCC snapshot isolation
 
-    @Test("a reader's open snapshot stays consistent across a concurrent writer commit")
-    func readerSnapshotIsolatedFromConcurrentWriter() throws {
+    @Test
+    func `a reader's open snapshot stays consistent across a concurrent writer commit`() throws {
         try withTempDBPath { path in
             let db = try Database.open(at: path)
             defer { db.close() }
@@ -441,8 +440,8 @@ struct StorageEngineCharacterizationTests {
         }
     }
 
-    @Test("a committed write advances the generation while an old snapshot keeps its own")
-    func snapshotGenerationIsStable() throws {
+    @Test
+    func `a committed write advances the generation while an old snapshot keeps its own`() throws {
         try withTempDBPath { path in
             let db = try Database.open(at: path)
             defer { db.close() }
@@ -463,8 +462,8 @@ struct StorageEngineCharacterizationTests {
 
     // MARK: - Durability / recovery (reopen after commit)
 
-    @Test("committed key/value data survives close and reopen")
-    func dataSurvivesReopen() throws {
+    @Test
+    func `committed key/value data survives close and reopen`() throws {
         try withTempDBPath { path in
             let originalKeys = (0 ..< 24).map { String(format: "persist-%02d", $0) }
             do {
@@ -490,8 +489,8 @@ struct StorageEngineCharacterizationTests {
         }
     }
 
-    @Test("the newest generation survives across multiple reopen cycles")
-    func latestGenerationSurvivesMultipleReopens() throws {
+    @Test
+    func `the newest generation survives across multiple reopen cycles`() throws {
         try withTempDBPath { path in
             // Three separate open→write→close cycles, each layering a new value. The
             // final reopen must reflect every committed generation, proving recovery
@@ -517,8 +516,8 @@ struct StorageEngineCharacterizationTests {
         }
     }
 
-    @Test("an overflow value survives a reopen with its chain intact")
-    func overflowValueSurvivesReopen() throws {
+    @Test
+    func `an overflow value survives a reopen with its chain intact`() throws {
         try withTempDBPath { path in
             let size = Format.overflowCapacity * 2 + 321
             var big = [UInt8](repeating: 0, count: size)
@@ -543,8 +542,8 @@ struct StorageEngineCharacterizationTests {
         pageNo * UInt64(Format.pageSize) + UInt64(fieldOffset)
     }
 
-    @Test("a structurally corrupt node page is rejected by a read, never trapped")
-    func corruptNodePageRejectedOnRead() throws {
+    @Test
+    func `a structurally corrupt node page is rejected by a read, never trapped`() throws {
         try withTempDBPath { path in
             do {
                 let db = try Database.open(at: path)
@@ -578,8 +577,8 @@ struct StorageEngineCharacterizationTests {
         }
     }
 
-    @Test("verifyIntegrity with checksums rejects a page whose bytes were altered post-commit")
-    func corruptPageRejectedByIntegrityChecksum() throws {
+    @Test
+    func `verifyIntegrity with checksums rejects a page whose bytes were altered post-commit`() throws {
         try withTempDBPath { path in
             do {
                 let db = try Database.open(at: path)
@@ -611,8 +610,8 @@ struct StorageEngineCharacterizationTests {
         }
     }
 
-    @Test("a truncated database file is rejected at open, not trapped")
-    func truncatedFileRejectedAtOpen() throws {
+    @Test
+    func `a truncated database file is rejected at open, not trapped`() throws {
         try withTempDBPath { path in
             do {
                 let db = try Database.open(at: path)
