@@ -13,7 +13,6 @@ import Testing
     import Glibc
 #endif
 
-@Suite("FileChannel")
 struct FileChannelTests {
     @Test func readWriteRoundTrip() throws {
         let dir = TempDir()
@@ -83,7 +82,6 @@ struct FileChannelTests {
     }
 }
 
-@Suite("MMap")
 struct MMapTests {
     /// The architecture-critical assumption: reserve a mapping far larger than
     /// the file, grow the file afterwards with pwrite/ftruncate, and observe
@@ -126,7 +124,6 @@ struct MMapTests {
     }
 }
 
-@Suite("SimulatedDisk")
 struct SimulatedDiskTests {
     @Test func writesPassThrough() throws {
         let dir = TempDir()
