@@ -13,7 +13,6 @@ import Testing
 /// search shape. Boolean membership only (ranking is). The end-to-end results
 /// are checked against a hand-derived oracle, and the matching-rowid *sets* are
 /// checked against real SQLite FTS5 (when the linked sqlite3 has FTS5).
-@Suite("FTS5 — F3c MATCH SQL surface")
 struct FTSQueryTests {
     /// `documents_fts(title, body)` (porter) over a `documents(id, key)` base.
     /// rowid in the FTS table equals `documents.id`, so the join is `d.id =
