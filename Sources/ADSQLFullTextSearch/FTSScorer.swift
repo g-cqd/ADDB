@@ -149,8 +149,8 @@ package enum FTSScorer {
                 (leaf, allowed) throws(DBError) in
                 resolved.append(
                     try Self.prepareLeaf(
-                        leaf, allowed: allowed, record: record, resolver: resolver, columns: columns,
-                        tokenizer: tokenizer, n: n))
+                        leaf, resolver: resolver, tokenizer: tokenizer,
+                        params: LeafParams(allowed: allowed, record: record, columns: columns, n: n)))
             }
             self.leaves = resolved
         }
@@ -219,10 +219,22 @@ package enum FTSScorer {
         /// ONCE. Combines what the per-document path computed separately as
         /// `documentFrequency` (df) and `frequencies(docid)` (per-doc tf), so the two
         /// stay consistent and neither re-reads postings per document.
+        /// The per-query inputs shared by every leaf-preparation step: the column
+        /// filter, the FTS record, the column count, and the corpus document count
+        /// `n` (for IDF). The page `resolver` stays a separate argument — it carries
+        /// the scorer's generic parameter, which a nested type cannot capture.
+        private struct LeafParams {
+            let allowed: Set<Int>?
+            let record: Catalog.FTSRecord
+            let columns: Int
+            let n: Double
+        }
+
         private static func prepareLeaf(
-            _ leaf: FTSQuery, allowed: Set<Int>?, record: Catalog.FTSRecord, resolver: R,
-            columns: Int, tokenizer: any FTSTokenizer, n: Double
+            _ leaf: FTSQuery, resolver: R, tokenizer: any FTSTokenizer, params: LeafParams
         ) throws(DBError) -> PreparedLeaf {
+            let allowed = params.allowed
+            let n = params.n
             guard case .phrase(let text, let prefix) = leaf else {
                 return PreparedLeaf(idf: FTSScorer.idf(df: 0, n: n), allowed: allowed, perDocFreq: [:])
             }
@@ -231,22 +243,21 @@ package enum FTSScorer {
                 return PreparedLeaf(idf: FTSScorer.idf(df: 0, n: n), allowed: allowed, perDocFreq: [:])
             }
             if tokens.count == 1 {
-                return try prepareTerm(
-                    tokens[0], prefix: prefix, allowed: allowed, record: record, resolver: resolver,
-                    columns: columns, n: n)
+                return try prepareTerm(tokens[0], prefix: prefix, resolver: resolver, params: params)
             }
-            return try preparePhrase(
-                tokens, prefix: prefix, allowed: allowed, record: record, resolver: resolver,
-                columns: columns, n: n)
+            return try preparePhrase(tokens, prefix: prefix, resolver: resolver, params: params)
         }
 
         /// A single-term leaf: df from the dictionary (no prefix) or the prefix
         /// expansion's distinct documents; per-column tf summed across the expansion.
         /// Mirrors `termDocumentFrequency` + `termFrequencies`.
         private static func prepareTerm(
-            _ term: [UInt8], prefix: Bool, allowed: Set<Int>?, record: Catalog.FTSRecord, resolver: R,
-            columns: Int, n: Double
+            _ term: [UInt8], prefix: Bool, resolver: R, params: LeafParams
         ) throws(DBError) -> PreparedLeaf {
+            let allowed = params.allowed
+            let record = params.record
+            let columns = params.columns
+            let n = params.n
             var perDoc: [Int64: [UInt32]] = [:]
             if !prefix {
                 let df = try FTSIndex.documentFrequency(resolver, record, term: term)
@@ -286,9 +297,12 @@ package enum FTSScorer {
         /// derive from each expansion's per-token `[docid: posting]` maps, decoded
         /// once. Mirrors `phraseDocs` + `phraseFrequencies`.
         private static func preparePhrase(
-            _ tokens: [[UInt8]], prefix: Bool, allowed: Set<Int>?, record: Catalog.FTSRecord, resolver: R,
-            columns: Int, n: Double
+            _ tokens: [[UInt8]], prefix: Bool, resolver: R, params: LeafParams
         ) throws(DBError) -> PreparedLeaf {
+            let allowed = params.allowed
+            let record = params.record
+            let columns = params.columns
+            let n = params.n
             guard record.definition.detail != .none else {
                 // Without positions a phrase cannot be scored per column; it still matched
                 // (requires positions for phrases), so it contributes nothing.
