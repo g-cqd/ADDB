@@ -7,7 +7,6 @@ import Testing
 @testable import ADDBTestSupport
 @testable import ADSQL
 
-@Suite("FreeList codecs")
 struct FreeListCodecTests {
     @Test func keyOrderIsNumeric() {
         let a = FreeList.entryKey(gen: 0, seq: 5)
@@ -57,7 +56,6 @@ struct FreeListCodecTests {
     }
 }
 
-@Suite("FreeList lifecycle")
 struct FreeListLifecycleTests {
     /// Runs the full production lifecycle against a real file and checks the
     /// liveness invariant after every commit: no leaked, no double-used pages.
