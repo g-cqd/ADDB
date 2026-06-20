@@ -15,10 +15,10 @@
     /// clock to a fixed epoch, so the formatted timestamp is exact with no real-time read
     /// and no flake. Pillar A's `now`-provider seam in action on the engine's datetime
     /// default — the live clock stays the production default, untouched.
-    @Suite("CivilTime — deterministic datetime('now')", .tags(.property))
+    @Suite(.tags(.property))
     struct CivilTimeTests {
-        @Test("utcNowString is exact under an injected clock")
-        func deterministicUnderInjectedClock() {
+        @Test
+        func `utcNowString is exact under an injected clock`() {
             #expect(CivilTime.utcNowString(now: { 0 }) == "1970-01-01 00:00:00")
             #expect(CivilTime.utcNowString(now: { 1_609_459_200 }) == "2021-01-01 00:00:00")
             // Leap day, mid-day — exercises the civil-from-days month/day math.
@@ -27,8 +27,8 @@
             #expect(CivilTime.utcNowString(now: { -1 }) == "1969-12-31 23:59:59")
         }
 
-        @Test("the live default still reads the real clock (production unchanged)")
-        func liveDefaultStillReadsWallClock() {
+        @Test
+        func `the live default still reads the real clock (production unchanged)`() {
             // The default path must agree with explicitly injecting the live provider, and
             // both must land in a plausible present window (sanity that the seam didn't
             // change production behavior).
