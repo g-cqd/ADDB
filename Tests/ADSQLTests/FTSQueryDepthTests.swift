@@ -34,7 +34,6 @@ import Testing
 /// ⇒ ~25× margin). Both caps fire far below the overflow threshold, so the FTS
 /// source needs no recursion-specific cap (unlike the SQL parser) — this suite is
 /// the lock that keeps it that way.
-@Suite("FTS5 — MATCH query recursion-cap depth")
 struct FTSQueryDepthTests {
     /// A 512 KiB worker stack — the constrained worker stack on which the SQL
     /// parser's recursion overflowed. A real parse/eval overflow reproduces only
