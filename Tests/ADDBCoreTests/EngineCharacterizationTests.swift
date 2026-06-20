@@ -18,12 +18,11 @@ import ADSQLModel
     // otherwise lives in the sibling ADSQL package's integration suite.
     @_spi(ADDBEngine) @testable import ADDBCore
 
-    @Suite("ADDB engine characterization")
     struct ADDBEngineCharacterizationTests {
         private func key(_ s: String) -> [UInt8] { Array(s.utf8) }
 
-        @Test("open creates a database with the requested path")
-        func openCreates() throws {
+        @Test
+        func `open creates a database with the requested path`() throws {
             try withTemporaryFilePath { path in
                 let db = try Database.open(at: path)
                 defer { db.close() }
@@ -31,8 +30,8 @@ import ADSQLModel
             }
         }
 
-        @Test("put then get round-trips the value")
-        func putGetRoundTrip() throws {
+        @Test
+        func `put then get round-trips the value`() throws {
             try withTemporaryFilePath { path in
                 let db = try Database.open(at: path)
                 defer { db.close() }
@@ -44,8 +43,8 @@ import ADSQLModel
             }
         }
 
-        @Test("delete reports prior existence and removes the key")
-        func deleteSemantics() throws {
+        @Test
+        func `delete reports prior existence and removes the key`() throws {
             try withTemporaryFilePath { path in
                 let db = try Database.open(at: path)
                 defer { db.close() }
@@ -59,8 +58,8 @@ import ADSQLModel
             }
         }
 
-        @Test("committed data survives a reopen")
-        func persistenceAcrossReopen() throws {
+        @Test
+        func `committed data survives a reopen`() throws {
             try withTemporaryFilePath { path in
                 let writer = try Database.open(at: path)
                 try writer.writeSync { (txn) throws(DBError) in try txn.put(key("durable"), key("yes")) }
@@ -73,8 +72,8 @@ import ADSQLModel
             }
         }
 
-        @Test("count reflects the number of stored keys")
-        func countTracksKeys() throws {
+        @Test
+        func `count reflects the number of stored keys`() throws {
             try withTemporaryFilePath { path in
                 let db = try Database.open(at: path)
                 defer { db.close() }
@@ -85,8 +84,8 @@ import ADSQLModel
             }
         }
 
-        @Test("a write advances the generation")
-        func writeAdvancesGeneration() throws {
+        @Test
+        func `a write advances the generation`() throws {
             try withTemporaryFilePath { path in
                 let db = try Database.open(at: path)
                 defer { db.close() }
@@ -96,8 +95,8 @@ import ADSQLModel
             }
         }
 
-        @Test("a forward cursor scan yields keys in ascending order")
-        func cursorScanIsOrdered() throws {
+        @Test
+        func `a forward cursor scan yields keys in ascending order`() throws {
             try withTemporaryFilePath { path in
                 let db = try Database.open(at: path)
                 defer { db.close() }
@@ -120,8 +119,8 @@ import ADSQLModel
             }
         }
 
-        @Test("integrity verification passes on a freshly written database")
-        func integrityHolds() throws {
+        @Test
+        func `integrity verification passes on a freshly written database`() throws {
             try withTemporaryFilePath { path in
                 let db = try Database.open(at: path)
                 defer { db.close() }
@@ -133,8 +132,8 @@ import ADSQLModel
             }
         }
 
-        @Test("a corrupt node page is rejected, never trapped or mis-read")
-        func corruptNodePageIsRejected() throws {
+        @Test
+        func `a corrupt node page is rejected, never trapped or mis-read`() throws {
             try withTemporaryFilePath { path in
                 do {
                     let db = try Database.open(at: path)
