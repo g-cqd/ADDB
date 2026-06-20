@@ -113,6 +113,23 @@ enum Writer {
 
     // MARK: - INSERT
 
+    /// Resolves an INSERT's ON CONFLICT clause into the engine conflict policy plus,
+    /// for DO UPDATE, the validated (target, sets) upsert spec.
+    private static func resolveConflict(
+        _ insert: SQLInsert, definition: TableDefinition
+    ) throws(DBError) -> (policy: ConflictPolicy, upsert: (target: String, sets: [SQLAssignment])?) {
+        switch insert.conflict {
+            case .abort: return (.abort, nil)
+            case .replace: return (.replace, nil)
+            case .ignore: return (.ignore, nil)
+            case .doUpdate(let target, let sets):
+                guard definition.columnIndex(of: target) != nil else {
+                    throw DBError.noSuchColumn(table: insert.table, column: target)
+                }
+                return (.abort, (target, sets))
+        }
+    }
+
     static func insert(
         _ insert: SQLInsert, txn: borrowing WriteTxn, params: SQLParameters
     ) throws(DBError) -> (rows: [SQLRow], result: RunResult) {
@@ -123,18 +140,7 @@ enum Writer {
         guard let definition = schema.tables[insert.table] else {
             throw DBError.noSuchTable(insert.table)
         }
-        var conflict: ConflictPolicy = .abort
-        var upsert: (target: String, sets: [SQLAssignment])?
-        switch insert.conflict {
-            case .abort: conflict = .abort
-            case .replace: conflict = .replace
-            case .ignore: conflict = .ignore
-            case .doUpdate(let target, let sets):
-                guard definition.columnIndex(of: target) != nil else {
-                    throw DBError.noSuchColumn(table: insert.table, column: target)
-                }
-                upsert = (target, sets)
-        }
+        let (conflict, upsert) = try resolveConflict(insert, definition: definition)
 
         let columnNames = insert.columns.isEmpty ? definition.columns.map(\.name) : insert.columns
         var columnSlots: [Int] = []
@@ -168,11 +174,12 @@ enum Writer {
                     "\(rowValues.count) values for \(columnNames.count) columns in INSERT")
             }
             if let upsert {
-                var values: [String: Value] = [:]
-                for (index, value) in rowValues.enumerated() { values[columnNames[index]] = value }
+                let values = Dictionary(uniqueKeysWithValues: zip(columnNames, rowValues))
                 try applyUpsert(
-                    values, target: upsert.target, sets: upsert.sets, table: insert.table,
-                    definition: definition, schema: schema, txn: txn, params: params,
+                    UpsertRequest(
+                        candidate: values, target: upsert.target, sets: upsert.sets,
+                        table: insert.table, definition: definition, schema: schema),
+                    txn: txn, params: params,
                     changes: &changes, lastRowid: &lastRowid, record: recordReturning)
                 return
             }
@@ -203,106 +210,6 @@ enum Writer {
                 }
         }
         return (returningRows, RunResult(changes: changes, lastInsertRowid: lastRowid))
-    }
-
-    // MARK: - ON CONFLICT DO UPDATE (upsert)
-
-    /// Inserts the candidate row, or — when it conflicts on the target unique
-    /// column — applies the DO UPDATE SET against the existing row with the
-    /// proposed row visible as `excluded.*`.
-    static func applyUpsert(
-        _ candidate: [String: Value], target: String, sets: [SQLAssignment], table: String,
-        definition: TableDefinition, schema: Schema, txn: borrowing WriteTxn, params: SQLParameters,
-        changes: inout Int, lastRowid: inout Int64, record: (Int64) throws(DBError) -> Void
-    ) throws(DBError) {
-        let existingRowid: Int64?
-        if case .rowidAlias(let aliasColumn, _) = definition.primaryKey, aliasColumn == target {
-            if case .integer(let candidateRowid)? = candidate[target],
-                try txn.row(in: table, rowid: candidateRowid) != nil
-            {
-                existingRowid = candidateRowid
-            } else {
-                existingRowid = nil
-            }
-        } else {
-            guard
-                let index = schema.indexes(on: table)
-                    .first(where: {
-                        $0.unique && $0.columns.count == 1 && $0.columns[0].lowercased() == target.lowercased()
-                    })
-            else {
-                throw DBError.sqlBind("ON CONFLICT target \(target) is not a unique column")
-            }
-            if let value = candidate[target], !value.isNull {
-                existingRowid = try txn.firstRowid(index: index.name, equals: [value])
-            } else {
-                existingRowid = nil  // NULLs never collide in a unique index
-            }
-        }
-
-        guard let rowid = existingRowid else {
-            if let inserted = try txn.insert(into: table, candidate, onConflict: .abort) {
-                changes += 1
-                lastRowid = inserted
-                try record(inserted)
-            }
-            return
-        }
-
-        guard let existing = try txn.row(in: table, rowid: rowid) else {
-            throw DBError.integrityFailure("upsert target row \(rowid) vanished")
-        }
-        let env = excludedEnv(
-            candidate: candidate, existing: existing.values, definition: definition, params: params)
-        var setValues: [String: Value] = [:]
-        for assignment in sets {
-            guard definition.columnIndex(of: assignment.column) != nil else {
-                throw DBError.noSuchColumn(table: table, column: assignment.column)
-            }
-            setValues[assignment.column] = try SQLEval.evaluate(assignment.value, env)
-        }
-        _ = try txn.update(table, rowid: rowid, set: setValues)
-        changes += 1
-        lastRowid = rowid
-        try record(rowid)
-    }
-
-    /// SET-expression env for DO UPDATE: `excluded.col` is the proposed insert
-    /// value (or the column default when not supplied); a bare/table-qualified
-    /// column is the existing row's value.
-    static func excludedEnv(
-        candidate: [String: Value], existing: [Value], definition: TableDefinition,
-        params: SQLParameters
-    ) -> SQLEvalEnv {
-        SQLEvalEnv(
-            now: params.now,
-            parameter: { p throws(DBError) in try params.lookup(p) },
-            column: { (qualifier, name, _) throws(DBError) in
-                if let qualifier, qualifier.lowercased() == "excluded" {
-                    if let value = candidate[name] { return value }
-                    guard let column = definition.columns.first(where: { $0.name == name }) else {
-                        throw DBError.noSuchColumn(table: "excluded", column: name)
-                    }
-                    switch column.defaultValue {
-                        case .value(let value): return value
-                        case .datetimeNow: return .text(CivilTime.utcNowString(now: params.now))
-                        case nil: return .null
-                    }
-                }
-                guard let index = definition.columnIndex(of: name) else {
-                    throw DBError.noSuchColumn(table: definition.name, column: name)
-                }
-                return existing[index]
-            },
-            collationOf: { (_, name) in
-                definition.columnIndex(of: name).map { definition.columns[$0].collation }
-            },
-            columnTypeOf: { (_, name) in
-                definition.columnIndex(of: name).map { definition.columns[$0].type }
-            },
-            scalarSubquery: { _ throws(DBError) in
-                throw DBError.sqlUnsupported("subquery in this context")
-            })
     }
 
     // MARK: - Reading within a write transaction (INSERT … SELECT, subqueries)
@@ -419,102 +326,5 @@ enum Writer {
             changes += 1
         }
         return (returningRows, RunResult(changes: changes, lastInsertRowid: 0))
-    }
-
-    // MARK: - RETURNING
-
-    /// Resolves RETURNING columns to (name, expression), expanding `*`.
-    static func bindReturning(
-        _ columns: [SQLResultColumn], definition: TableDefinition
-    ) throws(DBError) -> [(name: String, expr: SQLExpr)]? {
-        guard !columns.isEmpty else { return nil }
-        var outputs: [(name: String, expr: SQLExpr)] = []
-        for column in columns {
-            switch column {
-                case .star, .tableStar:
-                    for name in definition.columns.map(\.name) {
-                        outputs.append((name, .column(table: nil, name: name, offset: 0)))
-                    }
-                case .expr(let expr, let alias, let sourceText):
-                    let name: String
-                    if let alias {
-                        name = alias
-                    } else if case .column(_, let columnName, _) = expr {
-                        name = columnName
-                    } else {
-                        name = sourceText
-                    }
-                    outputs.append((name, expr))
-            }
-        }
-        return outputs
-    }
-
-    /// Evaluates the RETURNING expressions against a row's values.
-    static func projectRow(
-        _ returning: [(name: String, expr: SQLExpr)], table: TableDefinition, values rowValues: [Value],
-        header: SQLColumnHeader, params: SQLParameters
-    ) throws(DBError) -> SQLRow {
-        let env = rowEnv(table: table, values: rowValues, params: params)
-        var values: [Value] = []
-        values.reserveCapacity(returning.count)
-        for output in returning { values.append(try SQLEval.evaluate(output.expr, env)) }
-        return SQLRow(header: header, values: values)
-    }
-
-    /// An evaluation env over one materialized row of a single table. When this
-    /// runs inside a trigger body (a frame is active on `ctx`), `new.col`/`old.col`
-    /// resolve from the frame before the table's own columns — so a trigger body's
-    /// `UPDATE … SET x = new.y WHERE id = old.id` reads NEW/OLD correctly.
-    static func rowEnv(
-        table: TableDefinition, values: [Value], params: SQLParameters,
-        triggerCtx: TxnContext? = nil
-    ) -> SQLEvalEnv {
-        SQLEvalEnv(
-            now: params.now,
-            parameter: { p throws(DBError) in try params.lookup(p) },
-            column: { (qualifier, name, offset) throws(DBError) in
-                if let triggerCtx,
-                    let value = try SQLTriggerEngine.triggerColumn(
-                        triggerCtx, qualifier: qualifier, name: name, offset: offset)
-                {
-                    return value
-                }
-                guard let index = table.columnIndex(of: name) else {
-                    throw DBError.noSuchColumn(table: qualifier ?? table.name, column: name)
-                }
-                return values[index]
-            },
-            collationOf: { (qualifier, name) in
-                if let triggerCtx,
-                    let c = SQLTriggerEngine.triggerCollation(triggerCtx, qualifier: qualifier, name: name)
-                {
-                    return c
-                }
-                return table.columnIndex(of: name).map { table.columns[$0].collation }
-            },
-            columnTypeOf: { (qualifier, name) in
-                if let triggerCtx,
-                    let t = SQLTriggerEngine.triggerColumnType(triggerCtx, qualifier: qualifier, name: name)
-                {
-                    return t
-                }
-                return table.columnIndex(of: name).map { table.columns[$0].type }
-            },
-            scalarSubquery: { _ throws(DBError) in
-                throw DBError.sqlUnsupported("subquery in this context")
-            })
-    }
-
-    /// The base evaluation env for a write statement's VALUES expressions:
-    /// parameters, plus `new.col`/`old.col` when running inside a trigger body
-    /// (a frame active on the txn's context). Outside a trigger it is exactly a
-    /// parameters-only env, so non-trigger writes are unchanged.
-    static func writeEnv(txn: borrowing WriteTxn, params: SQLParameters) -> SQLEvalEnv {
-        let ctx = txn.ctx
-        guard ctx.triggerFrame != nil else {
-            return SQLEvalEnv.parametersOnly(now: params.now) { p throws(DBError) in try params.lookup(p) }
-        }
-        return SQLTriggerEngine.bodyEnv(ctx, params: params)
     }
 }
