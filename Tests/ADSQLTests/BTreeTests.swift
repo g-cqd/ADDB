@@ -62,7 +62,6 @@ private func scanAll(_ resolver: some PageResolver, _ meta: Meta) throws -> [(ke
     return out
 }
 
-@Suite("BTree model tests")
 struct BTreeModelTests {
     @Test(arguments: [UInt64(1), 7, 42, 1234, 0xDEAD])
     func randomPutsMatchModel(seed: UInt64) throws {
