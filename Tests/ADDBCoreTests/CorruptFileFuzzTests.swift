@@ -20,7 +20,6 @@ import ADSQLModel
     // exactly the loud signal of a remaining unhardened trap vector.
     @_spi(ADDBEngine) @testable import ADDBCore
 
-    @Suite("ADDB corrupt-file fuzz")
     struct ADDBCorruptFileFuzzTests {
         // The deterministic generator and the scratch-path helper are now the shared
         // `ADTestKit.SeededRNG` (its `next` / `next(upTo:)` stream is byte-for-byte the old
@@ -160,8 +159,8 @@ import ADSQLModel
             _ = try? db.verifyIntegrity(deep: true)
         }
 
-        @Test("byte-mutated node region never traps, only throws DBError or returns")
-        func mutatedNodeRegionNeverTraps() throws {
+        @Test
+        func `byte-mutated node region never traps, only throws DBError or returns`() throws {
             // Fixed seed → fully deterministic, reproducible run.
             let seed: UInt64 = 0xADDB_F0E5_1234_5678
             let maxMutationsPerIteration = 8
