@@ -9,7 +9,6 @@ import Testing
 
 /// / — self-contained FTS index build + maintenance through the SQL write
 /// API. Inspection uses the internal read helpers (the SQL MATCH query is).
-@Suite("FTS5 — F2b index build + maintenance")
 struct FTSIndexTests {
     private func run(_ db: Database, _ sql: String) throws { try db.prepare(sql).run() }
 
