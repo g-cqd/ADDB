@@ -9,7 +9,6 @@ import Testing
 /// The write-side builders lower to the same `SQLInsert`/`SQLUpdate`/`SQLDelete`
 /// AST the parser produces, so each builder must have the same effect as the
 /// equivalent SQL string.
-@Suite("SQL DSL — write builders")
 struct WriteDSLTests {
     private func makeDB(_ dir: TempDir) throws -> Database {
         let db = try Database.open(at: dir.file("writedsl.adsql"))
