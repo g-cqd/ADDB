@@ -48,7 +48,6 @@ private enum CompoundFixture {
     }
 }
 
-@Suite("SQL compounds and json_each")
 struct SQLCompoundTests {
     // ORDER BY chosen so each result is a total order (distinct projected values
     // or disjoint arms with a unique id), making ordered comparison reliable.
