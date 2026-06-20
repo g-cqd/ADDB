@@ -15,7 +15,6 @@ import Testing
 /// `documents`); this suite covers parsing, catalog persistence (re-parsed on
 /// reopen), end-to-end FTS sync, plain (non-FTS) firing with a CSQLite
 /// differential, DROP, IF [NOT] EXISTS, and the recursion-depth guard.
-@Suite("FTS5 — F5 general CREATE TRIGGER")
 struct FTSTriggerTests {
     private func parse(_ sql: String) throws -> SQLStatementAST {
         try SQLParser.parseOne(sql)
@@ -599,7 +598,7 @@ struct FTSTriggerTests {
 /// mutual exclusion (every write lands; no lost/torn updates) and FIFO/atomic
 /// application (a per-write running counter ends exactly at the write count).
 /// Must be TSan-clean.
-@Suite("Writer thread stress", .serialized)
+@Suite(.serialized)
 struct WriterThreadStressTests {
     /// Each write reads a counter, increments it, writes it back — all inside one
     /// exclusive transaction. If the executor ever ran two writes concurrently or
