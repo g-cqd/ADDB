@@ -21,7 +21,6 @@ struct MacroUser {
     let avatar: [UInt8]?
 }
 
-@Suite("@Table integration")
 struct TableMacroIntegrationTests {
     @Test func definitionMirrorsStoredProperties() {
         let definition = MacroUser.tableDefinition
