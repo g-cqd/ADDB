@@ -108,7 +108,6 @@ private func floatValue(_ v: Value) -> Double? {
 
 // MARK: - Differential
 
-@Suite("SQL evaluator differential vs SQLite")
 struct SQLEvalDifferentialTests {
     static let fixedCorpus: [String] = [
         // 3VL
@@ -307,7 +306,6 @@ struct SQLEvalDifferentialTests {
     }
 }
 
-@Suite("SQL evaluator semantics")
 struct SQLEvalSemanticsTests {
     @Test func truthTables() {
         // (a, b, a AND b, a OR b) over {true, false, unknown}
