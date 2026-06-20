@@ -11,7 +11,6 @@ import Testing
 /// seek — the seek encodes keys in the column's collation, so dropping the conjunct
 /// from the residual would under-/mis-return rows. Differential vs SQLite. (Surfaced
 /// by a soundness review of the covered-conjunct/residual-elimination path.)
-@Suite("Indexed equality vs COLLATE override")
 struct SQLCollationIndexTests {
     private func makePair(_ dir: TempDir, _ name: String) throws -> (Database, SQLiteMirror) {
         let db = try Database.open(at: dir.file(name))
