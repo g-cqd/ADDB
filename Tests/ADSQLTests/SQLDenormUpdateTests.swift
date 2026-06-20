@@ -13,7 +13,6 @@ import Testing
 /// roots lookup. Pins that every denorm expression the apple-docs `/search` denorm
 /// query depends on is computable in-engine (so the importer can build the denorm
 /// corpus directly instead of relying on source-side SQL).
-@Suite("F6 denorm via UPDATE")
 struct SQLDenormUpdateTests {
     @Test func denormColumnsPopulateViaUpdate() throws {
         let dir = TempDir()
