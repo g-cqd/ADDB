@@ -10,7 +10,6 @@ import Testing
 /// stack-overflow / denial-of-service hazard. `SelectExecutor.maxJoinTables` caps it; these tests pin
 /// that a join past the cap is rejected DETERMINISTICALLY (a `DBError`, never a crash) while a normal
 /// multi-table join still runs.
-@Suite("SQL join depth limit")
 struct SQLJoinDepthLimitTests {
     private func makeDB(_ dir: TempDir, _ name: String) throws -> Database {
         let db = try Database.open(at: dir.file(name))
