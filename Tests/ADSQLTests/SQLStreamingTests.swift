@@ -15,7 +15,6 @@ import Testing
 /// memory optimization; the OBSERVABLE equivalence + early-exit is the contract, and
 /// since `all` is itself differentially tested vs SQLite, `forEach ≡ all`
 /// transitively pins streaming to SQLite semantics too.
-@Suite("SQL streaming forEach")
 struct SQLStreamingTests {
     /// `t(id PK, grp, name)` with 50 rows (some NULL names, `grp` in 0..4) + a small
     /// `g(grp_id PK, label)` for the join shape.
