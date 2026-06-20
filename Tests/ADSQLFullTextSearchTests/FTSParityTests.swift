@@ -45,7 +45,6 @@ import Testing
 /// index is a perf optimization, deferred (flagged as follow-up).
 /// - `detail=column` (sf_symbols): SQLite *rejects* phrase queries on it; so we
 /// issue none for that shape (apple-docs doesn't either).
-@Suite("FTS5 — F6a apple-docs shapes ⟷ SQLite FTS5 parity")
 struct FTSParityTests {
     // Deterministic, and dense enough that single terms hit a large set and bm25
     // ordering is non-trivial, while staying fast in CI (single-list FTS write
