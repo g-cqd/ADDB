@@ -10,7 +10,6 @@ import Testing
 /// back to an assembled copy for overflow values (> Format.maxInlineCellSize,
 /// 4064 B). These rows mix small (inline) and large (overflow) values so the
 /// executor scan exercises both branches.
-@Suite("SQL scan over overflow values")
 struct SQLOverflowScanTests {
     private static let definition = TableDefinition(
         "big",
