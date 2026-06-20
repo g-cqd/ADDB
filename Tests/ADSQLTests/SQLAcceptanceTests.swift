@@ -92,7 +92,6 @@ private enum DocsCorpus {
     }
 }
 
-@Suite("SQL acceptance — apple-docs corpus")
 struct SQLCorpusTests {
     // Listing within a framework + language fallback.
     static let listing = """
@@ -191,7 +190,6 @@ struct SQLCorpusTests {
 /// optimization. The companion unit asserts the rewrite actually fires on the
 /// invariant LIKE pattern yet never collapses a column-bearing subtree (the
 /// correctness crux of `SQLEval.foldInvariant`).
-@Suite("SQL acceptance — query-invariant folding")
 struct SQLInvariantFoldTests {
     // The profile's hot shape: a column LIKE an invariant `?||'%'` prefix, a
     // tiered CASE over more invariant LIKE/`=` prefixes (the search tier), an
@@ -295,7 +293,6 @@ struct SQLInvariantFoldTests {
     }
 }
 
-@Suite("SQL acceptance — cross-feature fuzz")
 struct SQLFuzzTests {
     @Test(arguments: [UInt64(101), 202, 303])
     func randomQueriesMatchSQLite(seed: UInt64) throws {
