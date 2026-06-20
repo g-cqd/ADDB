@@ -42,7 +42,6 @@ import struct ADTestKit.SeededRNG
 /// Reproducibility: a fixed SeededRNG seed (NOT `SystemRandomNumberGenerator`),
 /// so any failure reproduces. Set `ADSQL_FUZZ_TRACE` in the environment to print
 /// every generated statement; a crash's last printed line is then the repro.
-@Suite("SQL query fuzz")
 struct QueryFuzzTests {
     // MARK: - Deterministic PRNG (shared `ADTestKit.SeededRNG`)
 
@@ -274,8 +273,8 @@ struct QueryFuzzTests {
         }
     }
 
-    @Test("adversarial query text never traps")
-    func fuzzNeverTraps() throws {
+    @Test
+    func `adversarial query text never traps`() throws {
         let trace = ProcessInfo.processInfo.environment["ADSQL_FUZZ_TRACE"] != nil
         let dir = TempDir()
         defer { dir.cleanup() }
@@ -323,8 +322,8 @@ struct QueryFuzzTests {
     /// `expression`, so `maxRecursionDepth` bounds that native recursion. Before it
     /// was added, ~23 nested subqueries (and ~37 nested CASE) overflowed the stack
     /// (SIGBUS) *during parsing* — the vectors this fuzz found and locked.
-    @Test("recursive primaries past the recursion-depth cap throw sqlSyntax")
-    func recursivePrimaryPastCapThrowsSyntax() throws {
+    @Test
+    func `recursive primaries past the recursion-depth cap throw sqlSyntax`() throws {
         let dir = TempDir()
         defer { dir.cleanup() }
         let db = try build(dir)
@@ -341,8 +340,8 @@ struct QueryFuzzTests {
     /// Nesting *up to* the cap still parses and runs — the cap rejects only the
     /// pathological depth, never legitimate (if unusual) nesting. Nested CASE at
     /// `maxRecursionDepth - 1` levels evaluates cleanly over the fixture rows.
-    @Test("nesting up to the recursion-depth cap still runs")
-    func nestingUpToCapRuns() throws {
+    @Test
+    func `nesting up to the recursion-depth cap still runs`() throws {
         let dir = TempDir()
         defer { dir.cleanup() }
         let db = try build(dir)
@@ -355,8 +354,8 @@ struct QueryFuzzTests {
     /// `SQLParser.maxExpressionTreeDepth` (the AST-height cap, distinct from the
     /// recursive-primary cap — deep parens do NOT re-enter `expression`) must throw
     /// `sqlSyntax`, not overflow on the deep `indirect enum` graph.
-    @Test("deep expression tree past the height cap throws sqlSyntax")
-    func expressionTreePastCapThrowsSyntax() throws {
+    @Test
+    func `deep expression tree past the height cap throws sqlSyntax`() throws {
         let dir = TempDir()
         defer { dir.cleanup() }
         let db = try build(dir)
