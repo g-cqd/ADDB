@@ -138,29 +138,40 @@ enum SQLScenario {
         else { throw SQLiteError.code(1, "open") }
         let db = handle
         defer { sqlite3_close_v2(db) }
-        func exec(_ sql: String) throws {
-            guard sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK else {
-                throw SQLiteError.code(sqlite3_errcode(db), sql)
-            }
-        }
         let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
-        try exec("PRAGMA journal_mode=WAL")
-        try exec("PRAGMA synchronous=OFF")
-        try exec("PRAGMA cache_size=-64000")
-        try exec("PRAGMA mmap_size=10737418240")
-        for sql in ddl { try exec(sql) }
+        try execSQL(db, "PRAGMA journal_mode=WAL")
+        try execSQL(db, "PRAGMA synchronous=OFF")
+        try execSQL(db, "PRAGMA cache_size=-64000")
+        try execSQL(db, "PRAGMA mmap_size=10737418240")
+        for sql in ddl { try execSQL(db, sql) }
 
+        try sqliteLoad(db, rows: rows, transient: transient)
+        var rng = BenchRNG(seed: 17)
+        sqliteKeySelect(db, rows: rows, config: config, transient: transient, &rng)
+        sqliteSearch(db, config: config, transient: transient, &rng)
+        sqliteDistinct(db)
+        sqliteJoin(db)
+    }
+
+    private static func execSQL(_ db: OpaquePointer?, _ sql: String) throws {
+        guard sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK else {
+            throw SQLiteError.code(sqlite3_errcode(db), sql)
+        }
+    }
+
+    private static func sqliteLoad(
+        _ db: OpaquePointer?, rows: Int, transient: sqlite3_destructor_type
+    ) throws {
         var insert: OpaquePointer?
         sqlite3_prepare_v3(
             db, "INSERT INTO documents(key, title, framework, kind) VALUES(?1, ?2, ?3, ?4)",
             -1, UInt32(SQLITE_PREPARE_PERSISTENT), &insert, nil)
         defer { sqlite3_finalize(insert) }
-
         let insertStart = nowNanos()
         var inserted = 0
         while inserted < rows {
             let batchEnd = min(inserted + 512, rows)
-            try exec("BEGIN IMMEDIATE")
+            try execSQL(db, "BEGIN IMMEDIATE")
             for i in inserted ..< batchEnd {
                 sqlite3_reset(insert)
                 sqlite3_bind_text(insert, 1, key(i), -1, transient)
@@ -171,12 +182,18 @@ enum SQLScenario {
                     throw SQLiteError.code(sqlite3_errcode(db), "insert")
                 }
             }
-            try exec("COMMIT")
+            try execSQL(db, "COMMIT")
             inserted = batchEnd
         }
-        print("  [sqlite] sql insert      \(formatRate(rows, nowNanos() - insertStart)) rows/s (3 indexes)")
+        print(
+            "  [sqlite] sql insert      \(formatRate(rows, nowNanos() - insertStart)) rows/s (3 indexes)"
+        )
+    }
 
-        var rng = BenchRNG(seed: 17)
+    private static func sqliteKeySelect(
+        _ db: OpaquePointer?, rows: Int, config: BenchConfig, transient: sqlite3_destructor_type,
+        _ rng: inout BenchRNG
+    ) {
         var byKey: OpaquePointer?
         sqlite3_prepare_v3(
             db, "SELECT id, title FROM documents WHERE key = ?1",
@@ -193,7 +210,12 @@ enum SQLScenario {
             keyHist.record(nowNanos() - start)
         }
         print("  [sqlite] sql key select  \(keyHist.summary())")
+    }
 
+    private static func sqliteSearch(
+        _ db: OpaquePointer?, config: BenchConfig, transient: sqlite3_destructor_type,
+        _ rng: inout BenchRNG
+    ) {
         var search: OpaquePointer?
         sqlite3_prepare_v3(
             db, "SELECT id, key FROM documents WHERE framework = ?1 AND kind = ?2 ORDER BY key LIMIT 20",
@@ -212,7 +234,9 @@ enum SQLScenario {
             searchHist.record(nowNanos() - start)
         }
         print("  [sqlite] sql search      \(searchHist.summary())")
+    }
 
+    private static func sqliteDistinct(_ db: OpaquePointer?) {
         var distinct: OpaquePointer?
         sqlite3_prepare_v3(
             db, "SELECT DISTINCT framework, kind FROM documents",
@@ -226,7 +250,9 @@ enum SQLScenario {
             distinctHist.record(nowNanos() - start)
         }
         print("  [sqlite] sql distinct    \(distinctHist.summary())")
+    }
 
+    private static func sqliteJoin(_ db: OpaquePointer?) {
         var join: OpaquePointer?
         sqlite3_prepare_v3(
             db, "SELECT COUNT(*) FROM documents a JOIN documents b ON b.key = a.key",
