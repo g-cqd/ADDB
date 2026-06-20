@@ -9,7 +9,6 @@ import Testing
 
 /// INSERT … SELECT, compared against SQLite by running the same script on both
 /// and diffing the destination table.
-@Suite("SQL INSERT … SELECT")
 struct SQLInsertSelectTests {
     private static let schema = [
         "CREATE TABLE src(id INTEGER PRIMARY KEY, k TEXT, n INTEGER, fw TEXT)",
