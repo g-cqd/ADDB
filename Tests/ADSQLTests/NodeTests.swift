@@ -32,7 +32,6 @@ private func leafLookup(_ page: PageBuf, _ key: [UInt8]) -> [UInt8]? {
     }
 }
 
-@Suite("Node leaf ops")
 struct NodeLeafTests {
     @Test func insertSearchRemoveAgainstModel() {
         let page = PageBuf()
@@ -209,7 +208,6 @@ struct NodeLeafTests {
     }
 }
 
-@Suite("Node branch ops")
 struct NodeBranchTests {
     func makeBranch(_ separators: [(String, UInt64)], leftmost: UInt64) -> PageBuf {
         let page = PageBuf()
@@ -304,7 +302,6 @@ struct NodeBranchTests {
     }
 }
 
-@Suite("Overflow chains")
 struct OverflowTests {
     final class DictPager: OverflowPager {
         var pages: [UInt64: PageBuf] = [:]
