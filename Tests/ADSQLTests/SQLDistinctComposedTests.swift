@@ -14,7 +14,6 @@ import Testing
 /// BEFORE `DISTINCT` so the dedup does real work, validated against SQLite (the
 /// oracle), covering both the unordered (`ordered: false`) and ORDER-BY
 /// (`ordered: true`, sort-key-aligned) dedup branches.
-@Suite("SQL DISTINCT over join / aggregate")
 struct SQLDistinctComposedTests {
     /// `emp(id, dept, city)` × 30 with `dept` ∈ {1,2} and `city` ∈ {NYC,LA,SF}
     /// cross-cutting (each city spans both depts) so DISTINCT collapses real
