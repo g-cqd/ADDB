@@ -17,7 +17,6 @@ struct Doc {
     let kind: String
 }
 
-@Suite("SQL DSL — validation + typed rows")
 struct SQLValidatorTests {
     private func makeDB(_ dir: TempDir) throws -> Database {
         let db = try Database.open(at: dir.file("validator.adsql"))
