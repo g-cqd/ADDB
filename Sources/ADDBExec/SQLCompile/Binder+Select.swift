@@ -44,7 +44,7 @@ extension Binder {
             let innerIndexes = inner.isFTS ? [] : schema.indexes(on: inner.table)
             let equalities = joinEqualities(raw.on, binding: binding, innerDepth: raw.depth)
             let (access, covered) = Planner.planJoin(
-                equalities: equalities, inner: inner, on: raw.on, binding: binding, innerDepth: raw.depth,
+                equalities: equalities, inner: inner, on: raw.on,
                 indexes: innerIndexes, definition: innerDefinition)
             var on = raw.on
             if case .fts = access, let (_, conjunct) = Planner.ftsMatchConjunct(raw.on, source: inner) {
