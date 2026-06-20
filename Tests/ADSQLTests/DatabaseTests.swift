@@ -9,7 +9,6 @@ import Testing
 @testable import ADDBTestSupport
 @testable import ADSQL
 
-@Suite("Database API")
 struct DatabaseAPITests {
     @Test func openWriteReadReopen() throws {
         let dir = TempDir()
@@ -155,7 +154,7 @@ struct DatabaseAPITests {
     }
 }
 
-@Suite("Database concurrency", .serialized)
+@Suite(.serialized)
 struct DatabaseConcurrencyTests {
     /// The headline invariant: a writer continuously rewrites N keys with a
     /// batch stamp; every reader snapshot must observe ALL keys carrying the
