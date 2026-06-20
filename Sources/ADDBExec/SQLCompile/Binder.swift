@@ -14,12 +14,22 @@ func validateQuery(_ select: SQLSelect, schema: Schema) throws(DBError) {
 /// access selection, join-equality analysis, aggregate rewriting, and column
 /// binding. The bound-plan data types it produces live in `Plan.swift`.
 enum Binder {
+    /// Maximum number of arms in one compound SELECT (`A UNION B UNION …`), mirroring SQLite's
+    /// `SQLITE_LIMIT_COMPOUND_SELECT` (default 500). Without it a pathological compound chain would
+    /// bind every arm unbounded; the cap surfaces a typed `DBError` instead. Same bounded-idiom as
+    /// `SQLTriggerEngine.maxDepth` (100) and `JoinExecutor.maxJoinTables` (64).
+    static let maxCompoundDepth = 500
+
     /// Binds a top-level query: a single SELECT or a compound. The trailing
     /// ORDER BY/LIMIT/OFFSET on a compound belong to the whole result, so the
     /// first arm is bound without them.
     static func bindQuery(_ select: SQLSelect, schema: Schema) throws(DBError) -> BoundQuery {
         guard !select.compounds.isEmpty else {
             return .select(try bindSelect(select, schema: schema))
+        }
+        guard select.compounds.count <= Self.maxCompoundDepth else {
+            throw DBError.sqlBind(
+                "compound SELECT has too many terms (\(select.compounds.count) > \(Self.maxCompoundDepth))")
         }
         var firstArm = select
         firstArm.compounds = []

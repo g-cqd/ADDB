@@ -29,7 +29,7 @@ extension StorageChannel {
     /// Byte-array convenience over `pwrite` (see `[UInt8].withUnsafeBytesThrowing`
     /// for why the typed-throws closure is routed through a capturing helper).
     public func pwrite(_ bytes: [UInt8], at offset: Int) throws(DBError) {
-        try bytes.withUnsafeBytesThrowing { raw throws(DBError) in
+        unsafe try bytes.withUnsafeBytesThrowing { raw throws(DBError) in
             unsafe try pwrite(raw, at: offset)
         }
     }
@@ -37,7 +37,7 @@ extension StorageChannel {
     /// Byte-array convenience over `pread`.
     public func preadBytes(count: Int, at offset: Int) throws(DBError) -> [UInt8] {
         var out = [UInt8](repeating: 0, count: count)
-        try out.withUnsafeMutableBytesThrowing { raw throws(DBError) in
+        unsafe try out.withUnsafeMutableBytesThrowing { raw throws(DBError) in
             unsafe try pread(into: raw, at: offset)
         }
         return out

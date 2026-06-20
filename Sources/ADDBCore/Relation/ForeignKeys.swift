@@ -1,4 +1,4 @@
-public import ADSQLModel
+import ADSQLModel
 
 /// ON DELETE actions. Foreign keys reference the parent's rowid (the
 /// INTEGER PRIMARY KEY alias) through exactly one child column — the engine
@@ -48,7 +48,7 @@ extension Relation {
             [.integer(parentRowid)], collations: [collations[0]])
         var rowids: [Int64] = []
         var cursor = Cursor(resolver: ctx, tree: index.handle)
-        var positioned = try prefix.withUnsafeBytesThrowing { raw throws(DBError) in
+        var positioned = unsafe try prefix.withUnsafeBytesThrowing { raw throws(DBError) in
             _ = unsafe try cursor.seek(raw)
             return cursor.isValid
         }

@@ -16,6 +16,7 @@ import PackageDescription
 
 let strictSettings: [SwiftSetting] = [
     .swiftLanguageMode(.v6),
+    .treatAllWarnings(as: .error),
     .enableUpcomingFeature("ExistentialAny"),
     .enableUpcomingFeature("InferIsolatedConformances"),
     .enableUpcomingFeature("InternalImportsByDefault"),
@@ -37,13 +38,18 @@ var packageDependencies: [Package.Dependency] = [
     localOrMain("ADJSON_PATH", "ADJSON"),
     localOrMain("ADCONCURRENCY_PATH", "ADConcurrency"),
     .package(url: "https://github.com/apple/swift-collections.git", from: "1.1.0"),
-    .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "603.0.0"),
+    .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "603.0.0")
 ]
 if isDev {
     packageDependencies.append(localOrMain("ADBUILDTOOLS_PATH", "ADBuildTools"))
     packageDependencies.append(localOrMain("ADTESTKIT_PATH", "ADTestKit"))
     packageDependencies.append(
         .package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.0.0"))
+    // ordo-one's statistically-rigorous benchmark framework (p-percentile latencies + throughput +
+    // malloc counts), matching the sibling ADFoundation / ADJSON suites. The suite lives in
+    // `Benchmarks/ADDBSuite` and runs via `ADDB_DEV=1 swift package benchmark`. Dev-only, so packages
+    // depending on ADDB never resolve it.
+    packageDependencies.append(.package(url: "https://github.com/ordo-one/benchmark", from: "1.4.0"))
 }
 let adTestKit: Target.Dependency = .product(name: "ADTestKit", package: "ADTestKit")
 let libraryBuildPlugins: [Target.PluginUsage] =
@@ -53,6 +59,7 @@ let adsqlModel: Target.Dependency = .product(name: "ADSQLModel", package: "ADSQL
 let adsql: Target.Dependency = .product(name: "ADSQL", package: "ADSQL")
 let adfCore: Target.Dependency = .product(name: "ADFCore", package: "ADFoundation")
 let adfIO: Target.Dependency = .product(name: "ADFIO", package: "ADFoundation")
+let adfUnicode: Target.Dependency = .product(name: "ADFUnicode", package: "ADFoundation")
 let adjsonCore: Target.Dependency = .product(name: "ADJSONCore", package: "ADJSON")
 let orderedCollections: Target.Dependency = .product(name: "OrderedCollections", package: "swift-collections")
 // swift-syntax runtime libraries — linked ONLY into test targets that exercise @Table, so the
@@ -60,7 +67,7 @@ let orderedCollections: Target.Dependency = .product(name: "OrderedCollections",
 let swiftSyntaxRuntime: [Target.Dependency] = [
     .product(name: "SwiftSyntax", package: "swift-syntax"),
     .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
-    .product(name: "SwiftParser", package: "swift-syntax"),
+    .product(name: "SwiftParser", package: "swift-syntax")
 ]
 
 // Test targets are dev-only (they pull in the DEV-ONLY ADTestKit). The SQL-engine + integration
@@ -88,7 +95,7 @@ if isDev {
         .target(
             name: "ADDBTestSupport",
             dependencies: [
-                "ADDBCore", "ADDBExec", "ADSQLJSON", "CSQLite", adsql, adsqlModel, adTestKit,
+                "ADDBCore", "ADDBExec", "ADSQLJSON", "CSQLite", adsql, adsqlModel, adTestKit
             ],
             path: "Tests/ADDBTestSupport",
             swiftSettings: testSettings))
@@ -99,7 +106,7 @@ if isDev {
             name: "ADSQLTests",
             dependencies: [
                 "ADDBTestSupport", "ADDBCore", "ADDBExec", "ADDBMacros", "ADSQLFullTextSearch",
-                "ADSQLJSON", "CSQLite", adsql, adsqlModel, adfCore, adfIO, adTestKit,
+                "ADSQLJSON", "CSQLite", adsql, adsqlModel, adfCore, adfIO, adTestKit
             ] + swiftSyntaxRuntime,
             swiftSettings: testSettings))
     // The full-text-search query suite (MATCH / bm25 / WAND), exercising `ADSQLFullTextSearch`.
@@ -108,7 +115,7 @@ if isDev {
             name: "ADSQLFullTextSearchTests",
             dependencies: [
                 "ADDBTestSupport", "ADDBCore", "ADDBExec", "ADSQLFullTextSearch", "CSQLite",
-                adsql, adsqlModel, adfCore, adTestKit,
+                adsql, adsqlModel, adfCore, adTestKit
             ],
             swiftSettings: testSettings))
     // The SQLite-import + apple-docs round-trip suite, exercising `ADSQLImport`.
@@ -117,7 +124,7 @@ if isDev {
             name: "ADSQLImportTests",
             dependencies: [
                 "ADDBTestSupport", "ADDBCore", "ADDBExec", "ADSQLImport", "ADSQLFullTextSearch",
-                "ADSQLJSON", "CSQLite", adsql, adsqlModel, adTestKit,
+                "ADSQLJSON", "CSQLite", adsql, adsqlModel, adTestKit
             ],
             swiftSettings: testSettings))
     // The schema-migration suite, exercising `ADSQLMigrate`.
@@ -125,9 +132,20 @@ if isDev {
         .testTarget(
             name: "ADSQLMigrateTests",
             dependencies: [
-                "ADDBTestSupport", "ADDBCore", "ADDBExec", "ADSQLMigrate", adsql, adsqlModel, adTestKit,
+                "ADDBTestSupport", "ADDBCore", "ADDBExec", "ADSQLMigrate", adsql, adsqlModel, adTestKit
             ],
             swiftSettings: testSettings))
+    // ordo-one benchmark suite (ADDB_DEV-gated): tracks `.mallocCountTotal` on the storage codec path
+    // (put/get/scan/index backfill) so a reintroduced copy-on-write copy or per-append reallocation
+    // trips the threshold instead of rotting silently. Runs via `ADDB_DEV=1 swift package benchmark`.
+    // Mirrors ADFoundation's `Benchmarks/ADFoundationSuite` wiring.
+    testTargets.append(
+        .executableTarget(
+            name: "ADDBSuite",
+            dependencies: ["ADDBCore", .product(name: "Benchmark", package: "benchmark")],
+            path: "Benchmarks/ADDBSuite",
+            swiftSettings: strictSettings,
+            plugins: [.plugin(name: "BenchmarkPlugin", package: "benchmark")]))
 }
 
 let package = Package(
@@ -158,11 +176,11 @@ let package = Package(
                 .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
                 .product(name: "SwiftDiagnostics", package: "swift-syntax"),
                 .product(name: "SwiftParser", package: "swift-syntax"),
-                .product(name: "ADFMacroSupport", package: "ADFoundation"),
+                .product(name: "ADFMacroSupport", package: "ADFoundation")
             ],
             swiftSettings: strictSettings),
         .target(
-            name: "ADDBCore", dependencies: [adfCore, adfIO, adsqlModel],
+            name: "ADDBCore", dependencies: [adfCore, adfIO, adfUnicode, adsqlModel],
             swiftSettings: kernelSettings, plugins: libraryBuildPlugins),
         .target(
             name: "ADDBExec", dependencies: ["ADDBCore", adsql, adsqlModel, orderedCollections],

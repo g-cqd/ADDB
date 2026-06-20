@@ -1,4 +1,4 @@
-@_spi(ADDBEngine) public import ADDBCore
+@_spi(ADDBEngine) import ADDBCore
 public import ADSQLModel
 import CSQLite
 

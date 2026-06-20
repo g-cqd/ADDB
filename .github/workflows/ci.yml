@@ -1,11 +1,15 @@
-# Single workflow: lint → build → test (chained in one job), plus a cross-platform build matrix,
-# sanitizer passes, a benchmark run, and a docs build+deploy — all gated on the main job so
-# nothing runs if lint/build/test fails.
+# The COMMON legs (lint/gate + build & test on macOS + Linux, debug/release, coverage) route through
+# the shared reusable workflow. The package-UNIQUE jobs fan out alongside it: the sqlite-backed Linux
+# differential lane (x64 + arm64), the cross-platform compile matrix, the ASan/TSan passes (main +
+# PR-curated), the ADSQL-vs-SQLite benchmark, and the DocC build+deploy / PR link check.
 #
-# Why one workflow / few jobs: chaining lint+build+test into a single job pays setup (checkout,
-# Xcode select, dependency resolve, cache restore) once and reuses the warm `.build` across the
-# steps. The matrix, sanitizer, benchmark, and docs jobs fan out only after the gate, and only
-# when relevant.
+# HUMAN REVIEW (see report): ADDB's tests link `CSQLite` (libsqlite3) and the cross-process tests
+# need the built `adsql` CLI path on Linux. The reusable workflow's Linux leg runs plain
+# `swift build`/`swift test` with NO `apt-get install libsqlite3-dev` and no `ADSQL_CLI_PATH`, so it
+# will fail on Linux once `AD_SWIFT_SIBLINGS_PUBLISHED` flips true (it is skipped until then). The
+# correct Linux verification is the package-unique `linux` job below, which installs sqlite and passes
+# the CLI path. Consider adding a system-deps input to the reusable workflow, or treat the reusable
+# Linux leg as macOS-parity only. (macOS ships libsqlite3, so the reusable macOS leg is fine.)
 name: CI
 
 on:
@@ -26,78 +30,44 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  build-test:
-    name: Lint, build & test (macOS)
-    runs-on: macos-26
-    steps:
-      - uses: actions/checkout@v6
-      - name: Select latest Xcode
-        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
-      - name: Show toolchain
-        run: swift --version
-      - name: Cache SwiftPM
-        uses: actions/cache@v5
-        with:
-          path: |
-            .build
-            ~/Library/Caches/org.swift.swiftpm
-          key: spm-${{ runner.os }}-${{ hashFiles('Package.swift') }}-${{ hashFiles('Sources/**', 'Tests/**', 'Plugins/**') }}
-          restore-keys: |
-            spm-${{ runner.os }}-${{ hashFiles('Package.swift') }}-
-            spm-${{ runner.os }}-
-      - name: Lint (formatting gate)
-        run: swift package lint
-      - name: Lint (internal tags)
-        # The tree-wide strip has landed, so STRICT_TAGS=1 forbids both TODO/FIXME and
-        # internal provenance citations (RFC 00xx / Review NNNN / milestone-finding tags).
-        env:
-          STRICT_TAGS: "1"
-        run: ./.githooks/check-tags.sh all
-      - name: Build
-        run: swift build
-      - name: Test (SQLite-differential suite)
-        run: swift test --enable-code-coverage
-      - name: Coverage summary
-        # Informational only (never fails the gate): a one-line line-coverage figure
-        # in the job summary. Hosted-runner numbers vary, so it is not a threshold.
-        if: always()
-        run: |
-          set +e
-          bin="$(swift build --show-bin-path)"
-          prof="$(find .build -name default.profdata | head -1)"
-          obj="$(find "$bin" -name '*.xctest' -maxdepth 2 | head -1)"
-          obj="$(find "$obj/Contents/MacOS" -type f -perm +111 2>/dev/null | head -1)"
-          if [ -n "$prof" ] && [ -n "$obj" ]; then
-            echo "## Code coverage" >> "$GITHUB_STEP_SUMMARY"
-            echo '```text' >> "$GITHUB_STEP_SUMMARY"
-            xcrun llvm-cov report "$obj" -instr-profile "$prof" \
-              -ignore-filename-regex='Tests|\.build' 2>/dev/null \
-              | tail -1 >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-          fi
-          true
+  quality:
+    # Full-adopt of the reusable workflow for the COMMON gate + build/test (macOS + Linux, debug +
+    # release; coverage on the debug macOS leg). ADDB depends on the first-party siblings ADSQL,
+    # ADFoundation, ADJSON and ADConcurrency (resolved from branch: main — Package.swift lines 36–39,
+    # in the always-on dependency array), so the resolution-dependent jobs stay gated on
+    # AD_SWIFT_SIBLINGS_PUBLISHED; the file-based gates (format/metrics/drift + the internal-tag check
+    # that the bespoke STRICT_TAGS step did) always run. Sanitizers/docs are NOT enabled here: the
+    # `sanitizers`/`pr-thread-sanitizer` jobs below use main-vs-PR gating with combined per-pass flags,
+    # and the DocC legs below add a Pages DEPLOY and a PR-only link check — none covered by the reusable.
+    uses: g-cqd/ADBuildTools/.github/workflows/swift-quality.yml@v1
+    with:
+      dev-env-var: ADDB_DEV
+      requires-published-siblings: true
 
   # Linux build + test lane (RFC 0010 F0 — the #1 apple-docs adoption gate). ADSQL was Darwin-only;
   # this lane is the actual Linux verification (the port is developed on macOS, which cannot build for
   # Linux locally). `swift build` + the full `swift test` differential suite PASS on x64 + arm64 — the
   # Glibc forks (clonefile->copy snapshot, fdatasync/fsync barriers, posix_fallocate, the cross-process
-  # reader table, XSI strerror_r) are validated at runtime, so F0 is functionally done.
+  # reader table, XSI strerror_r) are validated at runtime, so F0 is functionally done. This is the
+  # package-unique Linux lane the reusable's plain Linux leg can't be (it installs libsqlite3-dev and
+  # passes the CLI path, and runs the arm64 runner too).
   #
-  # STILL ADVISORY (`continue-on-error: true`) for one reason: this lane must track the MOVING
-  # `nightly-jammy` tag (see Toolchain below), so a required gate would let an unrelated bad nightly
-  # redden main. Pending: pin a dated nightly (or a stable >= 6.3 release verified to parse the 6.3
-  # manifest) and drop `continue-on-error` to make Linux a required gate.
+  # STILL ADVISORY (`continue-on-error: true`) for one reason historically: the lane tracked the MOVING
+  # `nightly-6.4-jammy` tag, so a required gate would let an unrelated bad nightly redden main. Now that
+  # the image is pinned to a DATED nightly (#14), the remaining blocker is a stable >= 6.4 release that
+  # parses the 6.4 manifest; drop `continue-on-error` to make Linux a required gate once that ships.
   #
-  # Toolchain: the manifest is `swift-tools-version: 6.3` and uses `.strictMemorySafety()` (SE-0458)
-  # plus the experimental `Lifetimes` feature (SE-0446/0456), so the Linux toolchain must be recent
-  # enough to parse and honor them. The released `swift:6.0`/`6.1` images predate the 6.3 manifest
-  # version and cannot even parse Package.swift; the nightly image tracks the development toolchain
-  # that ships these features. Pin to a dated nightly tag once the features land in a stable release.
+  # Toolchain: the manifest is `swift-tools-version: 6.4` with `.strictMemorySafety()` (SE-0458) plus
+  # the experimental `Lifetimes` feature (SE-0446/0456), so the Linux toolchain must be recent enough to
+  # parse and honor them. Released `swift:6.0`/`6.1` images predate the manifest and can't parse it; the
+  # dated nightly tracks a development toolchain that ships these features.
   linux:
     name: Build & test (Linux, ${{ matrix.arch }})
+    needs: quality
     continue-on-error: true
     runs-on: ${{ matrix.runner }}
-    container: swiftlang/swift:nightly-6.4-jammy
+    # Dated nightly pins the toolchain for reproducible CI; bump deliberately like a dependency (#14).
+    container: swiftlang/swift:nightly-6.4-2026-06-18-jammy
     strategy:
       fail-fast: false
       matrix:
@@ -134,9 +104,9 @@ jobs:
 
   platforms:
     name: Build (${{ matrix.platform }})
-    needs: build-test
+    needs: quality
     # Cross-platform compile is broad but costly: run it on main / on demand, not on every PR
-    # (the macOS job above already covers compilation for PRs).
+    # (the macOS leg in the reusable `quality` job already covers compilation for PRs).
     if: github.event_name != 'pull_request'
     runs-on: macos-26
     strategy:
@@ -168,13 +138,14 @@ jobs:
 
   sanitizers:
     name: Sanitize (${{ matrix.name }})
-    needs: build-test
+    needs: quality
     # Sanitizers are slow (TSan ~5-15x, ASan ~2x) and rebuild the whole graph under instrumentation,
     # so run them on main / on demand — never on every PR. The differential + property suites double
     # as the stress input that trips data races (TSan) in the single-writer / wait-free-reader and
     # group-commit layers, and OOB / use-after-free (ASan) in the mmap'd page views and record
     # codecs. These find what `-enable-actor-data-race-checks` (actor-isolation only) cannot. TSan
-    # and ASan are mutually exclusive, hence two passes.
+    # and ASan are mutually exclusive, hence two passes. Package-unique (not the reusable's sanitizer
+    # leg): main/dispatch-gated, and each pass combines its own flags.
     if: github.event_name != 'pull_request'
     runs-on: macos-26
     timeout-minutes: 90
@@ -205,7 +176,7 @@ jobs:
 
   benchmarks:
     name: Benchmark (macOS, release)
-    needs: build-test
+    needs: quality
     # Benchmarks rebuild the graph in release and are noisy on shared runners, so run them on
     # main / on demand — never on every PR (same gating as the platforms/sanitizers jobs). The
     # run publishes its numbers to the run's job summary for at-a-glance tracking; it is not a
@@ -250,7 +221,7 @@ jobs:
 
   docs:
     name: Build & deploy docs (Pages)
-    needs: build-test
+    needs: quality
     if: github.ref == 'refs/heads/main'
     runs-on: macos-26
     permissions:
@@ -313,7 +284,7 @@ jobs:
 
   docs-build:
     name: Build docs (PR check)
-    needs: build-test
+    needs: quality
     # Build the DocC site (no deploy) on PRs to catch broken symbol links / missing
     # docs before they reach main; the build+deploy job runs from `docs` on main.
     if: github.event_name == 'pull_request'
@@ -344,29 +315,3 @@ jobs:
             --target ADDBCore --target ADSQL \
             --target ADSQLFullTextSearch --target ADSQLJSON \
             --disable-indexing --output-path "$PWD/_docs-check"
-
-  pr-thread-sanitizer:
-    name: Sanitize (thread, PR)
-    needs: build-test
-    # Run the thread sanitizer on PRs to catch data races in the single-writer /
-    # wait-free-reader and scan paths before merge. Curated by flavor: only TSan on
-    # PRs (the full thread+address matrix still runs on main / on demand).
-    if: github.event_name == 'pull_request'
-    runs-on: macos-26
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v6
-      - name: Select latest Xcode
-        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
-      - name: Cache SwiftPM
-        uses: actions/cache@v5
-        with:
-          path: |
-            .build
-            ~/Library/Caches/org.swift.swiftpm
-          key: spm-${{ runner.os }}-san-thread-${{ hashFiles('Package.swift') }}-${{ hashFiles('Sources/**', 'Tests/**', 'Plugins/**') }}
-          restore-keys: |
-            spm-${{ runner.os }}-san-thread-${{ hashFiles('Package.swift') }}-
-            spm-${{ runner.os }}-san-thread-
-      - name: Test under thread sanitizer
-        run: swift test --sanitize=thread

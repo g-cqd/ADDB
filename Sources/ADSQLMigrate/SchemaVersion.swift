@@ -3,7 +3,7 @@
 @_spi(ADDBEngine) import ADDBCore
 import ADDBExec
 import ADSQL
-public import ADSQLModel
+import ADSQLModel
 
 /// The migration cursor: a single-row `schema_version` table whose `version`
 /// column records the highest migration applied to the database. A fresh

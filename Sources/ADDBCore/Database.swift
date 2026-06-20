@@ -497,8 +497,8 @@ public struct WriteTxn: ~Copyable {
     /// Inserts or replaces.
     public func put(_ key: [UInt8], _ value: [UInt8]) throws(DBError) {
         try Database.checkUserKey(key)
-        try key.withUnsafeBytesThrowing { keyBytes throws(DBError) in
-            try value.withUnsafeBytesThrowing { valueBytes throws(DBError) in
+        unsafe try key.withUnsafeBytesThrowing { keyBytes throws(DBError) in
+            unsafe try value.withUnsafeBytesThrowing { valueBytes throws(DBError) in
                 unsafe try BTree.put(ctx: ctx, key: keyBytes, value: valueBytes)
             }
         }

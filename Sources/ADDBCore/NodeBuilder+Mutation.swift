@@ -1,5 +1,5 @@
 import ADFCore
-public import ADSQLModel
+import ADSQLModel
 
 #if canImport(Darwin)
     import Darwin

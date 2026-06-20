@@ -1,4 +1,4 @@
-@_spi(ADDBEngine) public import ADDBCore
+@_spi(ADDBEngine) package import ADDBCore
 package import ADSQLModel
 
 /// Block-max WAND ranked top-k (Ding & Suel, 2011). A *dynamic-pruning*

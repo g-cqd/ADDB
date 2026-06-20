@@ -1,5 +1,5 @@
 @_spi(ADDBEngine) import ADDBCore
-public import ADSQL
+import ADSQL
 public import ADSQLModel
 import Synchronization
 

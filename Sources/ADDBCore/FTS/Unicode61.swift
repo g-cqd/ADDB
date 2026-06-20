@@ -1,3 +1,5 @@
+import ADFUnicode
+
 public import ADSQLModel
 
 /// The `unicode61` tokenizer: split on non-token characters, case-fold, and
@@ -5,10 +7,12 @@ public import ADSQLModel
 /// under `porter`. A "token character" is a Unicode letter or number; runs of
 /// them are terms, everything else is a separator.
 ///
-/// Hot loop is ASCII-only (a 128-way classify + `| 0x20` fold); non-ASCII falls
-/// back to the Swift stdlib Unicode database. Diacritic removal drops combining
-/// marks and maps the common precomposed Latin letters to their ASCII base
-/// (`remove_diacritics` 1/2); broader coverage is a future table extension.
+/// Hot loop is ASCII-only (a 128-way classify + `| 0x20` fold); non-ASCII routes
+/// through the shared `ADFUnicode` kernel — `CaseFolding.lowercase` then (when
+/// `remove_diacritics > 0`) `NFD` canonical decomposition with combining marks
+/// dropped. This generalizes diacritic removal to every decomposable scalar
+/// (replacing the old curated Latin table), so `remove_diacritics` 1 and 2 are
+/// now equivalent — full NFD stripping, matching SQLite's `remove_diacritics=2`.
 public struct Unicode61Tokenizer: FTSTokenizer {
     /// 0 = keep diacritics, 1/2 = remove (combining marks + curated Latin map).
     public let removeDiacritics: Int
@@ -97,32 +101,13 @@ public struct Unicode61Tokenizer: FTSTokenizer {
             if let folded = Self.asciiTokenFold(UInt8(scalar.value)) { term.append(folded) }
             return
         }
-        // Case-fold via the stdlib lowercase mapping (may expand to several scalars).
-        for unit in scalar.properties.lowercaseMapping.unicodeScalars {
-            if removeDiacritics > 0 {
-                if unit.properties.canonicalCombiningClass.rawValue != 0 { continue }  // drop mark
-                if let base = Self.latinBase(unit) {
-                    UTF8Text.append(base, to: &term)
-                    continue
-                }
-            }
-            UTF8Text.append(unit, to: &term)
+        // Non-ASCII (cold path): case-fold, then — when removing diacritics — canonically decompose and
+        // drop combining marks, all via the shared `ADFUnicode` kernel. This strips every decomposable
+        // diacritic (not just a curated Latin table); the ASCII fast path above is untouched.
+        var folded = CaseFolding.lowercase([scalar])
+        if removeDiacritics > 0 {
+            folded = NFD.decompose(folded).filter { $0.properties.canonicalCombiningClass.rawValue == 0 }
         }
-    }
-
-    /// Curated precomposed-Latin → ASCII base for the common accented letters
-    /// (input is already lowercased). Returns `nil` to keep the scalar.
-    static func latinBase(_ scalar: Unicode.Scalar) -> Unicode.Scalar? {
-        switch scalar.value {
-            case 0x00E0 ... 0x00E5: return "a"  // à á â ã ä å
-            case 0x00E7: return "c"  // ç
-            case 0x00E8 ... 0x00EB: return "e"  // è é ê ë
-            case 0x00EC ... 0x00EF: return "i"  // ì í î ï
-            case 0x00F1: return "n"  // ñ
-            case 0x00F2 ... 0x00F6, 0x00F8: return "o"  // ò ó ô õ ö ø
-            case 0x00F9 ... 0x00FC: return "u"  // ù ú û ü
-            case 0x00FD, 0x00FF: return "y"  // ý ÿ
-            default: return nil
-        }
+        for unit in folded { UTF8Text.append(unit, to: &term) }
     }
 }

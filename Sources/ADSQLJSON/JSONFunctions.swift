@@ -1,7 +1,7 @@
 @_spi(ADDBEngine) public import ADDBCore
 import ADDBExec
 import ADSQL
-@_spi(ADDBEngine) public import ADSQLModel
+@_spi(ADDBEngine) import ADSQLModel
 
 extension Database {
     /// Enables SQL JSON support: the SQLite json1 scalar functions, the

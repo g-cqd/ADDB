@@ -1,4 +1,4 @@
-public import ADSQLModel
+import ADSQLModel
 
 /// Errors raised by the schema migrator, distinct from the engine's `DBError`
 /// so a migration-orchestration fault (a duplicate version, a backward jump)

@@ -182,7 +182,7 @@ public struct Row: Equatable, Sendable {
             }
         self.cursor = Cursor(resolver: resolver, tree: tree)
         if let lowerKey {
-            let valid = try lowerKey.withUnsafeBytesThrowing { raw throws(DBError) in
+            let valid = unsafe try lowerKey.withUnsafeBytesThrowing { raw throws(DBError) in
                 _ = unsafe try cursor.seek(raw)
                 return cursor.isValid
             }
@@ -253,7 +253,7 @@ public struct Row: Equatable, Sendable {
                 // Direct scan: table rows, or — for a covering index — every needed
                 // column served straight from the index entry's value (no table
                 // descent). Both serve the current cursor entry identically.
-                try scanDirect(body)
+                unsafe try scanDirect(body)
             case .index:
                 // Index entries within a probe arrive in (columns…, rowid) order, so the
                 // rowids are ascending; a warm table cursor (`seekForward`) skips the

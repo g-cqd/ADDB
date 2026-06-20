@@ -1,4 +1,4 @@
-public import ADSQLModel
+import ADSQLModel
 
 /// `withUnsafeBytes` variants that thread the engine's typed `DBError` through the closure — the one
 /// DB-specific byte shim. LEB128 varints, little/big-endian loads/stores, and xxHash64 now live in
@@ -16,7 +16,7 @@ extension [UInt8] {
     ) throws(DBError) -> R {
         var failure: DBError?
         let result = withUnsafeBytes { (raw) -> R? in
-            do throws(DBError) { return try body(raw) } catch {
+            do throws(DBError) { return unsafe try body(raw) } catch {
                 failure = error
                 return nil
             }
@@ -32,7 +32,7 @@ extension [UInt8] {
     ) throws(DBError) -> R {
         var failure: DBError?
         let result = withUnsafeMutableBytes { (raw) -> R? in
-            do throws(DBError) { return try body(raw) } catch {
+            do throws(DBError) { return unsafe try body(raw) } catch {
                 failure = error
                 return nil
             }

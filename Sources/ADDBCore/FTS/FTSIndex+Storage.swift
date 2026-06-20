@@ -77,7 +77,7 @@ extension FTSIndex {
     ) throws(DBError) {
         let prefix = blockKeyPrefix(term)
         var cursor = Cursor(resolver: resolver, tree: handle)
-        var positioned = try prefix.withUnsafeBytesThrowing { raw throws(DBError) in
+        var positioned = unsafe try prefix.withUnsafeBytesThrowing { raw throws(DBError) in
             _ = unsafe try cursor.seek(raw)
             return cursor.isValid
         }
@@ -142,7 +142,7 @@ extension FTSIndex {
         columns: Int, positions: Bool
     ) throws(DBError) -> [FTSPosting] {
         var list: [FTSPosting] = []
-        try forEachBlockValue(resolver, handle, term: term) { (value) throws(DBError) in
+        unsafe try forEachBlockValue(resolver, handle, term: term) { (value) throws(DBError) in
             // `decode` consumes a `[UInt8]`; rebuild it from the span (same cost as the
             // prior per-block `copyValue`, never worse) and consume it here.
             list.append(

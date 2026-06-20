@@ -1,4 +1,4 @@
-@_spi(ADDBEngine) public import ADDBCore
+@_spi(ADDBEngine) import ADDBCore
 package import ADSQLModel
 
 /// The MATCH query language. Parses an FTS5-style query string into an

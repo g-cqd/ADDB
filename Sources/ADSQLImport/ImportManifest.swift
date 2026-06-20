@@ -1,5 +1,5 @@
 @_spi(ADDBEngine) import ADDBCore
-public import ADSQLModel
+import ADSQLModel
 
 /// Describes the FTS5 tables to reconstruct during import. SQLite's FTS5
 /// tokenize/config is not fully introspectable from the `.db` file, so the

@@ -1,5 +1,5 @@
 import ADFIO
-public import ADSQLModel
+import ADSQLModel
 
 #if canImport(Darwin)
     import Darwin
@@ -58,7 +58,7 @@ public import ADSQLModel
         }
         var mapped = unsafe mmap(nil, Format.lockFileSize, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0)
         while unsafe mapped == MAP_FAILED, errno == EINTR {
-            mapped = unsafe mmap(nil, Format.lockFileSize, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0)
+            unsafe mapped = unsafe mmap(nil, Format.lockFileSize, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0)
         }
         guard let mapped = unsafe mapped, unsafe mapped != MAP_FAILED else {
             close(fd)

@@ -281,7 +281,7 @@ public import ADSQLModel
         // block followed by a second `dropFirst` copy. The slice is consumed here
         // and `bodies` owns its contents; the span never escapes the call.
         var bodies: [[UInt8]] = []
-        try forEachBlockValue(resolver, record.postings, term: term) { value in
+        unsafe try forEachBlockValue(resolver, record.postings, term: term) { value in
             unsafe bodies.append(Array(value.dropFirst()))
         }
         guard !bodies.isEmpty else { return nil }
@@ -301,7 +301,7 @@ public import ADSQLModel
     ) throws(DBError) -> [Int64]? {
         var ids: [Int64] = []
         var present = false
-        try forEachBlockValue(resolver, record.postings, term: term) { (value) throws(DBError) in
+        unsafe try forEachBlockValue(resolver, record.postings, term: term) { (value) throws(DBError) in
             present = true
             // `decodeDocids` consumes a `[UInt8]`; rebuild it from the span (same cost
             // as the prior per-block `copyValue`, never worse) and consume it here.
@@ -344,7 +344,7 @@ public import ADSQLModel
         _ statsCursor: inout Cursor<R>, docid: Int64
     ) throws(DBError) -> Double? {
         let key = KeyCodec.rowKey(docid)
-        let found = try key.withUnsafeBytesThrowing { raw throws(DBError) in
+        let found = unsafe try key.withUnsafeBytesThrowing { raw throws(DBError) in
             unsafe try statsCursor.seekForward(raw)
         }
         guard found else { return nil }
@@ -372,7 +372,7 @@ public import ADSQLModel
     ) throws(DBError) -> [[UInt8]] {
         var terms: [[UInt8]] = []
         var cursor = Cursor(resolver: resolver, tree: record.dict)
-        var positioned = try prefix.withUnsafeBytesThrowing { raw throws(DBError) in
+        var positioned = unsafe try prefix.withUnsafeBytesThrowing { raw throws(DBError) in
             _ = unsafe try cursor.seek(raw)
             return cursor.isValid
         }

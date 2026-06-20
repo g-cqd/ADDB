@@ -145,7 +145,7 @@ public import ADSQLModel
             // recycles a just-harvested page instead of growing the file.
             ctx.allocator.pool.append(contentsOf: result.pages)
             harvested += result.pages.count
-            try result.key.withUnsafeBytesThrowing { keyBytes throws(DBError) in
+            unsafe try result.key.withUnsafeBytesThrowing { keyBytes throws(DBError) in
                 _ = unsafe try BTree.delete(ctx: ctx, tree: &free, key: keyBytes)
             }
         }
@@ -227,8 +227,8 @@ public import ADSQLModel
         guard !pages.isEmpty else { return }
         let key = entryKey(gen: gen, seq: seq)
         let value = encodePages(pages)
-        try key.withUnsafeBytesThrowing { keyBytes throws(DBError) in
-            try value.withUnsafeBytesThrowing { valueBytes throws(DBError) in
+        unsafe try key.withUnsafeBytesThrowing { keyBytes throws(DBError) in
+            unsafe try value.withUnsafeBytesThrowing { valueBytes throws(DBError) in
                 unsafe try BTree.put(ctx: ctx, tree: &tree, key: keyBytes, value: valueBytes)
             }
         }

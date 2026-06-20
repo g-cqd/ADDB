@@ -1,8 +1,8 @@
-@_spi(ADDBEngine) public import ADDBCore
+@_spi(ADDBEngine) import ADDBCore
 public import ADDBExec
 // `public` because `MigrationContext.run` returns ADSQL's `RunResult` in a public
 // signature; the other ADSQLMigrate files import ADSQL plainly (internal use only).
-public import ADSQL
+import ADSQL
 public import ADSQLModel
 
 /// One schema migration: a target ``version`` and a ``body`` that performs the

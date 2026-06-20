@@ -1,4 +1,4 @@
-public import ADSQLModel
+import ADSQLModel
 
 /// One index whose entry a row `update` must rewrite: its old/new encoded keys and whether the key
 /// (not just a covering INCLUDE value) changed.

@@ -1,6 +1,6 @@
 @_spi(ADDBEngine) import ADDBCore
-package import ADSQL
-@_spi(ADDBEngine) package import ADSQLModel
+import ADSQL
+@_spi(ADDBEngine) import ADSQLModel
 
 /// Query-invariant subexpression folding for `SQLEval`: `isInvariant`/`foldInvariant` precompute the
 /// row-independent parts of an expression once. Split from `Eval.swift` to keep both within the gate.

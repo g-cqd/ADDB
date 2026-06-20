@@ -175,7 +175,7 @@ import ADSQLModel
             let structuralIterations = 4000
             let reassemblyIterations = 1000
 
-            try withTempPath(prefix: "addb-fuzz") { buildPath in
+            try withTemporaryFilePath(prefix: "addb-fuzz") { buildPath in
                 let corpus = try buildCorpus(at: buildPath)
                 let pristine = corpus.bytes
 
@@ -205,7 +205,7 @@ import ADSQLModel
                     print("FUZZ \(phase) i=\(iteration) seed=0x\(String(seed, radix: 16)) muts=[\(list)]")
                 }
 
-                try withTempPath(prefix: "addb-fuzz") { scratchPath in
+                try withTemporaryFilePath(prefix: "addb-fuzz") { scratchPath in
                     let scratchURL = URL(fileURLWithPath: scratchPath)
 
                     for iteration in 0 ..< structuralIterations {

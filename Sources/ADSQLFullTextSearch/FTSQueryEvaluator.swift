@@ -1,5 +1,5 @@
 @_spi(ADDBEngine) public import ADDBCore
-public import ADSQLModel
+import ADSQLModel
 
 /// The `ADSQLFullTextSearch` implementation of ADDBCore's ``FTSEvaluation`` hook:
 /// it parses MATCH queries, evaluates them to docids, scores with bm25f, and runs

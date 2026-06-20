@@ -1,4 +1,9 @@
 @_spi(ADDBEngine) import ADDBCore
+// `MemberImportVisibility` (a `strictSettings` upcoming feature) requires importing the module that
+// DECLARES the relational model types directly, not relying on ADDBCore's `public import` re-export —
+// `TableDefinition` / `ColumnDefinition` / `IndexDefinition` / `DBError` / `Value` live in ADSQLModel.
+// Mirrors the sibling `ADDBCoreTests` files (which import ADSQLModel alongside the @_spi ADDBCore).
+import ADSQLModel
 import Benchmark
 import Foundation
 

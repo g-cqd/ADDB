@@ -1,4 +1,4 @@
-public import ADDBExec
+import ADDBExec
 
 /// Synthesizes ``TableRow`` conformance for a struct: a `TableDefinition` whose
 /// columns mirror the stored properties and an `init(row:)` that decodes a

@@ -101,6 +101,26 @@ struct SQLCompoundTests {
         }
     }
 
+    @Test func compoundWithTooManyTermsRejected() throws {
+        let dir = TempDir()
+        defer { dir.cleanup() }
+        let (db, _) = try CompoundFixture.make(dir, "compound-deep.adsql")
+        defer { db.close() }
+        // `compounds.count` is the arm count *past* the first, so one term over the cap trips the
+        // `Binder.maxCompoundDepth` guard rather than binding the unbounded chain.
+        let overLimit =
+            "SELECT id FROM docs"
+            + String(repeating: " UNION SELECT id FROM docs", count: Binder.maxCompoundDepth + 1)
+        #expect(throws: DBError.self) {
+            try db.prepare(overLimit).all()
+        }
+        // The off-by-one boundary: exactly `maxCompoundDepth` extra arms still binds + runs.
+        let atLimit =
+            "SELECT id FROM docs"
+            + String(repeating: " UNION SELECT id FROM docs", count: Binder.maxCompoundDepth)
+        _ = try db.prepare(atLimit).all()
+    }
+
     @Test func jsonEachParameterBound() throws {
         let dir = TempDir()
         defer { dir.cleanup() }

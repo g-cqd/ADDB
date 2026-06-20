@@ -1,5 +1,5 @@
 @_spi(ADDBEngine) import ADDBCore
-package import ADSQLModel
+import ADSQLModel
 
 /// The block-max WAND top-k driver. Given the WAND-eligible single-term
 /// leaves of a ranked query (from `FTSWAND.classify`), it retrieves the top-k

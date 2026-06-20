@@ -70,8 +70,8 @@ public struct RelationState: Sendable {
     static func putBytes(
         _ ctx: TxnContext, _ tree: inout TreeHandle, key: [UInt8], value: [UInt8]
     ) throws(DBError) {
-        try key.withUnsafeBytesThrowing { keyBytes throws(DBError) in
-            try value.withUnsafeBytesThrowing { valueBytes throws(DBError) in
+        unsafe try key.withUnsafeBytesThrowing { keyBytes throws(DBError) in
+            unsafe try value.withUnsafeBytesThrowing { valueBytes throws(DBError) in
                 unsafe try BTree.put(ctx: ctx, tree: &tree, key: keyBytes, value: valueBytes)
             }
         }
@@ -86,8 +86,8 @@ public struct RelationState: Sendable {
     ) throws(DBError) {
         var cache = ctx.appendCache[tableId]
         defer { ctx.appendCache[tableId] = cache }  // write back the warmed cache even on throw
-        try key.withUnsafeBytesThrowing { keyBytes throws(DBError) in
-            try value.withUnsafeBytesThrowing { valueBytes throws(DBError) in
+        unsafe try key.withUnsafeBytesThrowing { keyBytes throws(DBError) in
+            unsafe try value.withUnsafeBytesThrowing { valueBytes throws(DBError) in
                 unsafe try BTree.appendMax(
                     ctx: ctx, tree: &tree, key: keyBytes, value: valueBytes, cache: &cache)
             }
@@ -199,7 +199,7 @@ public struct RelationState: Sendable {
         // (catalog records of one kind are contiguous), so the upper bound is dead.
         let (lower, _) = Catalog.kindBounds(kind)
         var cursor = Cursor(resolver: resolver, tree: mainTree)
-        var positioned = try lower.withUnsafeBytesThrowing { raw throws(DBError) in
+        var positioned = unsafe try lower.withUnsafeBytesThrowing { raw throws(DBError) in
             _ = unsafe try cursor.seek(raw)
             return cursor.isValid
         }

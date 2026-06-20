@@ -1,7 +1,7 @@
 @_spi(ADDBEngine) public import ADDBCore
 import ADDBExec
 import ADSQL
-public import ADSQLModel
+import ADSQLModel
 
 /// Applies pending ``Migration``s to a `Database` in ascending version order,
 /// using ADDB's MVCC commit as the atomic boundary.
