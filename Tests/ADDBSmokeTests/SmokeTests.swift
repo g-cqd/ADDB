@@ -8,7 +8,6 @@ import Testing
 /// → storage in ADDBCore) runs correctly through one `import ADDB`. These are a
 /// fast guardrail for the big-bang inversion ahead of re-homing the full
 /// `ADSQLTests` integration suite into this package.
-@Suite("ADDB end-to-end executor smoke (post-inversion)")
 struct ADDBSmokeTests {
     /// Opens a fresh file-backed database at a unique temp path and removes it after.
     private func withTempDB(_ body: (Database) throws -> Void) throws {
@@ -22,8 +21,8 @@ struct ADDBSmokeTests {
         try body(db)
     }
 
-    @Test("CREATE / INSERT / SELECT round-trips rows in order")
-    func crud() throws {
+    @Test
+    func `CREATE / INSERT / SELECT round-trips rows in order`() throws {
         try withTempDB { db in
             _ = try db.prepare("CREATE TABLE users(id INTEGER PRIMARY KEY, name TEXT)").run()
             _ = try db.prepare("INSERT INTO users(id, name) VALUES (1, 'Ada'), (2, 'Bo')").run()
@@ -35,8 +34,8 @@ struct ADDBSmokeTests {
         }
     }
 
-    @Test("WHERE + parameter binding filters rows")
-    func parameterizedFilter() throws {
+    @Test
+    func `WHERE + parameter binding filters rows`() throws {
         try withTempDB { db in
             _ = try db.prepare("CREATE TABLE t(a INTEGER, b TEXT)").run()
             _ = try db.prepare("INSERT INTO t(a, b) VALUES (1,'x'),(2,'y'),(3,'z')").run()
@@ -45,8 +44,8 @@ struct ADDBSmokeTests {
         }
     }
 
-    @Test("GROUP BY aggregate computes SUM per group")
-    func aggregate() throws {
+    @Test
+    func `GROUP BY aggregate computes SUM per group`() throws {
         try withTempDB { db in
             _ = try db.prepare("CREATE TABLE t(a INTEGER, b INTEGER)").run()
             _ = try db.prepare("INSERT INTO t(a,b) VALUES (1,10),(1,20),(2,5)").run()
@@ -57,8 +56,8 @@ struct ADDBSmokeTests {
         }
     }
 
-    @Test("INNER JOIN matches across two tables")
-    func join() throws {
+    @Test
+    func `INNER JOIN matches across two tables`() throws {
         try withTempDB { db in
             _ = try db.prepare("CREATE TABLE u(id INTEGER PRIMARY KEY, name TEXT)").run()
             _ = try db.prepare("CREATE TABLE o(uid INTEGER, item TEXT)").run()
@@ -76,8 +75,8 @@ struct ADDBSmokeTests {
         }
     }
 
-    @Test("a malformed statement throws a typed DBError, never traps")
-    func syntaxErrorIsTyped() throws {
+    @Test
+    func `a malformed statement throws a typed DBError, never traps`() throws {
         try withTempDB { db in
             #expect(throws: DBError.self) {
                 _ = try db.prepare("SELECT FROM WHERE").all()
