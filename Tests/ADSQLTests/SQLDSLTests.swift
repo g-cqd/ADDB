@@ -9,7 +9,6 @@ import Testing
 /// The result-builder DSL is sugar over the same `SQLSelect` AST the parser
 /// produces, so every builder query must return exactly what the equivalent SQL
 /// string returns. Each test runs both and asserts row-for-row equality.
-@Suite("SQL DSL — query builder")
 struct SQLDSLTests {
     private func makeDB(_ dir: TempDir) throws -> Database {
         let db = try Database.open(at: dir.file("dsl.adsql"))
