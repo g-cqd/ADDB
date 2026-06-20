@@ -71,7 +71,6 @@ private enum DocsFixture {
 
 // MARK: - Differential SELECT
 
-@Suite("SQL single-table SELECT")
 struct SQLSelectTests {
     static let queries: [String] = [
         "SELECT * FROM docs",
@@ -171,7 +170,6 @@ struct SQLSelectTests {
 
 // MARK: - Bind-cache invalidation
 
-@Suite("SQL bind cache")
 struct SQLBindCacheTests {
     @Test func reboundAcrossCatalogVersions() throws {
         let dir = TempDir()
@@ -204,7 +202,6 @@ struct SQLBindCacheTests {
 
 // MARK: - Lazy vs full decode
 
-@Suite("Lazy row decode")
 struct LazyRowDecodeTests {
     private static let definition = TableDefinition(
         "r",
@@ -296,7 +293,6 @@ private func valueMatchesExact(_ a: Value, _ b: Value) -> Bool {
 
 // MARK: - Concurrency (TSan lane)
 
-@Suite("SQL statement concurrency")
 struct SQLStatementConcurrencyTests {
     @Test func oneStatementManyTasks() throws {
         let dir = TempDir()
