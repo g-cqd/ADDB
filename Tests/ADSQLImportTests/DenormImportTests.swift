@@ -12,7 +12,6 @@ import Testing
 /// columns directly — the productionized form of what the bench validated as a ~2.2×
 /// win over SQLite at 8-way. Per-row columns (`LOWER`/`CAST`/`json_extract`) + the
 /// `root_display` roots lookup (+ framework fallback) + `root_slug = framework`.
-@Suite("F6 denorm via importer")
 struct DenormImportTests {
     /// apple-docs-shaped source: `documents` (+ JSON `source_metadata`) and `roots`.
     private func makeSource(at path: String) throws {
