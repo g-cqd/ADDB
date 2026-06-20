@@ -12,7 +12,6 @@ import Testing
 /// imported ADSQL database matches the source — every regular row round-trips, and
 /// an FTS `MATCH` returns the same docids in the same order as the source SQLite
 /// FTS5 (the parity that gates the swap).
-@Suite("SQLite import round-trip")
 struct ImportRoundTripTests {
     private let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
