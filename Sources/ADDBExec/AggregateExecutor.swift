@@ -9,15 +9,22 @@ import OrderedCollections
 /// installs the per-group evaluation environment. `SelectExecutor` statics in an
 /// extension; pure code motion + visibility.
 extension SelectExecutor {
+    /// The query's resolved catalog records: the base tables (binding order), the
+    /// chosen leading index, per-join inner indexes, and FTS records by name.
+    struct QueryCatalog {
+        let tables: [Catalog.TableRecord]
+        let index: Catalog.IndexRecord?
+        let joinIndexes: [Catalog.IndexRecord?]
+        let ftsRecords: [String: Catalog.FTSRecord]
+    }
+
     static func runAggregated<R: PageResolver>(
-        _ plan: BoundSelect, tables: [Catalog.TableRecord], index: Catalog.IndexRecord?,
-        joinIndexes: [Catalog.IndexRecord?], ftsRecords: [String: Catalog.FTSRecord],
-        resolver: R, params: SQLParameters,
+        _ plan: BoundSelect, catalog: QueryCatalog, resolver: R, params: SQLParameters,
         outer: (context: RowContext, binding: QueryBinding)?, subquery: @escaping SubqueryRunner,
         execution: ExecutionOptions = .default,
         mergeIndexes: (outer: Catalog.IndexRecord, inner: Catalog.IndexRecord)? = nil
     ) throws(DBError) -> [SQLRow] {
-        let context = RowContext(definitions: tables.map(\.definition))
+        let context = RowContext(definitions: catalog.tables.map(\.definition))
         context.mergeIndexes = mergeIndexes
         let scanEnv = rowEnv(plan, context: context, params: params, outer: outer, subquery: subquery)
         let paramsEnv = SQLEvalEnv.parametersOnly(now: params.now) { p throws(DBError) in try params.lookup(p) }
@@ -63,7 +70,8 @@ extension SelectExecutor {
         }
 
         try forEachFilteredRow(
-            plan, tables: tables, index: index, joinIndexes: joinIndexes, ftsRecords: ftsRecords,
+            plan, tables: catalog.tables, index: catalog.index, joinIndexes: catalog.joinIndexes,
+            ftsRecords: catalog.ftsRecords,
             resolver: resolver, context: context, env: scanEnv, paramsEnv: paramsEnv, execution: execution,
             foldedWhere: foldedWhere, foldedJoinOn: foldedJoinOn
         ) { () throws(DBError) in
@@ -77,7 +85,7 @@ extension SelectExecutor {
             }
             if groups[key] == nil {
                 var representative: [[Value]] = []
-                for table in tables.indices {
+                for table in catalog.tables.indices {
                     // Skip materializing a table whose representative no output/HAVING/
                     // ORDER BY reads (e.g. COUNT(*)). Required for an existence-only inner,
                     // whose slot holds an empty span — decoding it would be wrong.
@@ -114,6 +122,18 @@ extension SelectExecutor {
             }
         }
 
+        return try sortSliceProject(
+            rows, sortKeys: sortKeys, collectKeys: collectKeys, plan: plan, params: params)
+    }
+
+    /// DISTINCT dedup → ORDER BY sort → OFFSET/LIMIT slice → project to `SQLRow`:
+    /// the shared materialization tail of the grouped aggregate pipeline.
+    private static func sortSliceProject(
+        _ rows: [[Value]], sortKeys: [[Value]], collectKeys: Bool, plan: BoundSelect,
+        params: SQLParameters
+    ) throws(DBError) -> [SQLRow] {
+        var rows = rows
+        var sortKeys = sortKeys
         if plan.distinct {
             (rows, sortKeys) = deduplicate(
                 rows, sortKeys: sortKeys, ordered: collectKeys, collations: plan.outputCollations)

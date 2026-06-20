@@ -30,7 +30,9 @@ enum SelectExecutor {
         let evaluator = execution.evaluator
         if plan.isAggregated {
             return try runAggregated(
-                plan, tables: tables, index: index, joinIndexes: joinIndexes, ftsRecords: ftsRecords,
+                plan,
+                catalog: QueryCatalog(
+                    tables: tables, index: index, joinIndexes: joinIndexes, ftsRecords: ftsRecords),
                 resolver: resolver, params: params, outer: outer, subquery: subquery, execution: execution,
                 mergeIndexes: mergeIndexes)
         }
