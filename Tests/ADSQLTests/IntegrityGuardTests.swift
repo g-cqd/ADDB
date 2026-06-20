@@ -15,7 +15,6 @@ import Testing
 /// Read-path integrity guards (health-check R1/R2): the committed-page reader
 /// rejects an out-of-range page pointer, and — opt-in — verifies checksums as
 /// pages are faulted in.
-@Suite("Integrity read guards")
 struct IntegrityGuardTests {
     /// R2: a page number ≥ the snapshot's committed high-water is a corrupt
     /// in-page pointer. It must be rejected rather than reading mapped-but-
