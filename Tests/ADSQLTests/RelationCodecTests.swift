@@ -47,7 +47,6 @@ private func memcmpOrder(_ a: [UInt8], _ b: [UInt8]) -> Int {
     return a.count < b.count ? -1 : 1
 }
 
-@Suite("KeyCodec")
 struct KeyCodecTests {
     @Test(arguments: [UInt64(1), 77, 991, 31337])
     func memcmpMatchesSemanticOrder(seed: UInt64) throws {
@@ -227,7 +226,6 @@ struct KeyCodecTests {
     }
 }
 
-@Suite("RecordCodec")
 struct RecordCodecTests {
     @Test(arguments: [UInt64(3), 99, 4242])
     func roundTrip(seed: UInt64) throws {
@@ -363,7 +361,6 @@ struct RecordCodecTests {
     }
 }
 
-@Suite("CivilTime")
 struct CivilTimeTests {
     @Test func knownInstants() {
         #expect(CivilTime.string(forEpochSeconds: 0) == "1970-01-01 00:00:00")
@@ -384,7 +381,6 @@ struct CivilTimeTests {
     }
 }
 
-@Suite("Definitions validation")
 struct DefinitionsTests {
     @Test func tableValidationCatchesMistakes() {
         let dup = TableDefinition(
