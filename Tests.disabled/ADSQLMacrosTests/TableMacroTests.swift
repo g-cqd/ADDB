@@ -9,7 +9,6 @@ import Testing
 /// Diagnostic-shape tests for `@Table`. The happy-path synthesis is covered
 /// end-to-end (it compiles and round-trips) by `TableMacroIntegrationTests` in
 /// ADDBTests, which is more robust than pinning the byte-exact expanded source.
-@Suite("ADSQLMacros — @Table diagnostics")
 struct TableMacroTests {
     let macroSpecs: [String: MacroSpec] = ["Table": MacroSpec(type: TableMacro.self)]
 
