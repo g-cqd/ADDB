@@ -59,7 +59,6 @@ private enum TopNFixture {
     }
 }
 
-@Suite("SQL bounded top-N")
 struct SQLSearchTopNTests {
     static let queries: [String] = [
         "SELECT id, name FROM items ORDER BY name LIMIT 4",  // BINARY fast path, ASC
