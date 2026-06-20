@@ -5,7 +5,6 @@ import Testing
 @_spi(ADDBEngine) @testable import ADDBExec
 @testable import ADSQL
 
-@Suite("FTS5 — F2a postings + stats codecs")
 struct FTSPostingsTests {
     /// Builds `count` ascending-docid postings across `columns` fields.
     private func sample(count: Int, columns: Int, positions: Bool) -> [FTSPosting] {
