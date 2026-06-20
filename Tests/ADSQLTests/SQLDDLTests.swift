@@ -7,7 +7,6 @@ import Testing
 @testable import ADDBTestSupport
 @testable import ADSQL
 
-@Suite("SQL DDL")
 struct SQLDDLTests {
     /// A complete workflow expressed only in SQL — schema, index, data, query —
     /// must agree with SQLite, proving the surface stands alone without the
