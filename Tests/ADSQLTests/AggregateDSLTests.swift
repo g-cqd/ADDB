@@ -8,7 +8,6 @@ import Testing
 
 /// Aggregate projections in the `Select` DSL lower to the same function-call AST
 /// the parser produces, so each builder must match the equivalent SQL string.
-@Suite("SQL DSL — aggregate projections")
 struct AggregateDSLTests {
     private func makeDB(_ dir: TempDir) throws -> Database {
         let db = try Database.open(at: dir.file("aggdsl.adsql"))
