@@ -42,7 +42,6 @@ private func get(_ resolver: some PageResolver, _ meta: Meta, _ key: [UInt8]) th
     return try result.get()
 }
 
-@Suite("BTree delete")
 struct BTreeDeleteTests {
     @Test(arguments: [UInt64(3), 11, 77, 4242])
     func mixedOpsMatchModel(seed: UInt64) throws {
@@ -166,7 +165,6 @@ struct BTreeDeleteTests {
     }
 }
 
-@Suite("Cursor")
 struct CursorTests {
     func buildTree(seed: UInt64, count: Int) throws -> (MemKernel, ModelStore) {
         let kernel = MemKernel()
