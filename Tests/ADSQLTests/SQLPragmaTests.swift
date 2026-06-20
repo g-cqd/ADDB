@@ -6,7 +6,6 @@ import Testing
 @testable import ADDBTestSupport
 @testable import ADSQL
 
-@Suite("SQL PRAGMA compatibility")
 struct SQLPragmaTests {
     /// A SQLite consumer's connection-setup script must run unchanged.
     @Test func setupScriptNeverErrors() throws {
