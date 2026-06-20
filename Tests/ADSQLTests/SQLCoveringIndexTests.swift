@@ -24,7 +24,6 @@ import Testing
 /// `CREATE INDEX` has no INCLUDE grammar yet, so indexes are created through the
 /// `txn.createIndex(IndexDefinition(…, includes:))` API; everything else is
 /// ordinary SQL run through `Database.prepare`.
-@Suite("SQL covering / INCLUDE-index serving")
 struct SQLCoveringIndexTests {
     /// `cov(id PK, a, b, c, d, e)` with a composite key `(a, b)` covering `(c, d)`.
     /// `a`/`b` are KEY columns (not stored in the entry value); `c`/`d` are INCLUDE
