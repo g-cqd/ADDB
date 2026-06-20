@@ -82,7 +82,6 @@ private enum IndexedDocs {
 
 // MARK: - Access-path selection
 
-@Suite("SQL planner access paths")
 struct SQLPlannerPathTests {
     static let expectations: [(sql: String, fragment: String)] = [
         ("SELECT * FROM docs", "SCAN docs"),
@@ -135,10 +134,9 @@ struct SQLPlannerPathTests {
 
 // MARK: - EXPLAIN query plan + slow-query hook
 
-@Suite("EXPLAIN query plan + slow-query hook")
 struct SQLExplainAndSlowQueryTests {
-    @Test("explainQueryPlan reports the access path per table (scan, index seek, join walk)")
-    func explainSteps() throws {
+    @Test
+    func `explainQueryPlan reports the access path per table (scan, index seek, join walk)`() throws {
         let dir = TempDir()
         defer { dir.cleanup() }
         let db = try IndexedDocs.adsql(dir, "explain.adsql", withIndexes: true)
@@ -161,8 +159,8 @@ struct SQLExplainAndSlowQueryTests {
         #expect(join.allSatisfy { $0.contains("docs") })
     }
 
-    @Test("slow-query hook fires above the threshold with the SQL text and a non-negative elapsed")
-    func slowQueryFires() throws {
+    @Test
+    func `slow-query hook fires above the threshold with the SQL text and a non-negative elapsed`() throws {
         let dir = TempDir()
         defer { dir.cleanup() }
         let db = try IndexedDocs.adsql(dir, "slow.adsql", withIndexes: true)
@@ -179,8 +177,8 @@ struct SQLExplainAndSlowQueryTests {
         #expect((fired.first?.elapsed ?? .zero) >= .zero)
     }
 
-    @Test("slow-query hook stays silent below the threshold and after clearing")
-    func slowQueryThresholdAndClear() throws {
+    @Test
+    func `slow-query hook stays silent below the threshold and after clearing`() throws {
         let dir = TempDir()
         defer { dir.cleanup() }
         let db = try IndexedDocs.adsql(dir, "thresh.adsql", withIndexes: true)
@@ -205,7 +203,6 @@ struct SQLExplainAndSlowQueryTests {
 
 // MARK: - Residual elimination (covered-conjunct removal)
 
-@Suite("SQL planner residual elimination")
 struct SQLResidualEliminationTests {
     private func residual(_ db: Database, _ sql: String) throws -> SQLExpr?? {
         try db.read { (txn) throws(DBError) in
@@ -242,7 +239,6 @@ struct SQLResidualEliminationTests {
 
 // MARK: - Superset + residual property test
 
-@Suite("SQL planner residual equivalence")
 struct SQLPlannerResidualTests {
     @Test(arguments: [UInt64(7), 19, 4242])
     func plannedEqualsScanAndSQLite(seed: UInt64) throws {
