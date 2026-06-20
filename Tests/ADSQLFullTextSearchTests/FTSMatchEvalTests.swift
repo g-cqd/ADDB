@@ -8,7 +8,6 @@ import Testing
 
 /// / — boolean MATCH evaluation over the index (membership; ranking
 /// is). Driven through `WriteTxn.ftsMatch`, which parses + evaluates.
-@Suite("FTS5 — F3b boolean MATCH evaluation")
 struct FTSMatchEvalTests {
     /// A 3-doc fixture; returns the opened DB (caller closes).
     private func fixture(_ dir: TempDir) throws -> Database {
