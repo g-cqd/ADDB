@@ -54,7 +54,6 @@ private enum AggFixture {
     }
 }
 
-@Suite("SQL aggregates")
 struct SQLAggregateTests {
     static let queries: [String] = [
         "SELECT COUNT(*) FROM docs",
@@ -151,7 +150,6 @@ struct SQLAggregateTests {
     }
 }
 
-@Suite("SQL aggregate residual equivalence")
 struct SQLAggregateResidualTests {
     @Test(arguments: [UInt64(5), 55, 555])
     func randomAggregatesMatchSQLite(seed: UInt64) throws {
