@@ -67,7 +67,6 @@ private enum JoinExistFixture {
     }
 }
 
-@Suite("SQL join existence fast path")
 struct SQLJoinExistenceTests {
     static let queries: [String] = [
         // UNIQUE full-key equality → fastExistence (every outer hits exactly once).
