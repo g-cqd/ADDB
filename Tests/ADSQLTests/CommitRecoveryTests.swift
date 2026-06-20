@@ -7,7 +7,6 @@ import Testing
 @testable import ADDBTestSupport
 @testable import ADSQL
 
-@Suite("Commit + reopen")
 struct CommitReopenTests {
     @Test func commitsSurviveCleanReopen() throws {
         let dir = TempDir()
@@ -114,7 +113,6 @@ struct CommitReopenTests {
     }
 }
 
-@Suite("Crash injection")
 struct CrashInjectionTests {
     struct History {
         var modelByGeneration: [UInt64: ModelStore] = [:]
