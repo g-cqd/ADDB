@@ -9,7 +9,7 @@ import Testing
 @testable import ADDBTestSupport
 @testable import ADSQL
 
-@Suite("Group commit", .serialized)
+@Suite(.serialized)
 struct GroupCommitTests {
     @Test func asyncWriteCommitsAndIsVisible() async throws {
         let dir = TempDir()
