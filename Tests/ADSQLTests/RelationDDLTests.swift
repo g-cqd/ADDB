@@ -23,7 +23,6 @@ private func documentsTable(_ name: String = "documents") -> TableDefinition {
         primaryKey: .rowidAlias(column: "id", autoincrement: true))
 }
 
-@Suite("Relation DDL")
 struct RelationDDLTests {
     @Test func createPersistsAcrossReopen() throws {
         let dir = TempDir()
@@ -254,7 +253,6 @@ struct RelationDDLTests {
     }
 }
 
-@Suite("Relation DDL crash atomicity")
 struct RelationDDLCrashTests {
     @Test func ddlCrashSweepIsAllOrNothing() throws {
         let dir = TempDir()
