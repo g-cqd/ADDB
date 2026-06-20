@@ -6,7 +6,6 @@ import Testing
 @testable import ADDBTestSupport
 @testable import ADSQL
 
-@Suite("Relation foreign keys")
 struct RelationFKTests {
     /// documents → sections → chunks, the apple-docs cascade shape.
     func makeChainDB(_ dir: TempDir, sectionsAction: FKAction = .cascade) throws -> Database {
