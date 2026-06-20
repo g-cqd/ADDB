@@ -11,7 +11,6 @@ import Testing
 /// smaller is more relevant**, so a "better" score is more negative. These are
 /// relevance/monotonicity properties (not byte-identity to FTS5 — the SQL
 /// surface in `FTSRankTests` carries the differential ordering gate).
-@Suite("FTS5 — F4a bm25f scorer")
 struct FTSScorerTests {
     private func run(_ db: Database, _ sql: String) throws { try db.prepare(sql).run() }
 
