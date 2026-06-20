@@ -123,8 +123,9 @@ package enum FTSWAND {
     ) throws(DBError) -> [(docid: Int64, score: Double)]? {
         guard k >= 1, let eligible = classify(query) else { return nil }
         return try FTSWANDTopK.run(
-            eligible: eligible, query: query, record: record, resolver: resolver,
-            weights: weights, global: global, k: k)
+            eligible: eligible, query: query,
+            inputs: FTSWANDTopK.BM25Inputs(record: record, weights: weights, global: global),
+            resolver: resolver, k: k)
     }
 
     // MARK: - Bound math

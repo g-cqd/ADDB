@@ -35,10 +35,20 @@ enum FTSWANDTopK {
     /// per-column bm25 weights (already padded to the FTS column count). `global` is
     /// the corpus aggregate (fetched once). Returns the top-k in final ranked order
     /// (most relevant first; ties by docid ascending), or nil to fall back.
+    /// The bm25 scoring inputs: the FTS index record, per-column weights (padded to the column count),
+    /// and the corpus aggregate stats — bundled so the entry point stays within the parameter gate.
+    struct BM25Inputs {
+        let record: Catalog.FTSRecord
+        let weights: [Double]
+        let global: FTSGlobalStats
+    }
+
     static func run<R: PageResolver>(
-        eligible: FTSWAND.Eligible, query: FTSQuery, record: Catalog.FTSRecord, resolver: R,
-        weights: [Double], global: FTSGlobalStats, k: Int
+        eligible: FTSWAND.Eligible, query: FTSQuery, inputs: BM25Inputs, resolver: R, k: Int
     ) throws(DBError) -> [(docid: Int64, score: Double)]? {
+        let record = inputs.record
+        let weights = inputs.weights
+        let global = inputs.global
         guard k >= 1, global.docCount > 0 else { return nil }
         let columns = record.definition.columns.count
         let storePositions = record.definition.detail != .none
