@@ -42,6 +42,9 @@ jobs:
     uses: g-cqd/ADBuildTools/.github/workflows/swift-quality.yml@v1
     with:
       dev-env-var: ADDB_DEV
+      enable-sanitizers: true
+      sanitizers: "address thread"
+      enable-coverage: true
       requires-published-siblings: true
 
   # Linux build + test lane (RFC 0010 F0 — the #1 apple-docs adoption gate). ADSQL was Darwin-only;
