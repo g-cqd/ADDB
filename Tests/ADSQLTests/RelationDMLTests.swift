@@ -71,7 +71,6 @@ private func verifyAgainstModel(_ db: Database, _ model: RelationalModelStore) t
     _ = try db.verifyIntegrity(deep: true)
 }
 
-@Suite("Relation DML model tests")
 struct RelationDMLModelTests {
     // Built outside the fuzz loop's nested `writeSync { for { switch } }` closures so
     // the loop body stays under the long-function-body timing limit.
@@ -184,7 +183,6 @@ struct RelationDMLModelTests {
     }
 }
 
-@Suite("Relation DML semantics")
 struct RelationDMLSemanticsTests {
     func makeDB(_ dir: TempDir, _ name: String) throws -> Database {
         let db = try Database.open(at: dir.file(name))
@@ -673,7 +671,7 @@ struct RelationDMLSemanticsTests {
     }
 }
 
-@Suite("Relation DML group commit", .serialized)
+@Suite(.serialized)
 struct RelationDMLGroupCommitTests {
     @Test func failingInsertRequestRollsBackAlone() async throws {
         let dir = TempDir()
