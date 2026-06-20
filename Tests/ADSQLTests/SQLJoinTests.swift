@@ -88,7 +88,6 @@ private enum JoinFixture {
     }
 }
 
-@Suite("SQL joins")
 struct SQLJoinTests {
     static let queries: [String] = [
         "SELECT d.id, d.key, r.display FROM docs d JOIN roots r ON r.slug = d.framework ORDER BY d.id",
@@ -136,7 +135,6 @@ struct SQLJoinTests {
     }
 }
 
-@Suite("SQL join residual equivalence")
 struct SQLJoinResidualTests {
     @Test(arguments: [UInt64(3), 31, 991])
     func randomJoinsMatchSQLite(seed: UInt64) throws {
