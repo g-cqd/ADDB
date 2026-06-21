@@ -89,6 +89,14 @@ if isDev {
             name: "ADDBSmokeTests",
             dependencies: ["ADDB", adsqlModel, adTestKit],
             swiftSettings: strictSettings))
+    // Folded in from the former standalone ADDBAsync package (self-contained — no ADTestKit/fixtures).
+    testTargets.append(
+        .testTarget(
+            name: "ADDBAsyncTests",
+            dependencies: [
+                "ADDBAsync", "ADDB", adsqlModel, .product(name: "ADConcurrency", package: "ADConcurrency")
+            ],
+            swiftSettings: strictSettings))
     // Shared fixture (MemKernel, ModelStore, SQLiteMirror, corpora) — a library target so the
     // re-homed suites can `@testable import` it. Re-homed from the old ADSQL package post-inversion.
     testTargets.append(
@@ -153,6 +161,7 @@ let package = Package(
     platforms: [.macOS(.v15), .iOS(.v26), .tvOS(.v26), .watchOS(.v26), .visionOS(.v26)],
     products: [
         .library(name: "ADDB", targets: ["ADDB"]),
+        .library(name: "ADDBAsync", targets: ["ADDBAsync"]),
         .library(name: "ADDBCore", targets: ["ADDBCore"]),
         .library(name: "ADDBExec", targets: ["ADDBExec"]),
         .library(name: "ADDBMacros", targets: ["ADDBMacros"]),
@@ -207,6 +216,14 @@ let package = Package(
             swiftSettings: strictSettings),
         .target(
             name: "ADDB", dependencies: ["ADDBCore", "ADDBExec", adsqlModel],
+            swiftSettings: strictSettings, plugins: libraryBuildPlugins),
+        // ADDBAsync — async façade folded in from the former standalone package: offloads the engine's
+        // blocking read/writeSync onto ADConcurrency.BlockingOffloadPool so a structured-concurrency
+        // caller never blocks the cooperative pool. Consumes the engine via the public `ADDB` product;
+        // this is what makes ADDB's previously-declared (and dead) ADConcurrency dependency live.
+        .target(
+            name: "ADDBAsync",
+            dependencies: ["ADDB", adsqlModel, .product(name: "ADConcurrency", package: "ADConcurrency")],
             swiftSettings: strictSettings, plugins: libraryBuildPlugins),
         .executableTarget(
             name: "ADSQLTool",
