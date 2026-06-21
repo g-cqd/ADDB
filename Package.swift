@@ -36,13 +36,12 @@ var packageDependencies: [Package.Dependency] = [
     localOrMain("ADSQL_PATH", "ADSQL"),
     localOrMain("ADFOUNDATION_PATH", "ADFoundation"),
     localOrMain("ADJSON_PATH", "ADJSON"),
-    localOrMain("ADCONCURRENCY_PATH", "ADConcurrency"),
     .package(url: "https://github.com/apple/swift-collections.git", from: "1.1.0"),
     .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "603.0.0")
 ]
 if isDev {
     packageDependencies.append(localOrMain("ADBUILDTOOLS_PATH", "ADBuildTools"))
-    packageDependencies.append(localOrMain("ADTESTKIT_PATH", "ADTestKit"))
+    // (ADTestKit is folded into ADFoundation; resolved via the ADFOUNDATION dependency above.)
     packageDependencies.append(
         .package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.0.0"))
     // ordo-one's statistically-rigorous benchmark framework (p-percentile latencies + throughput +
@@ -51,7 +50,7 @@ if isDev {
     // depending on ADDB never resolve it.
     packageDependencies.append(.package(url: "https://github.com/ordo-one/benchmark", from: "1.4.0"))
 }
-let adTestKit: Target.Dependency = .product(name: "ADTestKit", package: "ADTestKit")
+let adTestKit: Target.Dependency = .product(name: "ADTestKit", package: "ADFoundation")
 let libraryBuildPlugins: [Target.PluginUsage] =
     isDev ? [.plugin(name: "LintBuild", package: "ADBuildTools")] : []
 
@@ -94,7 +93,7 @@ if isDev {
         .testTarget(
             name: "ADDBAsyncTests",
             dependencies: [
-                "ADDBAsync", "ADDB", adsqlModel, .product(name: "ADConcurrency", package: "ADConcurrency")
+                "ADDBAsync", "ADDB", adsqlModel, .product(name: "ADConcurrency", package: "ADFoundation")
             ],
             swiftSettings: strictSettings))
     // Shared fixture (MemKernel, ModelStore, SQLiteMirror, corpora) — a library target so the
@@ -223,7 +222,7 @@ let package = Package(
         // this is what makes ADDB's previously-declared (and dead) ADConcurrency dependency live.
         .target(
             name: "ADDBAsync",
-            dependencies: ["ADDB", adsqlModel, .product(name: "ADConcurrency", package: "ADConcurrency")],
+            dependencies: ["ADDB", adsqlModel, .product(name: "ADConcurrency", package: "ADFoundation")],
             swiftSettings: strictSettings, plugins: libraryBuildPlugins),
         .executableTarget(
             name: "ADSQLTool",
