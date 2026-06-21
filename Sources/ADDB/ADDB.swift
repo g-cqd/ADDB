@@ -16,3 +16,8 @@
 // Post-inversion the SQL executor (prepare/Statement/SQLRow + the @Table/Query DSL) lives in
 // ADDBExec; the façade re-exports it so `import ADDB` is the single entry point for engine + SQL.
 @_exported import ADDBExec
+// The shared value/schema model (`Value`, `Definitions`, `Row`, `DBError`) lives in the standalone
+// `ADSQLModel`. Re-export it so the value-type API documented above is reachable from `import ADDB`
+// alone — callers no longer add a separate `import ADSQLModel`. The SQL *frontend* (`ADSQL`, the
+// parser/binder/planner) stays a distinct opt-in import: building SQL text is a separate concern.
+@_exported import ADSQLModel

@@ -206,7 +206,7 @@ let package = Package(
             dependencies: ["ADDBCore", "ADDBExec", adsql, adsqlModel, "CSQLite"],
             swiftSettings: strictSettings),
         .target(
-            name: "ADDB", dependencies: ["ADDBCore", "ADDBExec"],
+            name: "ADDB", dependencies: ["ADDBCore", "ADDBExec", adsqlModel],
             swiftSettings: strictSettings, plugins: libraryBuildPlugins),
         .executableTarget(
             name: "ADSQLTool",
