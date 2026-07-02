@@ -59,7 +59,7 @@ jobs:
   # passes the CLI path, and runs the arm64 runner too).
   #
   # STILL ADVISORY (`continue-on-error: true`) for one reason historically: the lane tracked the MOVING
-  # `nightly-6.4-jammy` tag, so a required gate would let an unrelated bad nightly redden main. Now that
+  # `nightly-6.4.x-noble` tag, so a required gate would let an unrelated bad nightly redden main. Now that
   # the image is pinned to a DATED nightly (#14), the remaining blocker is a stable >= 6.4 release that
   # parses the 6.4 manifest; drop `continue-on-error` to make Linux a required gate once that ships.
   #
@@ -73,7 +73,7 @@ jobs:
     continue-on-error: true
     runs-on: ${{ matrix.runner }}
     # Dated nightly pins the toolchain for reproducible CI; bump deliberately like a dependency (#14).
-    container: swiftlang/swift:nightly-6.4-2026-06-18-jammy
+    container: swiftlang/swift:nightly-6.4.x-noble@sha256:54970846d48a8255eee5986aa5bbd259b7f73bbf38429cc2428ce6a62a390b47
     strategy:
       fail-fast: false
       matrix:
