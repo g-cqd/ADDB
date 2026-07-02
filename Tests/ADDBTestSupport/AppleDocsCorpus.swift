@@ -1,8 +1,6 @@
 import ADSQLModel
 import ADTestKit
 
-@_spi(ADDBEngine) @testable import ADDBExec
-
 /// A deterministic, apple-docs-SHAPED synthetic corpus for the FTS parity gate
 /// and the later FTS bench. "Apple-docs-shaped" means the text
 /// reads like DocC reference pages — framework names, symbol/type names,

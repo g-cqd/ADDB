@@ -1,7 +1,7 @@
 import ADSQLModel
 
-@_spi(ADDBEngine) @testable import ADDBCore
-@_spi(ADDBEngine) @testable import ADDBExec
+@_spi(ADDBEngine) import ADDBCore
+@_spi(ADDBEngine) import ADDBExec
 
 /// Reference model for property tests: a plain dictionary with lexicographic
 /// ordering on demand. Deliberately naive — correctness oracle, not fast.

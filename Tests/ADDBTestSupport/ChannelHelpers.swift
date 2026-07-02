@@ -1,7 +1,7 @@
 import ADSQLModel
 
-@_spi(ADDBEngine) @testable import ADDBCore
-@_spi(ADDBEngine) @testable import ADDBExec
+@_spi(ADDBEngine) import ADDBCore
+@_spi(ADDBEngine) import ADDBExec
 
 /// Vectored-write test helper: copies each chunk into stable heap buffers so
 /// the gather path of `pwritev` is exercised without escaping `withUnsafeBytes`

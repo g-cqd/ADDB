@@ -1,8 +1,8 @@
 import ADSQLModel
 import ADTestKit
 
-@_spi(ADDBEngine) @testable import ADDBCore
-@_spi(ADDBEngine) @testable import ADDBExec
+@_spi(ADDBEngine) import ADDBCore
+@_spi(ADDBEngine) import ADDBExec
 
 /// In-memory committed-page store: lets B+tree logic run without the pager /
 /// committer. Freed pages are dropped eagerly so any dangling reference from

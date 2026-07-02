@@ -1,8 +1,8 @@
 import ADSQLModel
 import ADTestKit
 
-@_spi(ADDBEngine) @testable import ADDBCore
-@_spi(ADDBEngine) @testable import ADDBExec
+@_spi(ADDBEngine) import ADDBCore
+@_spi(ADDBEngine) import ADDBExec
 
 /// Seeded generators for typed values, shared by codec property tests and
 /// the relational model tests.

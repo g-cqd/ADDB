@@ -6,8 +6,6 @@ import ADSQLModel
 // types for signatures but not their members across modules, which SE-0444 rejects.)
 @_exported import ADTestKit
 
-@_spi(ADDBEngine) @testable import ADDBExec
-
 /// The deterministic seedable RNG is now the shared `ADTestKit.SeededRNG`; this alias
 /// keeps the dependent ADSQL test files calling `SplitMix64(seed:)` untouched while
 /// removing the seventh hand-rolled copy. The SplitMix64 core stream is byte-identical,

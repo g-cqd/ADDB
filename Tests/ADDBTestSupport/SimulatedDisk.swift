@@ -3,8 +3,8 @@ import ADSQLModel
 import ADTestKit
 import Synchronization
 
-@_spi(ADDBEngine) @testable import ADDBCore
-@_spi(ADDBEngine) @testable import ADDBExec
+@_spi(ADDBEngine) import ADDBCore
+@_spi(ADDBEngine) import ADDBExec
 
 /// Storage channel that journals every mutation while writing through to a
 /// real file (so the engine's mmap reads still work mid-test), and can

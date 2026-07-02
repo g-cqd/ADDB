@@ -2,8 +2,8 @@ import ADSQLModel
 import ADTestKit
 import CSQLite
 
-@_spi(ADDBEngine) @testable import ADDBCore
-@_spi(ADDBEngine) @testable import ADDBExec
+@_spi(ADDBEngine) import ADDBCore
+@_spi(ADDBEngine) import ADDBExec
 
 // MARK: - SQLite mirror (full-query oracle)
 

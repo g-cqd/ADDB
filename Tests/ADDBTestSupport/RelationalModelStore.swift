@@ -1,7 +1,7 @@
 import ADSQLModel
 
-@_spi(ADDBEngine) @testable import ADDBCore
-@_spi(ADDBEngine) @testable import ADDBExec
+@_spi(ADDBEngine) import ADDBCore
+@_spi(ADDBEngine) import ADDBExec
 
 /// Naive relational oracle: dictionaries of rows plus recomputed index
 /// orderings, mirroring ADSQL's externally visible semantics (strict types

@@ -1,8 +1,8 @@
 import ADDBJSON
 import ADSQLModel
 
-@_spi(ADDBEngine) @testable import ADDBCore
-@_spi(ADDBEngine) @testable import ADDBExec
+@_spi(ADDBEngine) import ADDBCore
+@_spi(ADDBEngine) import ADDBExec
 
 extension Database {
     /// Test convenience: open a database and enable SQL JSON (json1 functions,
