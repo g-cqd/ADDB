@@ -12,8 +12,15 @@ import PackageDescription
 //     interim ADSQL* names: the ADSQL prefix belongs to the separate frontend package, and these
 //     modules ship from ADDB — consumers import the ADDB* names).
 //   • ADDB — the curated public façade (engine + execution).
-// Big-bang note: ADDBAsync folds in + the ADStorageCore/ADDBEngine target split + the test split are
-// the remaining steps (design doc §7–§8). Test/benchmark targets are temporarily omitted.
+//   • ADDBAsync — the async façade over the engine's blocking read/writeSync (folded in from the
+//     former standalone ADDBAsync package; offloads onto ADConcurrency.BlockingOffloadPool).
+//   • ADDBMacros (+ the ADSQLMacros compiler plugin) — the opt-in @Table / #SQL sugar, isolated so
+//     no shipped non-macro product links swift-syntax.
+//   • ADSQLTool (the `adsql` CLI) and ADSQLBench (the vs-SQLite benchmark harness) — executables.
+// The test suites (re-homed here from ADSQL in the inversion, plus the shared ADDBTestSupport
+// fixture) and the ordo-one ADDBSuite benchmark are dev-gated behind ADDB_DEV=1 below — they pull
+// dev-only dependencies (ADTestKit, ADBuildTools, ordo-one benchmark), so consumers resolving ADDB
+// never see them.
 
 let strictSettings: [SwiftSetting] = [
     .swiftLanguageMode(.v6),
