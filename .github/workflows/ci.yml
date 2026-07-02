@@ -162,6 +162,10 @@ jobs:
     if: github.event_name != 'pull_request'
     runs-on: macos-26
     timeout-minutes: 90
+    env:
+      # The test targets are ADDB_DEV-gated; without this the job vacuously tested NOTHING
+      # (zero test targets in the graph) while reporting green.
+      ADDB_DEV: "1"
     strategy:
       fail-fast: false
       matrix:

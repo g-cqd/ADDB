@@ -339,25 +339,35 @@ struct SQLEvalSemanticsTests {
 
     @Test func booleanChainsWithinLimitEvaluateAndShortCircuit() throws {
         // A chain within the depth bound evaluates via the iterative AND/OR path and
-        // short-circuits left to right under three-valued logic.
+        // short-circuits left to right under three-valued logic. The cap-legal 250-term
+        // chains recurse the binder once per term, so the evaluations run on the explicit
+        // depth-sweep thread (see DepthSweepSupport.swift); assertions stay on the test task.
         let n = 250
         let allTrue = Array(repeating: "1=1", count: n).joined(separator: " AND ")
-        #expect(try adsqlEval(allTrue) == .integer(1))
-        #expect(try adsqlEval(allTrue + " AND 1=0") == .integer(0))  // a false ends it
-        #expect(try adsqlEval(allTrue + " AND NULL") == .null)  // 3VL: NULL, no decisive operand
         let allFalse = Array(repeating: "1=0", count: n).joined(separator: " OR ")
-        #expect(try adsqlEval(allFalse) == .integer(0))
-        #expect(try adsqlEval(allFalse + " OR 1=1") == .integer(1))  // a true ends it
-        #expect(try adsqlEval(allFalse + " OR NULL") == .null)
+        let values = try runDepthSweep { () throws -> [Value] in
+            [
+                try adsqlEval(allTrue),
+                try adsqlEval(allTrue + " AND 1=0"),  // a false ends it
+                try adsqlEval(allTrue + " AND NULL"),  // 3VL: NULL, no decisive operand
+                try adsqlEval(allFalse),
+                try adsqlEval(allFalse + " OR 1=1"),  // a true ends it
+                try adsqlEval(allFalse + " OR NULL")
+            ]
+        }
+        #expect(values == [.integer(1), .integer(0), .null, .integer(0), .integer(1), .null])
     }
 
     @Test func booleanChainWithinLimitMatchesSQLite() throws {
-        // A moderately deep chain must match the oracle exactly (value + 3VL).
+        // A moderately deep chain must match the oracle exactly (value + 3VL). The 200-term
+        // chains recurse the binder once per term — evaluated on the explicit depth-sweep
+        // thread; the system-SQLite oracle (small C frames, own 1000 depth cap) stays here.
         let sqlite = SQLiteScratch()
         let and = Array(repeating: "1=1", count: 200).joined(separator: " AND ") + " AND 1=0"
         let or = Array(repeating: "1=0", count: 200).joined(separator: " OR ") + " OR NULL"
-        #expect(try adsqlEval(and) == (try sqlite.eval(and)))
-        #expect(try adsqlEval(or) == (try sqlite.eval(or)))
+        let (oursAnd, oursOr) = try runDepthSweep { (try adsqlEval(and), try adsqlEval(or)) }
+        #expect(oursAnd == (try sqlite.eval(and)))
+        #expect(oursOr == (try sqlite.eval(or)))
     }
 
     @Test func overlongChainsRejectedNotOverflow() throws {

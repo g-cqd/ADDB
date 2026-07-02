@@ -281,20 +281,25 @@ struct QueryFuzzTests {
         let db = try build(dir)
         defer { db.close() }
 
-        var rng = SeededRNG(seed: Self.seed)
-        for iteration in 0 ..< Self.iterations {
-            // ~70% grammar-aware extreme shapes, ~30% byte/token mutation.
-            let sql = rng.int(10) < 7 ? generateGrammar(&rng) : mutate(&rng)
-            // Bind a random value per `?` so parameterised shapes exercise binding too.
-            let placeholders = sql.utf8.reduce(into: 0) { count, byte in
-                if byte == UInt8(ascii: "?") { count += 1 }
+        // The whole sweep runs on an explicitly sized thread (see `depthSweepStackSize` in
+        // DepthSweepSupport.swift) — returning from the join IS the no-overflow assertion,
+        // per `runOnConstrainedStack`'s contract.
+        runOnConstrainedStack(stackSize: depthSweepStackSize, name: "ADSQLTests.query-fuzz") {
+            var rng = SeededRNG(seed: Self.seed)
+            for iteration in 0 ..< Self.iterations {
+                // ~70% grammar-aware extreme shapes, ~30% byte/token mutation.
+                let sql = rng.int(10) < 7 ? self.generateGrammar(&rng) : self.mutate(&rng)
+                // Bind a random value per `?` so parameterised shapes exercise binding too.
+                let placeholders = sql.utf8.reduce(into: 0) { count, byte in
+                    if byte == UInt8(ascii: "?") { count += 1 }
+                }
+                let params = self.randomParams(placeholders, &rng)
+                if trace {
+                    // The last line printed before a crash is the exact repro.
+                    print("ADSQL_FUZZ[\(iteration)]: \(sql)  params=\(params)")
+                }
+                self.drive(db, sql, params)
             }
-            let params = randomParams(placeholders, &rng)
-            if trace {
-                // The last line printed before a crash is the exact repro.
-                print("ADSQL_FUZZ[\(iteration)]: \(sql)  params=\(params)")
-            }
-            drive(db, sql, params)
         }
     }
 

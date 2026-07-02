@@ -125,7 +125,9 @@ struct SQLStrategyMatrixTests {
     /// conjunct split, invariant folding, and both evaluators) iteratively. Within
     /// the depth bound it runs and agrees across evaluators; past the bound it is
     /// rejected at prepare under every evaluator — never overflowing a consumer or
-    /// the recursive `indirect enum` teardown.
+    /// the recursive `indirect enum` teardown. The cap-legal 250-term chain recurses
+    /// the binder once per term, so each sweep runs on the explicit depth-sweep
+    /// thread (see DepthSweepSupport.swift); assertions stay on the test task.
     @Test func deepWhereChainUnderEveryEvaluator() throws {
         let dir = TempDir()
         defer { dir.cleanup() }
@@ -133,17 +135,20 @@ struct SQLStrategyMatrixTests {
         let overlong = Array(repeating: "id >= 1", count: 5000).joined(separator: " AND ")
         var reference: [[Value]]?
         for evaluator in Self.evaluators {
-            let db = try MatrixFixture.make(dir, evaluator: evaluator)
-            defer { db.close() }
-            let rows = try db.prepare("SELECT count(*) FROM t WHERE \(within)").all().map(\.values)
+            let (rows, rejectedOverlong) = try runDepthSweep { () throws -> ([[Value]], Bool) in
+                let db = try MatrixFixture.make(dir, evaluator: evaluator)
+                defer { db.close() }
+                let rows = try db.prepare("SELECT count(*) FROM t WHERE \(within)").all().map(\.values)
+                var threw = false
+                do { _ = try db.prepare("SELECT count(*) FROM t WHERE \(overlong)") } catch { threw = true }
+                return (rows, threw)
+            }
             if let reference {
                 #expect(rowsMatch(rows, reference, ordered: false), "\(evaluator)")
             } else {
                 reference = rows
             }
-            var threw = false
-            do { _ = try db.prepare("SELECT count(*) FROM t WHERE \(overlong)") } catch { threw = true }
-            #expect(threw, "\(evaluator) should reject the overlong WHERE")
+            #expect(rejectedOverlong, "\(evaluator) should reject the overlong WHERE")
         }
         #expect(reference == [[.integer(25)]])  // all 25 rows match the within-limit chain
     }
