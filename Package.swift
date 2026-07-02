@@ -149,7 +149,14 @@ if isDev {
     testTargets.append(
         .executableTarget(
             name: "ADDBSuite",
-            dependencies: ["ADDBCore", .product(name: "Benchmark", package: "benchmark")],
+            // ADDBExec adds the SQL executor (`prepare`/`Statement`/`all`/`run`) and
+            // ADSQLFullTextSearch the FTS evaluator (`openFTS`/`MATCH`/`bm25`) so the suite can
+            // benchmark the SELECT + FTS hot paths (the in-process serving path), not just the
+            // KV/relational primitives ADDBCore covers.
+            dependencies: [
+                "ADDBCore", "ADDBExec", "ADSQLFullTextSearch",
+                .product(name: "Benchmark", package: "benchmark")
+            ],
             path: "Benchmarks/ADDBSuite",
             swiftSettings: strictSettings,
             plugins: [.plugin(name: "BenchmarkPlugin", package: "benchmark")]))
