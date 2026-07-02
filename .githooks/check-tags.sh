@@ -28,9 +28,15 @@ todo_re='(TODO|FIXME)'
 # High-confidence provenance: essentially no legitimate use in Swift comments.
 # `RFC ?00[0-9]{2}` matches the internal 00xx series only (not RFC 7396 etc.).
 prov_re='(RFC ?00[0-9]{2}|Review ?[0-9]{4}|[MF][0-9]+/[MFA][0-9]+[a-z]?)'
-# Bare milestone/finding/appendix tags are ambiguous in code, so only flag them
-# inside a comment (`//` … or a `///`/`*` doc line).
-bare_re='(//|^[[:space:]]*[*])[^"]*\b[MFA][0-9]+[a-z]?\b'
+# Bare milestone/finding/appendix tags (M5, F6c, A2) are ambiguous on their own — the same shapes
+# occur legitimately as hex bytes ("C3 A9", "F0 9F 98 80"), spec/label prose ("the A3 gate",
+# "M2: lenient relaxes the grammar"), and URLs in string literals ("caf%C3%A9"). So a bare tag is
+# flagged only inside a comment (`//` not preceded by `:`, so `https://…` never counts, and with no
+# `"` between the comment marker and the tag; or a `*` doc line) AND only with citation context:
+# a provenance keyword (see/per/cf/milestone/finding/appendix/review) immediately before the tag,
+# or the tag parenthesized alone (`(F6c)`). The high-confidence paired/numbered forms above stay
+# matched unconditionally.
+bare_re='((^|[^:])//|^[[:space:]]*[*])[^"]*(\b([Ss]ee|[Pp]er|cf\.?|[Mm]ilestone|[Ff]inding|[Aa]ppendix|[Rr]eview)[[:space:]]+[MFA][0-9]+[a-z]?\b|\([MFA][0-9]+[a-z]?\))'
 
 report() { printf '%s\n' "$1" >&2; }
 
