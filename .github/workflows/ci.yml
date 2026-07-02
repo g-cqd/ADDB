@@ -3,13 +3,12 @@
 # differential lane (x64 + arm64), the cross-platform compile matrix, the ASan/TSan passes (main +
 # PR-curated), the ADSQL-vs-SQLite benchmark, and the DocC build+deploy / PR link check.
 #
-# HUMAN REVIEW (see report): ADDB's tests link `CSQLite` (libsqlite3) and the cross-process tests
-# need the built `adsql` CLI path on Linux. The reusable workflow's Linux leg runs plain
-# `swift build`/`swift test` with NO `apt-get install libsqlite3-dev` and no `ADSQL_CLI_PATH`, so it
-# will fail on Linux once `AD_SWIFT_SIBLINGS_PUBLISHED` flips true (it is skipped until then). The
-# correct Linux verification is the package-unique `linux` job below, which installs sqlite and passes
-# the CLI path. Consider adding a system-deps input to the reusable workflow, or treat the reusable
-# Linux leg as macOS-parity only. (macOS ships libsqlite3, so the reusable macOS leg is fine.)
+# ADDB's tests link `CSQLite` (libsqlite3) and the cross-process tests need the built `adsql` CLI path
+# on Linux. PARTLY RESOLVED: the reusable workflow now takes a `system-packages` input and the
+# `quality:` job passes `system-packages: libsqlite3-dev`, so its Linux leg builds + tests against
+# libsqlite3 once `AD_SWIFT_SIBLINGS_PUBLISHED` flips true. The cross-process tests' `ADSQL_CLI_PATH`
+# is NOT covered by that input, so the package-unique `linux` job below remains the authoritative Linux
+# verification (it installs sqlite AND passes the CLI path). (macOS ships libsqlite3 — the macOS leg is fine.)
 name: CI
 
 on:
@@ -46,6 +45,10 @@ jobs:
       sanitizers: "address thread"
       enable-coverage: true
       requires-published-siblings: true
+      # CSQLite links libsqlite3; its dev headers are needed to build/test on the reusable Linux
+      # leg (macOS ships them in the SDK). With this the reusable Linux leg is a real Linux test,
+      # not just macOS-parity — the package-unique Linux lane below stays for the extra checks.
+      system-packages: libsqlite3-dev
 
   # Linux build + test lane (RFC 0010 F0 — the #1 apple-docs adoption gate). ADSQL was Darwin-only;
   # this lane is the actual Linux verification (the port is developed on macOS, which cannot build for

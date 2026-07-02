@@ -36,10 +36,14 @@ the body of `ad_storage_search_pages`, and the wire format in §2.5 is that ABI.
 apple-docs RFC 0001 gates ADSQL adoption (its P7) on **three explicit conditions**:
 1. **FTS5 + bm25** — ✅ **HAVE.** bm25f score parity **and** ranked-order parity now proven against
    SQLite FTS5 through the importer (F2 below, landed).
-2. **Linux x64/arm64** — ❌ **NOT MET — the #1 blocker.** apple-docs is first-class Linux; ADSQL's
-   IO/durability layer is Darwin-specific (`mmap`, `F_BARRIERFSYNC`/`F_FULLFSYNC` via `fcntl`, APFS
-   `clonefile`, the cross-process reader table). This RFC previously mis-scoped portability as
-   "de-risked" — that referred only to macOS arm64+x86_64. **Linux is the largest gate item.** See §4.0.
+2. **Linux x64/arm64** — ✅ **NOW MET (was the #1 blocker; F0 landed).** The Glibc port is done: the
+   IO/durability layer that was Darwin-specific (`mmap`, `F_BARRIERFSYNC`/`F_FULLFSYNC` via `fcntl`, APFS
+   `clonefile`, the cross-process reader table) is forked behind `#if canImport(Glibc)` — `mmap`/`msync`
+   are POSIX, `clonefile`→O(n) byte-copy snapshot (the one genuine semantic difference, isolated to
+   `Integrity.snapshot`), `F_FULLFSYNC`→`fdatasync`/`fsync`, XSI `strerror_r`, `posix_fallocate` — and
+   **`swift build` + the full `swift test` differential suite pass on x64 + arm64 in CI** (runtime-validated).
+   See the **F0 tracker entry + §4.0** below. Caveat: the Linux CI lane is advisory-only until a stable
+   ≥6.3 toolchain ships (it currently tracks the moving nightly tag) — pin it + make it required then.
 3. **real-SQLite → ADSQL corpus migration** — ✅ **F1 importer DONE.** The live `.db` that the
    `bun:sqlite` writer mutates can't be opened in place, so the migration is offline — exactly F1's shape.
 
@@ -50,7 +54,8 @@ functions with SQLite-matching semantics (`COALESCE`, `LOWER`/`UPPER`, `LENGTH`/
 which ADSQL evaluates self-contained via its `inJSONEach` AST node + `SQLJSON.eachValues` — **not** the
 general FROM-clause table-valued `json_each` of RFC 0011. **The entire apple-docs main query (§2.2–2.4) is
 now proven byte-identical to SQLite** (`Tests/ADSQLImportTests/AppleDocsMainQueryTests.swift`), so the hot
-path has **no SQL-surface gap**; the open P0a items are F0 Linux + the INT engine swap.
+path has **no SQL-surface gap**; with F0 Linux now landed (condition 2 above), the open P0a item is the
+INT engine swap.
 
 ---
 
