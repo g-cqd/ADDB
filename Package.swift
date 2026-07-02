@@ -96,6 +96,22 @@ if isDev {
             name: "ADDBSmokeTests",
             dependencies: ["ADDB", adsqlModel, adTestKit],
             swiftSettings: strictSettings))
+    // Expansion-level suite for the @Table / #SQL macros (assertMacroExpansion over the plugin
+    // types): diagnostics + pass-through shape, which only exist at expansion time — the happy
+    // path is integration-covered by ADSQLTests' TableMacroIntegrationTests. Depends on the
+    // ADSQLMacros implementation target directly (macro targets build for the host, so the test
+    // bundle links the macro types plus swift-syntax's swift-testing-native generic test support).
+    testTargets.append(
+        .testTarget(
+            name: "ADDBMacrosTests",
+            dependencies: [
+                "ADSQLMacros",
+                .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
+                .product(name: "SwiftSyntaxMacroExpansion", package: "swift-syntax"),
+                .product(name: "SwiftSyntaxMacrosGenericTestSupport", package: "swift-syntax"),
+                .product(name: "SwiftDiagnostics", package: "swift-syntax")
+            ],
+            swiftSettings: testSettings))
     // Folded in from the former standalone ADDBAsync package (self-contained — no ADTestKit/fixtures).
     testTargets.append(
         .testTarget(
