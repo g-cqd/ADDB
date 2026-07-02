@@ -49,6 +49,11 @@ jobs:
       # leg (macOS ships them in the SDK). With this the reusable Linux leg is a real Linux test,
       # not just macOS-parity — the package-unique Linux lane below stays for the extra checks.
       system-packages: libsqlite3-dev
+      # The default swiftbuild engine fails the RELEASE test build with "unable to resolve Swift
+      # module dependency to a compatible module: 'ADDBExec'/'ADDBCore'" (Tests/ADDBTestSupport)
+      # on the pinned 6.4 snapshot, while the debug leg passes — the same engine-bug class ADHTML
+      # works around per its ADR-0008. Force the classic engine until the toolchain fixes it.
+      build-system: native
 
   # Linux build + test lane (RFC 0010 F0 — the #1 apple-docs adoption gate). ADSQL was Darwin-only;
   # this lane is the actual Linux verification (the port is developed on macOS, which cannot build for
