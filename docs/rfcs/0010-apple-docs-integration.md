@@ -53,7 +53,7 @@ functions with SQLite-matching semantics (`COALESCE`, `LOWER`/`UPPER`, `LENGTH`/
 (SELECT value FROM json_each($sources_json))`) uses the **contracted `IN (SELECT … json_each …)` shape**,
 which ADSQL evaluates self-contained via its `inJSONEach` AST node + `SQLJSON.eachValues` — **not** the
 general FROM-clause table-valued `json_each` of RFC 0011. **The entire apple-docs main query (§2.2–2.4) is
-now proven byte-identical to SQLite** (`Tests/ADSQLImportTests/AppleDocsMainQueryTests.swift`), so the hot
+now proven byte-identical to SQLite** (`Tests/ADDBImportTests/AppleDocsMainQueryTests.swift`), so the hot
 path has **no SQL-surface gap**; with F0 Linux now landed (condition 2 above), the open P0a item is the
 INT engine swap.
 
@@ -136,7 +136,7 @@ cell `[u8 tag][payload]`: `0`=NULL, `1`=INT `[i64 LE]`, `2`=REAL `[f64 LE]`, `3`
 |---|---|---|
 | **F0** Linux x64/arm64 **[GATE]** | **✅ DONE** | Glibc forks landed; **`swift build` + the full `swift test` differential suite pass on x64+arm64** in CI — runtime-validated (clonefile→byte-copy snapshot, `fdatasync`/`fsync`, `posix_fallocate`, the cross-process reader table, XSI `strerror_r`). The CI lane stays advisory only because it tracks the moving nightly tag (the manifest needs 6.3 features); pin + require once a stable ≥6.3 toolchain ships |
 | **INT** `ad_storage_*` engine swap **[GATE]** | **⏳ Swift side DONE** | `ADSQLSearch.searchPagesFramed` runs the §2.2 query + frames the §2.5 bytes — byte-parity-proven vs SQLite (`SearchPagesFramedTests`, independent decoder). Remaining (cross-repo, in apple-docs): a `@_cdecl ad_storage_search_pages` decode-shim → `searchPagesFramed`, a SwiftPM dep on ADSQL, and an imported corpus |
-| **F1** SQLite importer **[GATE]** | **✅ DONE** | `ADSQLImport` target: `Database.importSQLite(from:manifest:)` + `adsql import`; schema port + coercion + index/PK/UNIQUE port + manifest FTS5 rebuild + deep integrity; idempotent, deterministic |
+| **F1** SQLite importer **[GATE]** | **✅ DONE** | `ADDBImport` target: `Database.importSQLite(from:manifest:)` + `adsql import`; schema port + coercion + index/PK/UNIQUE port + manifest FTS5 rebuild + deep integrity; idempotent, deterministic |
 | **F2** FTS byte-parity | **✅ LANDED** | bm25f score parity **+ ranked-order parity** (ties → ascending rowid via the bounded-top-N upper-bound fix) proven through the importer vs SQLite FTS5 — `ImportedFTSParityTests.swift`, default + 5-weight |
 | **F3** scalar + main-query surface | **✅ PROVEN** | full §2.2–2.4 main query byte-parity vs SQLite — `AppleDocsMainQueryTests`; `json_each` covered by the contracted `inJSONEach` shape (not RFC 0011's FROM-clause TVF) |
 | **F4** covering/INCLUDE serving | **✅ DONE** | binder proves required-cols ⊆ {rowid-alias} ∪ {INCLUDE} (stricter than key∪includes — a non-rowid key col is not in the entry value, so it forces a descent), stamps the `.index` plan `covering`, executor serves via `RowCursor(coveringIncludes:)` with no descent; pinned by `SQLCoveringIndexTests` (7 cases: positive/negative/reversed-INCLUDE/direct binder-decision) vs the no-index scan oracle + SQLite |
@@ -185,7 +185,7 @@ and uses portable **C11 atomics** (`ADCAtomics`) for cross-process sync (the har
   (`Errors.swift:54`) is the **XSI variant and is silently wrong under glibc's GNU variant — a must-fix**,
   and `pthread_attr_set_qos_class_np` + `clock_gettime_nsec_np` need an `#if`-out (no correctness impact).
 - **Build / CI — M.** `#if canImport(Glibc)` scaffolding across ~11 files, de-risk `.strictMemorySafety()`
-  + experimental `Lifetimes` on Linux Swift, wire `libsqlite3-dev` (only `ADSQLImport`/bench/tests need it,
+  + experimental `Lifetimes` on Linux Swift, wire `libsqlite3-dev` (only `ADDBImport`/bench/tests need it,
   not the core engine), add a Linux CI matrix lane.
 - **Tests — S/M.** Mostly portable (Foundation + POSIX); fence `F_FULLFSYNC`/`_np`-timing cases.
 

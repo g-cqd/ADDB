@@ -255,12 +255,12 @@ extension SelectExecutor {
                 }
             case .fts(let record, let queryBytes, let weights):
                 // The FTS *query* language (MATCH parse, bm25f scoring, block-max WAND)
-                // lives in the opt-in `ADSQLFullTextSearch` module, injected onto the
+                // lives in the opt-in `ADDBFTS` module, injected onto the
                 // resolver as an `FTSEvaluation`. This layer holds only the access path;
                 // it never names a query-language type.
                 guard let fts = resolver.ftsEvaluator else {
                     throw DBError.sqlUnsupported(
-                        "full-text search: import ADSQLFullTextSearch and call enableFullTextSearch()")
+                        "full-text search: import ADDBFTS and call enableFullTextSearch()")
                 }
                 let empty = unsafe UnsafeRawBufferPointer(start: nil, count: 0)
                 // — block-max WAND: a ranked top-k (ORDER BY rank ASC + LIMIT k) over an

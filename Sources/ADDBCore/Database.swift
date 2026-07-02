@@ -136,7 +136,7 @@ public final class Database: Sendable {
     /// storage-defined `FTSEvaluation` protocol so this layer never references a
     /// query-language type. Unlike the trigger engine — which the SQL layer
     /// self-installs on `prepare` — the evaluator lives *above* the SQL engine, so
-    /// the `ADSQLFullTextSearch` module installs it explicitly
+    /// the `ADDBFTS` module installs it explicitly
     /// (`Database.enableFullTextSearch()`). Copied onto each read/write transaction
     /// so MATCH resolves uniformly; stays nil until enabled — a MATCH row source
     /// then throws a clear error instead.

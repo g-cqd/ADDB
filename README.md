@@ -71,7 +71,7 @@ ADDB ships two library products — both pure engine, no language layer:
 - The on-disk FTS index (postings codec with frame-of-reference bit-packing, one
   block per key, O(n) incremental build) and ranked top-k via **block-max WAND**.
   The query-language surface for it (`CREATE VIRTUAL TABLE … USING fts5`, the
-  `MATCH` operator, `bm25` / `bm25f`) lives in ADSQL's `ADSQLFullTextSearch`.
+  `MATCH` operator, `bm25` / `bm25f`) lives in ADSQL's `ADDBFTS`.
 
 ### Safety model
 - **Module-wide strict memory safety** (SE-0458): every unsafe construct is

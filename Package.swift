@@ -8,8 +8,9 @@ import PackageDescription
 //     uses ADSQL's `ADSQLModel` (Value/Definitions/DBError).
 //   • ADDBExec — the SQL executor/evaluator + trigger/scalar-fn execution; runs ADSQL's bound plan
 //     over the concrete engine (concrete Value/Cursor → monomorphic, fast).
-//   • ADSQLFullTextSearch / ADSQLJSON / ADSQLMigrate / ADSQLImport — opt-in supersets (product names
-//     preserved, so consumers' imports are unchanged — they just resolve from this package now).
+//   • ADDBFTS / ADDBJSON / ADDBMigrate / ADDBImport — opt-in supersets (renamed from the
+//     interim ADSQL* names: the ADSQL prefix belongs to the separate frontend package, and these
+//     modules ship from ADDB — consumers import the ADDB* names).
 //   • ADDB — the curated public façade (engine + execution).
 // Big-bang note: ADDBAsync folds in + the ADStorageCore/ADDBEngine target split + the test split are
 // the remaining steps (design doc §7–§8). Test/benchmark targets are temporarily omitted.
@@ -102,7 +103,7 @@ if isDev {
         .target(
             name: "ADDBTestSupport",
             dependencies: [
-                "ADDBCore", "ADDBExec", "ADSQLJSON", "CSQLite", adsql, adsqlModel, adTestKit
+                "ADDBCore", "ADDBExec", "ADDBJSON", "CSQLite", adsql, adsqlModel, adTestKit
             ],
             path: "Tests/ADDBTestSupport",
             swiftSettings: testSettings))
@@ -112,34 +113,34 @@ if isDev {
         .testTarget(
             name: "ADSQLTests",
             dependencies: [
-                "ADDBTestSupport", "ADDBCore", "ADDBExec", "ADDBMacros", "ADSQLFullTextSearch",
-                "ADSQLJSON", "CSQLite", adsql, adsqlModel, adfCore, adfIO, adTestKit
+                "ADDBTestSupport", "ADDBCore", "ADDBExec", "ADDBMacros", "ADDBFTS",
+                "ADDBJSON", "CSQLite", adsql, adsqlModel, adfCore, adfIO, adTestKit
             ] + swiftSyntaxRuntime,
             swiftSettings: testSettings))
-    // The full-text-search query suite (MATCH / bm25 / WAND), exercising `ADSQLFullTextSearch`.
+    // The full-text-search query suite (MATCH / bm25 / WAND), exercising `ADDBFTS`.
     testTargets.append(
         .testTarget(
-            name: "ADSQLFullTextSearchTests",
+            name: "ADDBFTSTests",
             dependencies: [
-                "ADDBTestSupport", "ADDBCore", "ADDBExec", "ADSQLFullTextSearch", "CSQLite",
+                "ADDBTestSupport", "ADDBCore", "ADDBExec", "ADDBFTS", "CSQLite",
                 adsql, adsqlModel, adfCore, adTestKit
             ],
             swiftSettings: testSettings))
-    // The SQLite-import + apple-docs round-trip suite, exercising `ADSQLImport`.
+    // The SQLite-import + apple-docs round-trip suite, exercising `ADDBImport`.
     testTargets.append(
         .testTarget(
-            name: "ADSQLImportTests",
+            name: "ADDBImportTests",
             dependencies: [
-                "ADDBTestSupport", "ADDBCore", "ADDBExec", "ADSQLImport", "ADSQLFullTextSearch",
-                "ADSQLJSON", "CSQLite", adsql, adsqlModel, adTestKit
+                "ADDBTestSupport", "ADDBCore", "ADDBExec", "ADDBImport", "ADDBFTS",
+                "ADDBJSON", "CSQLite", adsql, adsqlModel, adTestKit
             ],
             swiftSettings: testSettings))
-    // The schema-migration suite, exercising `ADSQLMigrate`.
+    // The schema-migration suite, exercising `ADDBMigrate`.
     testTargets.append(
         .testTarget(
-            name: "ADSQLMigrateTests",
+            name: "ADDBMigrateTests",
             dependencies: [
-                "ADDBTestSupport", "ADDBCore", "ADDBExec", "ADSQLMigrate", adsql, adsqlModel, adTestKit
+                "ADDBTestSupport", "ADDBCore", "ADDBExec", "ADDBMigrate", adsql, adsqlModel, adTestKit
             ],
             swiftSettings: testSettings))
     // ordo-one benchmark suite (ADDB_DEV-gated): tracks `.mallocCountTotal` on the storage codec path
@@ -150,11 +151,11 @@ if isDev {
         .executableTarget(
             name: "ADDBSuite",
             // ADDBExec adds the SQL executor (`prepare`/`Statement`/`all`/`run`) and
-            // ADSQLFullTextSearch the FTS evaluator (`openFTS`/`MATCH`/`bm25`) so the suite can
+            // ADDBFTS the FTS evaluator (`openFTS`/`MATCH`/`bm25`) so the suite can
             // benchmark the SELECT + FTS hot paths (the in-process serving path), not just the
             // KV/relational primitives ADDBCore covers.
             dependencies: [
-                "ADDBCore", "ADDBExec", "ADSQLFullTextSearch",
+                "ADDBCore", "ADDBExec", "ADDBFTS",
                 .product(name: "Benchmark", package: "benchmark")
             ],
             path: "Benchmarks/ADDBSuite",
@@ -171,10 +172,10 @@ let package = Package(
         .library(name: "ADDBCore", targets: ["ADDBCore"]),
         .library(name: "ADDBExec", targets: ["ADDBExec"]),
         .library(name: "ADDBMacros", targets: ["ADDBMacros"]),
-        .library(name: "ADSQLFullTextSearch", targets: ["ADSQLFullTextSearch"]),
-        .library(name: "ADSQLJSON", targets: ["ADSQLJSON"]),
-        .library(name: "ADSQLMigrate", targets: ["ADSQLMigrate"]),
-        .library(name: "ADSQLImport", targets: ["ADSQLImport"]),
+        .library(name: "ADDBFTS", targets: ["ADDBFTS"]),
+        .library(name: "ADDBJSON", targets: ["ADDBJSON"]),
+        .library(name: "ADDBMigrate", targets: ["ADDBMigrate"]),
+        .library(name: "ADDBImport", targets: ["ADDBImport"]),
         .executable(name: "adsql", targets: ["ADSQLTool"])
     ],
     dependencies: packageDependencies,
@@ -207,17 +208,17 @@ let package = Package(
             name: "ADDBMacros", dependencies: ["ADDBExec", "ADSQLMacros", adsqlModel],
             swiftSettings: strictSettings, plugins: libraryBuildPlugins),
         .target(
-            name: "ADSQLFullTextSearch",
+            name: "ADDBFTS",
             dependencies: ["ADDBCore", "ADDBExec", adsql, adsqlModel, adfCore],
             swiftSettings: strictSettings, plugins: libraryBuildPlugins),
         .target(
-            name: "ADSQLJSON", dependencies: ["ADDBCore", "ADDBExec", adsql, adsqlModel, adjsonCore],
+            name: "ADDBJSON", dependencies: ["ADDBCore", "ADDBExec", adsql, adsqlModel, adjsonCore],
             swiftSettings: strictSettings, plugins: libraryBuildPlugins),
         .target(
-            name: "ADSQLMigrate", dependencies: ["ADDBCore", "ADDBExec", adsql, adsqlModel],
+            name: "ADDBMigrate", dependencies: ["ADDBCore", "ADDBExec", adsql, adsqlModel],
             swiftSettings: strictSettings, plugins: libraryBuildPlugins),
         .target(
-            name: "ADSQLImport",
+            name: "ADDBImport",
             dependencies: ["ADDBCore", "ADDBExec", adsql, adsqlModel, "CSQLite"],
             swiftSettings: strictSettings),
         .target(
@@ -233,12 +234,12 @@ let package = Package(
             swiftSettings: strictSettings, plugins: libraryBuildPlugins),
         .executableTarget(
             name: "ADSQLTool",
-            dependencies: ["ADDBCore", "ADDBExec", "ADSQLImport", adsql, adsqlModel],
+            dependencies: ["ADDBCore", "ADDBExec", "ADDBImport", adsql, adsqlModel],
             swiftSettings: strictSettings),
         .executableTarget(
             name: "ADSQLBench",
             dependencies: [
-                "ADDBCore", "ADDBExec", "ADSQLFullTextSearch", "ADSQLJSON", "CSQLite",
+                "ADDBCore", "ADDBExec", "ADDBFTS", "ADDBJSON", "CSQLite",
                 adfIO, adsql, adsqlModel
             ],
             swiftSettings: strictSettings)

@@ -1,6 +1,6 @@
 import ADDBCore
-import ADSQLFullTextSearch
-import ADSQLJSON
+import ADDBFTS
+import ADDBJSON
 import ADSQLModel
 
 extension Database {

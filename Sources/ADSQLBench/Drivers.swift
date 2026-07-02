@@ -2,9 +2,9 @@
 // ADDB's `@_spi(ADDBEngine)` surface, not the curated public façade.
 @_spi(ADDBEngine) import ADDBCore
 import ADDBExec
+import ADDBFTS
 import ADFIO
 import ADSQL
-import ADSQLFullTextSearch
 import ADSQLModel
 import CSQLite
 

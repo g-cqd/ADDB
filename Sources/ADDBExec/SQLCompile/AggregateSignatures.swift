@@ -4,7 +4,7 @@ import Synchronization
 /// binder validates a custom-aggregate call against this *signature* table before planning, separately
 /// from the executor's accumulator factory in ``SQLAggregateRegistry``. The two stay in sync because
 /// `SQLAggregateRegistry.register` mirrors every aggregate's arity here on registration (e.g. when
-/// `ADSQLJSON.enableJSON()` registers `json_group_array`), so a custom aggregate *binds* as soon as
+/// `ADDBJSON.enableJSON()` registers `json_group_array`), so a custom aggregate *binds* as soon as
 /// it's enabled. `installPrepareHook` lets the execution side trigger lazy builtin registration on a
 /// first lookup if needed.
 public enum AggregateSignatures {

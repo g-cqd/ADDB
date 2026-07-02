@@ -1,4 +1,4 @@
-import ADSQLJSON
+import ADDBJSON
 import ADSQLModel
 import CSQLite
 import Testing
@@ -13,7 +13,7 @@ import Testing
 /// Enables SQL JSON once for this file's direct-evaluator tests (json_*, `->`/`->>`
 /// run through the process-wide registries, not a `Database`, so there's no
 /// `openJSON` seam). Idempotent.
-private let jsonEnabledForEval: Void = ADSQLJSONSupport.register()
+private let jsonEnabledForEval: Void = ADDBJSONSupport.register()
 
 /// Evaluates `SELECT <expr>` through ADSQL's evaluator.
 private func adsqlEval(_ expr: String, params: [String: Value] = [:]) throws -> Value {
@@ -312,6 +312,7 @@ struct SQLEvalSemanticsTests {
         let t = Truth.yes
         let f = Truth.no
         let u = Truth.unknown
+        // swiftlint:disable:next large_tuple
         let table: [(Truth, Truth, Truth, Truth)] = [
             (t, t, t, t), (t, f, f, t), (t, u, u, t),
             (f, t, f, t), (f, f, f, f), (f, u, f, u),

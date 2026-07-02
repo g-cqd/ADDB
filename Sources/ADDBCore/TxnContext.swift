@@ -155,7 +155,7 @@ extension PageSource {
     /// trigger definitions). Storage never inspects it; it dies with the txn, so a
     /// parsed definition cannot outlive its source text. Writer-confined → no lock.
     @_spi(ADDBEngine) public var triggerCache: AnyObject?
-    /// The SQL-layer FTS query evaluator, installed by `ADSQLFullTextSearch` onto
+    /// The SQL-layer FTS query evaluator, installed by `ADDBFTS` onto
     /// the database and copied onto each write context at creation (mirroring
     /// `triggerEngine`). nil when full-text search is not enabled, so a write that
     /// touches an FTS table's MATCH source on the overlay sees the same evaluator a

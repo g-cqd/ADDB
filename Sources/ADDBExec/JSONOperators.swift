@@ -5,7 +5,7 @@ import Synchronization
 
 /// The implementation of the JSON constructs the evaluator handles structurally —
 /// the `->`/`->>` operators and `json_each(...)` membership — supplied by the
-/// opt-in `ADSQLJSON` module (ADJSON-backed). A protocol witness, NOT a stored
+/// opt-in `ADDBJSON` module (ADJSON-backed). A protocol witness, NOT a stored
 /// closure: a `@Sendable` typed-throws closure put through a generic box hits a
 /// reabstraction-thunk miscompile (infinite recursion → stack overflow), whereas a
 /// witness-table call is well-defined — the same reason ``FTSEvaluation`` is a
@@ -39,14 +39,14 @@ package enum SQLJSONOperators {
 
     package static func arrow(_ document: Value, _ spec: Value, asJSON: Bool) throws(DBError) -> Value {
         guard let evaluator = evaluator() else {
-            throw DBError.sqlUnsupported("JSON operators (->, ->>): import ADSQLJSON and call enableJSON()")
+            throw DBError.sqlUnsupported("JSON operators (->, ->>): import ADDBJSON and call enableJSON()")
         }
         return try evaluator.arrow(document, spec, asJSON: asJSON)
     }
 
     package static func eachValues(_ json: String) throws(DBError) -> [Value] {
         guard let evaluator = evaluator() else {
-            throw DBError.sqlUnsupported("json_each: import ADSQLJSON and call enableJSON()")
+            throw DBError.sqlUnsupported("json_each: import ADDBJSON and call enableJSON()")
         }
         return try evaluator.eachValues(json)
     }

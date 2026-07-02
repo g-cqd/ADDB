@@ -1,4 +1,5 @@
-import ADSQLFullTextSearch
+// swiftlint:disable file_length
+import ADDBFTS
 import ADSQLModel
 import CSQLite
 import Testing
@@ -15,6 +16,7 @@ import Testing
 /// `documents`); this suite covers parsing, catalog persistence (re-parsed on
 /// reopen), end-to-end FTS sync, plain (non-FTS) firing with a CSQLite
 /// differential, DROP, IF [NOT] EXISTS, and the recursion-depth guard.
+// swiftlint:disable:next type_body_length
 struct FTSTriggerTests {
     private func parse(_ sql: String) throws -> SQLStatementAST {
         try SQLParser.parseOne(sql)

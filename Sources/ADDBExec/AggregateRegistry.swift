@@ -34,7 +34,7 @@ package struct AggregateDescriptor: Sendable {
 /// The binder consults it to recognize an aggregate the core doesn't hardcode
 /// (and to bind it to the `AggregateSpec.Kind.custom` slot); `GroupAccumulators`
 /// consults it to build a per-group accumulator. Registration is idempotent and
-/// one-way, matching ``SQLFunctionRegistry``. Extension modules (``ADSQLJSON``)
+/// one-way, matching ``SQLFunctionRegistry``. Extension modules (``ADDBJSON``)
 /// register their group aggregates here on enable.
 package enum SQLAggregateRegistry {
     private static let descriptors = Mutex<[String: AggregateDescriptor]>([:])

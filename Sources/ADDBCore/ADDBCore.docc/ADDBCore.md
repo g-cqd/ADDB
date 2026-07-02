@@ -9,7 +9,7 @@ dependency beyond the standard library.
 ADDBCore is the engine implementation. Consume it through the **`ADDB`** product,
 which re-exports this module (`import ADDB`); the examples below use that import.
 The `ADSQL` module layers a SQLite-grammar query engine and a Swift DSL on top, and
-`ADSQLFullTextSearch` / `ADSQLJSON` add opt-in full-text-search and JSON surfaces.
+`ADDBFTS` / `ADDBJSON` add opt-in full-text-search and JSON surfaces.
 
 The engine stores data in a single file as a **copy-on-write B+tree over an `mmap`'d page
 heap** (16 KiB pages, XXH64-checksummed). Concurrency is **single-writer / wait-free

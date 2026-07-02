@@ -1,4 +1,4 @@
-import ADSQLFullTextSearch
+import ADDBFTS
 import ADSQLModel
 import Testing
 

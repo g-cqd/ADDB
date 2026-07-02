@@ -1,8 +1,8 @@
 @_spi(ADDBEngine) import ADDBCore
 // ADDBExec: the SQL executor surface (`prepare`/`Statement`/`all`/`run`) for the SELECT benchmarks.
-// ADSQLFullTextSearch: `Database.openFTS` + the MATCH/bm25 evaluator for the full-text benchmarks.
+// ADDBFTS: `Database.openFTS` + the MATCH/bm25 evaluator for the full-text benchmarks.
 import ADDBExec
-import ADSQLFullTextSearch
+import ADDBFTS
 // `MemberImportVisibility` (a `strictSettings` upcoming feature) requires importing the module that
 // DECLARES the relational model types directly, not relying on ADDBCore's `public import` re-export —
 // `TableDefinition` / `ColumnDefinition` / `IndexDefinition` / `DBError` / `Value` live in ADSQLModel.

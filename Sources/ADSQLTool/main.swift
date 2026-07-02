@@ -2,8 +2,8 @@
 // is part of ADDB's `@_spi(ADDBEngine)` surface (the broad engine API the SQL layer
 // drives) rather than the curated public façade.
 @_spi(ADDBEngine) import ADDBCore
+import ADDBImport
 import ADSQL
-import ADSQLImport
 import ADSQLModel
 import Foundation
 

@@ -5,8 +5,8 @@ import Testing
 
 @_spi(ADDBEngine) @testable import ADDBCore
 @_spi(ADDBEngine) @testable import ADDBExec
+@testable import ADDBFTS
 @testable import ADDBTestSupport
-@testable import ADSQLFullTextSearch
 
 /// Recursion-cap regression lock for the FTS MATCH-query parser and evaluator.
 ///

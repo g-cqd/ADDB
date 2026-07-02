@@ -328,7 +328,7 @@ extension WriteTxn {
     }
 
     /// Resolves an FTS table's catalog record (flushing buffered docs first for
-    /// read-your-writes). `package` so the `ADSQLFullTextSearch` query layer's
+    /// read-your-writes). `package` so the `ADDBFTS` query layer's
     /// `ftsMatch`/`ftsScore` conveniences can reach it.
     @_spi(ADDBEngine) public func ftsRecord(_ name: String) throws(DBError) -> Catalog.FTSRecord {
         try Relation.flushFTS(ctx, name: name)  // read-your-writes: flush buffered docs first.

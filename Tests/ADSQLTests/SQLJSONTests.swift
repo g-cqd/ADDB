@@ -3,8 +3,8 @@ import Testing
 
 @_spi(ADDBEngine) @testable import ADDBCore
 @_spi(ADDBEngine) @testable import ADDBExec
+@testable import ADDBJSON
 @testable import ADDBTestSupport
-@testable import ADSQLJSON
 
 /// Unit coverage for the ADJSON-backed SQL JSON layer (parse → tape, SQLite-dialect
 /// path walk, SQL value mapping, and the scalar functions). End-to-end use is exercised

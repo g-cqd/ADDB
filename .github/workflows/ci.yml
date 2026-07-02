@@ -265,7 +265,7 @@ jobs:
             generate-documentation \
             --enable-experimental-combined-documentation \
             --target ADDBCore --target ADSQL \
-            --target ADSQLFullTextSearch --target ADSQLJSON \
+            --target ADDBFTS --target ADDBJSON \
             --disable-indexing \
             --transform-for-static-hosting \
             --hosting-base-path ADSQL \
@@ -319,5 +319,5 @@ jobs:
             generate-documentation \
             --enable-experimental-combined-documentation \
             --target ADDBCore --target ADSQL \
-            --target ADSQLFullTextSearch --target ADSQLJSON \
+            --target ADDBFTS --target ADDBJSON \
             --disable-indexing --output-path "$PWD/_docs-check"

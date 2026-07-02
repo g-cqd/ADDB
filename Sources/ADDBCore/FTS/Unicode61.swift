@@ -1,5 +1,4 @@
 import ADFUnicode
-
 public import ADSQLModel
 
 /// The `unicode61` tokenizer: split on non-token characters, case-fold, and

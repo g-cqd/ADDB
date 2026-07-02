@@ -197,7 +197,7 @@ enum SQLFunctions {
 
     /// Forces one-time registration of the core scalar builtins. Called by
     /// ``SQLFunctionRegistry/handler(for:)`` so any lookup first sees the core set;
-    /// extension modules (``ADSQLJSON``) register their functions on top when enabled.
+    /// extension modules (``ADDBJSON``) register their functions on top when enabled.
     static func ensureBuiltinsRegistered() { _ = builtinsRegistered }
 
     private static let builtinsRegistered: Void = {

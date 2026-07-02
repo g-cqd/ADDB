@@ -15,7 +15,7 @@ public import ADSQLModel
 /// The storage layer's hook into the full-text-search *query* language. ADDBCore
 /// owns the FTS index (postings, statistics, tokenizers — all written during
 /// DML); the query language (MATCH parsing, bm25f scoring, block-max WAND) is a
-/// superset that lives in the opt-in `ADSQLFullTextSearch` module. That module
+/// superset that lives in the opt-in `ADDBFTS` module. That module
 /// implements this protocol and installs it via `Database.enableFullTextSearch()`,
 /// so the executor's MATCH row source evaluates queries without this layer ever
 /// naming a query-language type. This inverts the dependency exactly as

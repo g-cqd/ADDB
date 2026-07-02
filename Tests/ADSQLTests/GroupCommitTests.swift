@@ -1,5 +1,5 @@
+import ADDBFTS
 import ADFIO
-import ADSQLFullTextSearch
 import ADSQLModel
 import Synchronization
 import Testing
