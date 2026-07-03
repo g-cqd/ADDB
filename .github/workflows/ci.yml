@@ -77,6 +77,9 @@ jobs:
     needs: quality
     continue-on-error: true
     runs-on: ${{ matrix.runner }}
+    # The test targets are ADDB_DEV-gated; without this the job vacuously finds no tests.
+    env:
+      ADDB_DEV: "1"
     # Dated nightly pins the toolchain for reproducible CI; bump deliberately like a dependency (#14).
     container: swiftlang/swift:nightly-6.4.x-noble@sha256:54970846d48a8255eee5986aa5bbd259b7f73bbf38429cc2428ce6a62a390b47
     strategy:
