@@ -1,7 +1,6 @@
-import ADSQLModel
-
 @_spi(ADDBEngine) import ADDBCore
 @_spi(ADDBEngine) import ADDBExec
+import ADSQLModel
 
 /// Naive relational oracle: dictionaries of rows plus recomputed index
 /// orderings, mirroring ADSQL's externally visible semantics (strict types

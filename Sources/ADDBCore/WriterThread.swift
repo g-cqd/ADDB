@@ -132,7 +132,14 @@ import Synchronization
                 fatalError("pthread_create failed (\(rc))")
             }
         #endif
-        thread.withLock { unsafe $0.tid = tid }
+        // `pthread_t` is a pointer type on Darwin — storing it is an unsafe op that needs the
+        // marker — but a plain integer on Glibc, where the same marker is an UnnecessaryUnsafe
+        // error under warnings-as-errors.
+        #if canImport(Glibc)
+            thread.withLock { $0.tid = tid }
+        #else
+            thread.withLock { unsafe $0.tid = tid }
+        #endif
     }
 
     /// Enqueues `body` and BLOCKS the caller until it has run on the writer
@@ -185,7 +192,12 @@ import Synchronization
         state.withLock { $0.shuttingDown = true }
         // Wake the loop so it observes the flag and (with an empty queue) returns.
         wakeup.signal()
-        guard let tid = unsafe thread.withLock({ unsafe $0.tid }) else { return }
+        // Same per-platform `pthread_t` split as in `start` (pointer on Darwin, integer on Glibc).
+        #if canImport(Glibc)
+            guard let tid = thread.withLock({ $0.tid }) else { return }
+        #else
+            guard let tid = unsafe thread.withLock({ unsafe $0.tid }) else { return }
+        #endif
         // A group-commit drain captures `Database` strongly (`[self]`); when the
         // worker frees that closure (`runAndComplete`'s `body = nil`) it can drop
         // the LAST reference, so `Database.deinit` — hence this `shutdown` — may
@@ -194,11 +206,22 @@ import Synchronization
         // the signal above guarantee `runLoop` returns, after which a detached
         // thread reclaims itself (no leak). Off the writer thread (the normal path)
         // we join, so teardown is synchronous.
-        if unsafe pthread_equal(pthread_self(), tid) != 0 {
-            unsafe pthread_detach(tid)
-        } else {
-            unsafe pthread_join(tid, nil)
-        }
+        // Glibc's integer `pthread_t` makes these pthread calls safe there (each marker would be
+        // an UnnecessaryUnsafe error under warnings-as-errors); Darwin's pointer `pthread_t`
+        // requires them.
+        #if canImport(Glibc)
+            if pthread_equal(pthread_self(), tid) != 0 {
+                pthread_detach(tid)
+            } else {
+                pthread_join(tid, nil)
+            }
+        #else
+            if unsafe pthread_equal(pthread_self(), tid) != 0 {
+                unsafe pthread_detach(tid)
+            } else {
+                unsafe pthread_join(tid, nil)
+            }
+        #endif
     }
 
     /// Single-consumer serial loop. Runs on the dedicated thread until shutdown

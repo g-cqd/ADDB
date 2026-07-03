@@ -1,7 +1,6 @@
+@_spi(ADDBEngine) import ADDBExec
 import ADSQLModel
 @_exported import ADTestKit
-
-@_spi(ADDBEngine) import ADDBExec
 
 /// The private-temp-directory helper is now the shared `ADTestKit.TemporaryDirectory`
 /// (atomic `mkdtemp`, race-free recursive teardown). This alias keeps the dependent

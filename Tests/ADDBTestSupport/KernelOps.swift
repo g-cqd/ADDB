@@ -1,7 +1,6 @@
-import ADSQLModel
-
 @_spi(ADDBEngine) import ADDBCore
 @_spi(ADDBEngine) import ADDBExec
+import ADSQLModel
 
 /// Byte-array bridges over the kernel's raw-buffer APIs, shared by suites.
 /// (Closures stay untyped or non-throwing to dodge the Swift 6.4 typed-throws

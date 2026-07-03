@@ -20,7 +20,14 @@ import Foundation
 // even when redirected to a file. Fully-buffered output otherwise withholds them until
 // the buffer fills or the process exits — which can make a long-but-progressing run
 // (e.g. a large read battery) look like a stuck build until it's killed.
-setvbuf(stdout, nil, _IOLBF, 0)
+#if canImport(Glibc)
+    // Glibc's `stdout` is an UN-ANNOTATED shared mutable global: every spelling of a read trips
+    // strict-concurrency checking in top-level code, so the line-buffering nicety is skipped on
+    // Linux (a TTY flushes on newline anyway, and this dev harness's CI leg only needs to
+    // compile there — the vs-SQLite bench itself runs on macOS).
+#else
+    setvbuf(stdout, nil, _IOLBF, 0)
+#endif
 
 var config = BenchConfig()
 var engines = ["adsql", "sqlite"]

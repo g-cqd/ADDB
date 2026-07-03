@@ -240,7 +240,9 @@ extension Database {
             let copyResult: Result<Void, DBError> = withUnsafeTemporaryAllocation(
                 of: UInt8.self, capacity: bufferSize
             ) { buffer in
-                let base = unsafe buffer.baseAddress!
+                // No `unsafe` marker: reading `baseAddress` off the (unsafe-typed) buffer is not
+                // itself an unsafe operation under SE-0458 — the marked ops are the read/write calls.
+                let base = buffer.baseAddress!
                 while true {
                     let readN = unsafe Glibc.read(src, base, bufferSize)
                     if readN < 0 {
