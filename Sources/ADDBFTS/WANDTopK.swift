@@ -93,25 +93,24 @@ enum FTSWANDTopK {
         guard !cursors.isEmpty else { return [] }
 
         // The shared scorer: turns a document + its contributing cursors into the
-        // bit-identical positive relevance `S = Σ contribution`.
-        let scorer = DocScorer(
-            record: record, resolver: resolver, weights: weights, columns: columns, avgdl: avgdl)
+        // bit-identical positive relevance `S = Σ contribution`. Per-document lengths
+        // come from the snapshot's length table (loaded once), so scoring a survivor is
+        // arithmetic over the cursor's field-TFs plus an O(1) length index — no per-doc
+        // stats-tree descent, the cost block-max pruning could not remove.
+        let lengths = try FTSLengthCache.table(resolver, record)
+        let scorer = DocScorer(weights: weights, columns: columns, avgdl: avgdl, lengths: lengths)
 
         var heap = TopKHeap(capacity: k)
-        // One persistent ascending cursor on the stats tree: survivors are scored in
-        // ascending docid order, so `docLength`'s `seekForward` skips the per-doc
-        // root→leaf descent for same-leaf docs.
-        var statsCursor = Cursor(resolver: resolver, tree: record.stats)
         if cursors.count == 1 {
             // Single term (the hot case, e.g. "view"): pure block-max skipping — drop a
             // whole block whose bound cannot beat θ without decoding or scoring it.
-            try runSingleTerm(&cursors[0], heap: &heap, scorer: scorer, statsCursor: &statsCursor)
+            runSingleTerm(&cursors[0], heap: &heap, scorer: scorer)
         } else {
             switch eligible.op {
                 case .or:
-                    try runDisjunctive(&cursors, heap: &heap, scorer: scorer, statsCursor: &statsCursor)
+                    runDisjunctive(&cursors, heap: &heap, scorer: scorer)
                 case .and:
-                    try runConjunctive(&cursors, heap: &heap, scorer: scorer, statsCursor: &statsCursor)
+                    runConjunctive(&cursors, heap: &heap, scorer: scorer)
             }
         }
         // Convert the kept entries to the `FTSScorer` convention (negated `S`) and
@@ -135,10 +134,9 @@ enum FTSWANDTopK {
     /// each of its documents directly from the cursor. This is where block-max
     /// pruning pays the most — the late blocks of a near-universal term that all
     /// fall under the rising threshold are jumped over wholesale.
-    private static func runSingleTerm<R: PageResolver>(
-        _ cursor: inout FTSWANDCursor, heap: inout TopKHeap, scorer: DocScorer<R>,
-        statsCursor: inout Cursor<R>
-    ) throws(DBError) {
+    private static func runSingleTerm(
+        _ cursor: inout FTSWANDCursor, heap: inout TopKHeap, scorer: DocScorer
+    ) {
         // One reused field-TF buffer for the whole list: the single-term scan scores
         // every doc in an entered block, so a fresh per-doc `[UInt32]` (and the 1-entry
         // contributors array) was pure churn on the hottest ranked path.
@@ -154,8 +152,7 @@ enum FTSWANDTopK {
                 continue
             }
             cursor.currentFieldTFs(into: &fieldTFs)
-            let s = try scorer.scoreSingle(
-                docid: docid, idf: cursor.idf, fieldTFs: fieldTFs, statsCursor: &statsCursor)
+            let s = scorer.scoreSingle(docid: docid, idf: cursor.idf, fieldTFs: fieldTFs)
             heap.offer(docid: docid, score: s)
             cursor.advancePast()
         }
@@ -169,10 +166,9 @@ enum FTSWANDTopK {
     /// document whose bound `< θ`; otherwise score it for real from those cursors'
     /// field-TFs. The cursor's galloping `advance(to:)` block-max-skips toward the
     /// next live candidate for free.
-    private static func runDisjunctive<R: PageResolver>(
-        _ cursors: inout [FTSWANDCursor], heap: inout TopKHeap, scorer: DocScorer<R>,
-        statsCursor: inout Cursor<R>
-    ) throws(DBError) {
+    private static func runDisjunctive(
+        _ cursors: inout [FTSWANDCursor], heap: inout TopKHeap, scorer: DocScorer
+    ) {
         while true {
             var pivot: Int64 = .max
             var anyLive = false
@@ -202,7 +198,7 @@ enum FTSWANDTopK {
             }
             heap.offer(
                 docid: pivot,
-                score: try scorer.score(docid: pivot, contributors: contributors, statsCursor: &statsCursor))
+                score: scorer.score(docid: pivot, contributors: contributors))
             for index in cursors.indices where cursors[index].current == pivot {
                 cursors[index].advancePast()
             }
@@ -216,10 +212,9 @@ enum FTSWANDTopK {
     /// (galloping skips non-intersecting docids); once aligned, prune by the summed
     /// block bound (skip when `< θ`) else score for real from every cursor's
     /// field-TFs.
-    private static func runConjunctive<R: PageResolver>(
-        _ cursors: inout [FTSWANDCursor], heap: inout TopKHeap, scorer: DocScorer<R>,
-        statsCursor: inout Cursor<R>
-    ) throws(DBError) {
+    private static func runConjunctive(
+        _ cursors: inout [FTSWANDCursor], heap: inout TopKHeap, scorer: DocScorer
+    ) {
         while true {
             var target: Int64 = .min
             for cursor in cursors {
@@ -243,8 +238,7 @@ enum FTSWANDTopK {
                 }
                 heap.offer(
                     docid: target,
-                    score: try scorer.score(
-                        docid: target, contributors: contributors, statsCursor: &statsCursor))
+                    score: scorer.score(docid: target, contributors: contributors))
             }
             for index in cursors.indices { cursors[index].advancePast() }
         }
@@ -268,24 +262,23 @@ enum FTSWANDTopK {
 /// The per-document length comes from the same `FTSIndex.docStats` the score-all
 /// path reads; only the per-term posting re-decode is avoided (the cursor already
 /// holds the field-TFs).
-struct DocScorer<R: PageResolver> {
-    let record: Catalog.FTSRecord
-    let resolver: R
+struct DocScorer {
     let weights: [Double]
     let columns: Int
     let avgdl: Double
+    /// Per-document lengths for this snapshot, loaded once — the O(1) replacement for
+    /// the per-doc `FTSIndex.docLength` stats-tree descent (see ``FTSLengthCache``).
+    let lengths: FTSLengthTable
 
     /// `S` for `docid` given each contributing term's `(idf, fieldTFs)` in query
     /// leaf order. Mirrors `FTSScorer.score`: sum, per present leaf,
     /// `contribution(idf, Σ_c weight_c·tf_c, lengthNorm(D))`, skipping a leaf whose
-    /// weighted frequency is 0. Returns 0 when the doc has no stats (degenerate;
-    /// matches `FTSScorer`).
+    /// weighted frequency is 0. A matched document always carries a stats row, so its
+    /// `length(docid)` is its real `D`; the arithmetic is identical to `FTSScorer`.
     package func score(
-        docid: Int64, contributors: [(idf: Double, fieldTFs: [UInt32])],
-        statsCursor: inout Cursor<R>
-    ) throws(DBError) -> Double {
-        guard let docLength = try FTSIndex.docLength(&statsCursor, docid: docid) else { return 0 }
-        let lengthNorm = FTSScorer.lengthNorm(docLength: docLength, avgdl: avgdl)
+        docid: Int64, contributors: [(idf: Double, fieldTFs: [UInt32])]
+    ) -> Double {
+        let lengthNorm = FTSScorer.lengthNorm(docLength: lengths.length(docid), avgdl: avgdl)
         var total = 0.0
         for contributor in contributors {
             var weightedFreq = 0.0
@@ -306,10 +299,9 @@ struct DocScorer<R: PageResolver> {
     /// `contribution`), but takes the field-TFs by borrow (a reused buffer) and
     /// avoids the per-doc contributors array.
     func scoreSingle(
-        docid: Int64, idf: Double, fieldTFs tfs: [UInt32], statsCursor: inout Cursor<R>
-    ) throws(DBError) -> Double {
-        guard let docLength = try FTSIndex.docLength(&statsCursor, docid: docid) else { return 0 }
-        let lengthNorm = FTSScorer.lengthNorm(docLength: docLength, avgdl: avgdl)
+        docid: Int64, idf: Double, fieldTFs tfs: [UInt32]
+    ) -> Double {
+        let lengthNorm = FTSScorer.lengthNorm(docLength: lengths.length(docid), avgdl: avgdl)
         var weightedFreq = 0.0
         for column in 0 ..< columns {
             let tf = column < tfs.count ? Double(tfs[column]) : 0

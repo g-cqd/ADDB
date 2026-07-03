@@ -86,8 +86,7 @@ package enum FTSScorer {
     ) throws(DBError) -> Double {
         let prepared = try PreparedScorer(
             query: query, record: record, resolver: resolver, weights: weights, global: global)
-        var statsCursor = Cursor(resolver: resolver, tree: record.stats)
-        return try prepared.score(docid: docid, statsCursor: &statsCursor)
+        return prepared.score(docid: docid)
     }
 
     // MARK: - Query-scoped scorer
@@ -113,6 +112,10 @@ package enum FTSScorer {
         /// document 0, mirroring the per-document path's top guards.
         private let degenerate: Bool
         private let leaves: [PreparedLeaf]
+        /// Per-document lengths for this snapshot, loaded once (see ``FTSLengthCache``) —
+        /// the O(1) replacement for the per-document `FTSIndex.docLength` stats descent
+        /// this scorer paid on every scored candidate.
+        private let lengths: FTSLengthTable
 
         /// One positive query leaf, resolved for the whole query.
         private struct PreparedLeaf {
@@ -139,6 +142,7 @@ package enum FTSScorer {
             let avgdl = global.docCount > 0 ? totalLength / Double(global.docCount) : 0
             self.avgdl = avgdl
             self.degenerate = global.docCount == 0 || avgdl <= 0
+            self.lengths = try FTSLengthCache.table(resolver, record)
 
             // Resolve every positive leaf once, in the query's left-to-right traversal
             // order (so the per-document score sum matches the previous path exactly).
@@ -159,10 +163,9 @@ package enum FTSScorer {
         /// resolved leaf, no posting decode. Bit-identical to the per-document path:
         /// same leaf order, same `wf = Σ_c weight_c·freq_c` (over allowed columns),
         /// same zero-frequency skip, same `contribution`, same negation.
-        package func score(docid: Int64, statsCursor: inout Cursor<R>) throws(DBError) -> Double {
+        package func score(docid: Int64) -> Double {
             guard !degenerate else { return 0 }
-            guard let docLength = try FTSIndex.docLength(&statsCursor, docid: docid) else { return 0 }
-            let lengthNorm = FTSScorer.lengthNorm(docLength: docLength, avgdl: avgdl)
+            let lengthNorm = FTSScorer.lengthNorm(docLength: lengths.length(docid), avgdl: avgdl)
             var total = 0.0
             for leaf in leaves {
                 guard let perColumn = leaf.perDocFreq[docid] else { continue }

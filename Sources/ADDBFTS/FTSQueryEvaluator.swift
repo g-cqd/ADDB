@@ -24,7 +24,7 @@ final class FTSQueryEvaluator: FTSEvaluation {
         let prepared = try FTSScorer.PreparedScorer(
             query: query, record: record, resolver: resolver,
             weights: Self.padded(weights, to: record.definition.columns.count), global: global)
-        return (docids, PreparedScorerBox(prepared: prepared, resolver: resolver, stats: record.stats))
+        return (docids, PreparedScorerBox(prepared: prepared))
     }
 
     func rankedTopK<R: PageResolver>(
@@ -55,15 +55,13 @@ final class FTSQueryEvaluator: FTSEvaluation {
 /// docs — the optimization the executor's local cursor previously held.
 final class PreparedScorerBox<R: PageResolver>: FTSScoring {
     private let prepared: FTSScorer.PreparedScorer<R>
-    private var statsCursor: Cursor<R>
 
-    init(prepared: FTSScorer.PreparedScorer<R>, resolver: R, stats: TreeHandle) {
+    init(prepared: FTSScorer.PreparedScorer<R>) {
         self.prepared = prepared
-        self.statsCursor = Cursor(resolver: resolver, tree: stats)
     }
 
     func score(docid: Int64) throws(DBError) -> Double {
-        try prepared.score(docid: docid, statsCursor: &statsCursor)
+        prepared.score(docid: docid)
     }
 }
 
