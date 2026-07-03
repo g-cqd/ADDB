@@ -13,6 +13,11 @@ git config core.hooksPath .githooks
 
 That's it. The toolchain's bundled `swift format` powers the plugins; no extra tools needed.
 
+**Benchmarks only:** the ordo-one `package-benchmark` dependency (pulled into the `ADSQL_DEV=1`
+graph) needs the system **jemalloc** headers — `brew install jemalloc` on macOS (`libjemalloc-dev`
+on Linux). Without it, `ADSQL_DEV=1 swift …` fails at dependency-scan time. Plain `swift build` /
+`swift test` don't need it.
+
 ## Everyday commands
 
 ```sh
