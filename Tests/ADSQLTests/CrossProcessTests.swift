@@ -9,19 +9,28 @@ import Testing
 
 private final class BundleMarker {}
 
-/// Locates the adsql CLI. On macOS the executable is a sibling of the `.xctest`
-/// bundle in the build products dir (the `Bundle(for:)` path below). On Linux there
-/// is no test bundle, so that layout doesn't hold; the CI lane passes the exact
-/// built path via `ADSQL_CLI_PATH` (`swift build --show-bin-path`/adsql).
+/// Locates the adsql CLI (built alongside the tests, since `ADSQLTests` depends on the executable).
+/// `ADSQL_CLI_PATH` overrides. Otherwise both build-products layouts are tried: on macOS the
+/// executable is a SIBLING of the `.xctest` bundle (one level up from `bundleURL`); on Linux there is
+/// no bundle wrapper, so `bundleURL` IS the build-products dir that also holds `adsql`.
 private func adsqlBinary() -> String {
     if let override = ProcessInfo.processInfo.environment["ADSQL_CLI_PATH"], !override.isEmpty {
         return override
     }
-    return Bundle(for: BundleMarker.self).bundleURL
-        .deletingLastPathComponent()
-        .appendingPathComponent("adsql")
-        .path
+    let bundleURL = Bundle(for: BundleMarker.self).bundleURL
+    let candidates = [
+        bundleURL.deletingLastPathComponent().appendingPathComponent("adsql"),
+        bundleURL.appendingPathComponent("adsql")
+    ]
+    for candidate in candidates where FileManager.default.isExecutableFile(atPath: candidate.path) {
+        return candidate.path
+    }
+    return candidates[0].path  // not found: return the macOS layout so the error names a real path
 }
+
+/// Whether the CLI could be located — the cross-process suite's `.enabled(if:)` guard, so a lane that
+/// doesn't provide the built binary records a SKIP rather than a spawn failure.
+private let adsqlCLIAvailable = FileManager.default.isExecutableFile(atPath: adsqlBinary())
 
 @discardableResult
 private func runCLI(_ arguments: [String]) throws -> (status: Int32, output: String) {
@@ -47,7 +56,7 @@ private func launchCLI(_ arguments: [String]) throws -> Process {
     return process
 }
 
-@Suite(.serialized)
+@Suite(.serialized, .enabled(if: adsqlCLIAvailable))
 struct CrossProcessTests {
     @Test func cliBinaryExists() {
         #expect(FileManager.default.isExecutableFile(atPath: adsqlBinary()))
