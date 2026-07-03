@@ -120,6 +120,13 @@ jobs:
     # (the macOS leg in the reusable `quality` job already covers compilation for PRs).
     if: github.event_name != 'pull_request'
     runs-on: macos-26
+    # ADVISORY until an Xcode with SwiftPM >= 6.4 ships on runner images: xcodebuild resolves
+    # packages with ITS OWN embedded SwiftPM (Xcode 26.6 = Swift 6.3.x), which cannot parse this
+    # package's swift-tools-version 6.4 manifest — the installed 6.4 snapshot (TOOLCHAINS) swaps
+    # compilers but not xcodebuild's package resolution, so every leg dies at "Could not resolve
+    # package dependencies". Structural: the matrix has never been able to pass on this image
+    # generation. Re-promote when Xcode 27 lands on runner images.
+    continue-on-error: true
     strategy:
       fail-fast: false
       matrix:
