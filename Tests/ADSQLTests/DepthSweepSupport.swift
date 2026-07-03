@@ -1,6 +1,12 @@
 import ADTestKit
 import Foundation
 
+#if canImport(Darwin)
+    import Darwin
+#elseif canImport(Glibc)
+    import Glibc
+#endif
+
 // Shared support for the DEPTH-SWEEPING tests (cap-legal 200–250-term boolean chains and the
 // seeded query fuzz), which recurse the binder/evaluator once per term by design.
 //
@@ -16,9 +22,10 @@ import Foundation
 // stack-size-independent.
 let depthSweepStackSize: Int = {
     // Runtime probe: the sanitizer runtimes export their initializers; dlsym through the
-    // process's own global scope finds them iff this run is instrumented.
-    let handle = dlopen(nil, RTLD_LAZY)
-    defer { if handle != nil { dlclose(handle) } }
+    // process's own global scope finds them iff this run is instrumented. (The handle is bound,
+    // not passed optional: Glibc declares dlsym/dlclose with a non-optional handle.)
+    guard let handle = dlopen(nil, RTLD_LAZY) else { return 512 * 1024 }
+    defer { dlclose(handle) }
     let sanitized = dlsym(handle, "__asan_init") != nil || dlsym(handle, "__tsan_init") != nil
     return sanitized ? 4 * 1024 * 1024 : 512 * 1024
 }()
@@ -31,5 +38,6 @@ let depthSweepStackSize: Int = {
 func runDepthSweep<R: Sendable>(_ body: @escaping @Sendable () throws -> R) throws -> R {
     try runOnConstrainedStack(stackSize: depthSweepStackSize, name: "ADSQLTests.depth-sweep") {
         Result { try body() }
-    }.get()
+    }
+    .get()
 }
