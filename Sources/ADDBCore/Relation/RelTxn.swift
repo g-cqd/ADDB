@@ -298,6 +298,13 @@ extension WriteTxn {
         return try Relation.firstRowid(ctx, index: index, table: table, equals: values)
     }
 
+    /// Every rowid whose `index` key equals `values` (the plural of `firstRowid`, for a non-unique index).
+    public func matchingRowids(index name: String, equals values: [Value]) throws(DBError) -> [Int64] {
+        let index = try indexRecord(name)
+        let table = try tableRecord(index.definition.table)
+        return try Relation.matchingRowids(ctx, index: index, table: table, equals: values)
+    }
+
     /// Creates a table. Transactional and crash-atomic like any other write.
     public func createTable(_ definition: TableDefinition) throws(DBError) {
         try Relation.createTable(ctx, definition)

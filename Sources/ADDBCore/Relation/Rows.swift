@@ -453,4 +453,40 @@ extension Relation {
         }
         return try outcome.get()
     }
+
+    /// Every rowid whose index key equals `values` — the plural of `firstRowid`, for a NON-unique index (a
+    /// unique index yields ≤1). Seeks the encoded key prefix, then walks forward while each entry still
+    /// carries it (its trailing 8 bytes are the rowid). The same forward-scan `referencingRowids` uses for FK
+    /// enforcement, keyed by a value list instead of a parent rowid.
+    static func matchingRowids(
+        _ resolver: some PageResolver, index: Catalog.IndexRecord, table: Catalog.TableRecord,
+        equals values: [Value]
+    ) throws(DBError) -> [Int64] {
+        let collations = indexCollations(index.definition, table: table.definition)
+        guard values.count == collations.count else {
+            throw DBError.invalidDefinition(
+                "matchingRowids needs all \(collations.count) columns of \(index.definition.name)")
+        }
+        let prefix = try KeyCodec.encode(values, collations: collations)
+        var rowids: [Int64] = []
+        var cursor = Cursor(resolver: resolver, tree: index.handle)
+        var positioned = unsafe try prefix.withUnsafeBytesThrowing { raw throws(DBError) in
+            _ = unsafe try cursor.seek(raw)
+            return cursor.isValid
+        }
+        while positioned {
+            let rowid: Int64?? = unsafe try cursor.withCurrent { (key, _) throws(DBError) in
+                let matches = prefix.withUnsafeBytes { p in
+                    unsafe key.count >= p.count
+                        && key.prefix(p.count).elementsEqual(UnsafeRawBufferPointer(rebasing: p[...]))
+                }
+                guard matches else { return nil }
+                return unsafe KeyCodec.rowid(fromSuffixOf: key)
+            }
+            guard let hit = rowid ?? nil else { break }
+            rowids.append(hit)
+            positioned = try cursor.next()
+        }
+        return rowids
+    }
 }

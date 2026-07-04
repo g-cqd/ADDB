@@ -94,4 +94,37 @@ struct WriterSeekFastPathTests {
         #expect(rowsMatch(ours, try mirrorTable(mirror), ordered: true), "\(ours)")
         #expect(ours.contains([.text("swiftui"), .text("pending"), .integer(0)]))  // untouched
     }
+
+    @Test("UPDATE … WHERE <non-unique indexed col> = param updates EVERY matching row (per-key denorm)")
+    func nonUniqueKeyUpdateMatchesSQLite() throws {
+        let dir = TempDir()
+        _ = dir
+        let db = try Database.openJSON(at: dir.file("nonuniq.adsql"))
+        let mirror = SQLiteMirror()
+        // A non-unique index on `framework` — the shape the import's per-root denorm UPDATEs hit.
+        let statements = [
+            "CREATE TABLE docs (id INTEGER PRIMARY KEY, framework TEXT NOT NULL, root_display TEXT)",
+            "CREATE INDEX idx_docs_framework ON docs(framework)",
+            "INSERT INTO docs (id, framework) VALUES (1, 'swiftui')",
+            "INSERT INTO docs (id, framework) VALUES (2, 'swiftui')",
+            "INSERT INTO docs (id, framework) VALUES (3, 'uikit')",
+            "INSERT INTO docs (id, framework) VALUES (4, 'swiftui')",
+            "INSERT INTO docs (id, framework) VALUES (5, 'foundation')"
+        ]
+        for sql in statements {
+            try db.prepare(sql).run()
+            try mirror.exec(sql)
+        }
+        // One UPDATE keyed on the non-unique `framework` must touch ALL three swiftui rows (not just the
+        // first) — the range walk, not a single firstRowid seek — and leave uikit/foundation alone.
+        try db.prepare("UPDATE docs SET root_display = $d WHERE framework = $f")
+            .run(["d": .text("SwiftUI"), "f": .text("swiftui")])
+        try mirror.exec("UPDATE docs SET root_display = 'SwiftUI' WHERE framework = 'swiftui'")
+
+        let ours = try db.prepare("SELECT id, framework, root_display FROM docs ORDER BY id").all()
+            .map(\.values)
+        let theirs = try mirror.query("SELECT id, framework, root_display FROM docs ORDER BY id")
+        #expect(rowsMatch(ours, theirs, ordered: true), "\(ours)")
+        #expect(ours.filter { $0[2] == .text("SwiftUI") }.count == 3)
+    }
 }

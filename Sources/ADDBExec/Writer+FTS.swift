@@ -172,13 +172,14 @@ extension Writer {
     static func collectMatches(
         _ predicate: SQLExpr?, table: TableDefinition, txn: borrowing WriteTxn, params: SQLParameters
     ) throws(DBError) -> [(rowid: Int64, values: [Value])] {
-        // Fast path: a `<col> = <const>` / `<col> IN (<const>…)` predicate over a single-column UNIQUE
-        // index seeks the matching rowid(s) instead of scanning the whole table. Without it an UPDATE or
-        // DELETE keyed on a unique column is O(rows) — and O(rows·k) for a k-element IN list, since the
-        // list is re-scanned per row — which dominates a point/small-set mutation on a large table. Each
-        // seeked row is re-checked against the FULL predicate, so the result is identical to the scan.
+        // Fast path: a `<col> = <const>` / `<col> IN (<const>…)` predicate over any single-column index
+        // (unique OR not) seeks the matching rowid(s) instead of scanning the whole table. Without it an
+        // UPDATE or DELETE keyed on an indexed column is O(rows) — and O(rows·k) for a k-element IN list,
+        // since the list is re-scanned per row — which dominates a point/small-set mutation on a large
+        // table (e.g. per-key denormalization: one UPDATE per key × N rows). Each seeked row is re-checked
+        // against the FULL predicate, so the result is identical to the scan.
         if let predicate,
-            let seeked = try seekUniqueMatches(predicate, table: table, txn: txn, params: params)
+            let seeked = try seekIndexedMatches(predicate, table: table, txn: txn, params: params)
         {
             return seeked
         }
@@ -195,39 +196,37 @@ extension Writer {
         }
     }
 
-    /// The unique-index seek behind `collectMatches`. Returns the matching rows when `predicate` is a
-    /// `<col> = <const>` (either operand order) or `<col> IN (<const>…)` over a single-column UNIQUE index
-    /// whose constants are all TEXT — the crawl/serve keys (crawl path, document key) are TEXT, so the
-    /// seek value's storage class matches the stored key's and no row the scan would find is missed. Any
-    /// other shape/type returns `nil` → the caller scans (always correct, just not accelerated).
-    private static func seekUniqueMatches(
+    /// The index seek behind `collectMatches`. Returns the matching rows when `predicate` is a `<col> =
+    /// <const>` (either operand order) or `<col> IN (<const>…)` over a single-column index — UNIQUE (≤1 row
+    /// per value) or not (a value maps to many rows) — whose constants are all TEXT. TEXT-only keeps the
+    /// seek exact: a TEXT seek matches a TEXT-stored key with no affinity coercion, so no row the scan
+    /// would find is missed. Any other shape/type returns `nil` → the caller scans (correct, unaccelerated).
+    private static func seekIndexedMatches(
         _ predicate: SQLExpr, table: TableDefinition, txn: borrowing WriteTxn, params: SQLParameters
     ) throws(DBError) -> [(rowid: Int64, values: [Value])]? {
         guard let (column, values) = try pointPredicate(predicate, table: table, params: params) else {
             return nil
         }
-        // TEXT-only: a TEXT seek matches a TEXT-stored unique key exactly (no affinity coercion, so no
-        // missed row vs. the scan). Non-TEXT constants fall back to the scan.
         guard values.allSatisfy({ if case .text = $0 { true } else { false } }) else { return nil }
         guard
             let index = try txn.schema().indexes(on: table.name)
                 .first(where: {
-                    $0.unique && $0.columns.count == 1
-                        && $0.columns[0].lowercased() == column.lowercased()
+                    $0.columns.count == 1 && $0.columns[0].lowercased() == column.lowercased()
                 })
         else { return nil }
 
         var matches: [(rowid: Int64, values: [Value])] = []
         var seen = Set<Int64>()
         for value in values {
-            guard let rowid = try txn.firstRowid(index: index.name, equals: [value]) else { continue }
-            guard seen.insert(rowid).inserted else { continue }  // an IN list may repeat a value
-            guard let row = try txn.row(in: table.name, rowid: rowid) else { continue }
-            // Re-check the FULL predicate on the candidate — the seek only narrows the search space; the
-            // predicate stays the source of truth, so the result is byte-identical to the scan.
-            let env = rowEnv(table: table, values: row.values, params: params, triggerCtx: txn.ctx)
-            if SQLEval.truth(try SQLEval.evaluate(predicate, env)) != .yes { continue }
-            matches.append((rowid, row.values))
+            for rowid in try txn.matchingRowids(index: index.name, equals: [value])
+            where seen.insert(rowid).inserted {  // dedupe across a repeated IN value
+                guard let row = try txn.row(in: table.name, rowid: rowid) else { continue }
+                // Re-check the FULL predicate on the candidate — the seek only narrows the search space;
+                // the predicate stays the source of truth, so the result is byte-identical to the scan.
+                let env = rowEnv(table: table, values: row.values, params: params, triggerCtx: txn.ctx)
+                if SQLEval.truth(try SQLEval.evaluate(predicate, env)) != .yes { continue }
+                matches.append((rowid, row.values))
+            }
         }
         return matches
     }
