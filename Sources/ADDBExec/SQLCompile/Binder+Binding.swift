@@ -169,6 +169,34 @@ extension Binder {
         "COUNT", "SUM", "AVG", "MIN", "MAX", "TOTAL", "GROUP_CONCAT"
     ]
 
+    /// The core aggregate spec for a recognized name (COUNT/SUM/MIN/MAX/AVG), validating arity + `*`.
+    /// MIN/MAX carry a placeholder `.binary` collation that `bindAggregate` later resolves from the
+    /// argument. Extracted from `rewriteAggregates` so that walk stays within the function-length budget.
+    private static func coreAggregate(
+        _ upper: String, args: [SQLExpr], star: Bool
+    ) throws(DBError) -> AggregateSpec {
+        switch upper {
+            case "COUNT":
+                if star { return AggregateSpec(kind: .countStar) }
+                guard args.count == 1 else { throw DBError.sqlUnsupported("COUNT expects one argument or *") }
+                return AggregateSpec(kind: .count(args[0]))
+            case "SUM":
+                guard !star, args.count == 1 else { throw DBError.sqlUnsupported("SUM(expr)") }
+                return AggregateSpec(kind: .sum(args[0]))
+            case "MAX":
+                guard !star, args.count == 1 else { throw DBError.sqlUnsupported("MAX(expr)") }
+                return AggregateSpec(kind: .max(args[0], .binary))
+            case "MIN":
+                guard !star, args.count == 1 else { throw DBError.sqlUnsupported("MIN(expr)") }
+                return AggregateSpec(kind: .min(args[0], .binary))
+            case "AVG":
+                guard !star, args.count == 1 else { throw DBError.sqlUnsupported("AVG(expr)") }
+                return AggregateSpec(kind: .avg(args[0]))
+            default:
+                throw DBError.sqlUnsupported("aggregate \(upper)")
+        }
+    }
+
     /// Replaces aggregate calls with `aggregateResult(slot)` references,
     /// collecting the distinct specs. Recurses through scalar expressions (so
     /// `COALESCE(SUM(x), 0)` works) but leaves subqueries — a different scope —
@@ -187,29 +215,7 @@ extension Binder {
             case .function(let name, let args, let star, let offset):
                 let upper = name.uppercased()
                 if aggregateNames.contains(upper) {
-                    switch upper {
-                        case "COUNT":
-                            if star { return slot(AggregateSpec(kind: .countStar)) }
-                            guard args.count == 1 else {
-                                throw DBError.sqlUnsupported("COUNT expects one argument or *")
-                            }
-                            return slot(AggregateSpec(kind: .count(args[0])))
-                        case "SUM":
-                            guard !star, args.count == 1 else { throw DBError.sqlUnsupported("SUM(expr)") }
-                            return slot(AggregateSpec(kind: .sum(args[0])))
-                        case "MAX":
-                            guard !star, args.count == 1 else { throw DBError.sqlUnsupported("MAX(expr)") }
-                            // Collation is a placeholder here; `bindAggregate` resolves the real one.
-                            return slot(AggregateSpec(kind: .max(args[0], .binary)))
-                        case "MIN":
-                            guard !star, args.count == 1 else { throw DBError.sqlUnsupported("MIN(expr)") }
-                            return slot(AggregateSpec(kind: .min(args[0], .binary)))
-                        case "AVG":
-                            guard !star, args.count == 1 else { throw DBError.sqlUnsupported("AVG(expr)") }
-                            return slot(AggregateSpec(kind: .avg(args[0])))
-                        default:
-                            throw DBError.sqlUnsupported("aggregate \(upper)")
-                    }
+                    return slot(try Self.coreAggregate(upper, args: args, star: star))
                 }
                 // An extension-registered aggregate (e.g. json_group_array): validate its
                 // arity against the descriptor and bind it to a `.custom` slot.
