@@ -59,4 +59,42 @@ extension Database {
             try body(SQLTransaction(database: self, ctx: txn.ctx))
         }
     }
+
+    /// Runs `body` in one write transaction with `table`'s triggers SUSPENDED: they are dropped, `body`
+    /// runs (its writes to `table` fire none of them), then they are recreated — all inside the single
+    /// transaction, so any throw rolls the whole unit back and the triggers are never actually lost.
+    ///
+    /// The lever for a bulk write of columns a trigger doesn't read: an `AFTER UPDATE` FTS-sync trigger
+    /// re-encodes a whole posting list per row (quadratic over N rows); suspending it makes the write
+    /// linear. The CALLER guarantees the writes preserve the triggers' invariant (e.g. leave the
+    /// FTS-source columns untouched, so the FTS index stays correct) — this helper re-syncs nothing.
+    @discardableResult
+    public func suspendingTriggers<R>(
+        on table: String, _ body: (SQLTransaction) throws(DBError) -> R
+    ) throws(DBError) -> R {
+        try transaction { (txn) throws(DBError) in
+            let saved = try txn.triggerDefinitions(on: table)
+            for trigger in saved { try txn.run("DROP TRIGGER IF EXISTS \(trigger.name)") }
+            let result = try body(txn)
+            for trigger in saved { try txn.run(trigger.ddl) }
+            return result
+        }
+    }
+}
+
+extension SQLTransaction {
+    /// The `(name, CREATE-TRIGGER text)` of every trigger defined on `table`, name-sorted — the DDL needed
+    /// to drop and later recreate them (see ``Database/suspendingTriggers(on:_:)``). Reads this
+    /// transaction's own schema state, so it reflects triggers created/dropped earlier in the same txn.
+    func triggerDefinitions(on table: String) throws(DBError) -> [(name: String, ddl: String)] {
+        let state = try Relation.ensureState(ctx)
+        var out: [(name: String, ddl: String)] = []
+        for name in state.triggerTexts.keys.sorted() {
+            guard let ddl = state.triggerTexts[name] else { continue }
+            if try SQLTriggerEngine.parse(ddl, expectedName: name).table == table {
+                out.append((name: name, ddl: ddl))
+            }
+        }
+        return out
+    }
 }

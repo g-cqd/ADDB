@@ -376,6 +376,69 @@ struct FTSTriggerTests {
         #expect(try matchIds(db, "two") == [2])
     }
 
+    // MARK: - suspendingTriggers (the bulk-write lever)
+
+    private func abstractOf(_ db: Database, _ id: Int64) throws -> String? {
+        for row in try db.prepare("SELECT abstract FROM documents WHERE id = ?").all(.integer(id)) {
+            if case .text(let a) = row[0] { return a }
+        }
+        return nil
+    }
+
+    /// `suspendingTriggers(on:)` drops the table's triggers for the body, so a base-table UPDATE lands
+    /// WITHOUT firing the au FTS-sync trigger, then recreates them — the FTS index is left untouched during
+    /// the suspended write, and the triggers sync again afterwards.
+    @Test func suspendingTriggersSuppressesSyncThenRestores() throws {
+        let dir = TempDir()
+        defer { dir.cleanup() }
+        let db = try ftsSyncFixture(dir)
+        defer { db.close() }
+        try db.prepare(
+            "INSERT INTO documents(id, title, abstract, declaration, headings, key)"
+                + " VALUES(1, 'swift intro', 'old body', '', '', 'k1')"
+        )
+        .run()
+        #expect(try matchIds(db, "old") == [1])
+
+        // Suspended: the abstract column IS updated, but the au trigger never fires — FTS keeps 'old'.
+        try db.suspendingTriggers(on: "documents") { (txn) throws(DBError) in
+            _ = try txn.run("UPDATE documents SET abstract = 'fresh' WHERE id = 1")
+        }
+        #expect(try abstractOf(db, 1) == "fresh")
+        #expect(try matchIds(db, "old") == [1], "the suspended trigger must not have re-synced FTS")
+        #expect(try matchIds(db, "fresh").isEmpty)
+        #expect(try db.writeSync { (txn) throws(DBError) in try txn.schema().triggerTexts.count } == 3)
+
+        // Restored: a normal UPDATE fires the au trigger again → FTS re-syncs to the live row.
+        try db.prepare("UPDATE documents SET abstract = 'live' WHERE id = 1").run()
+        #expect(try matchIds(db, "live") == [1])
+        #expect(try matchIds(db, "old").isEmpty)
+    }
+
+    /// A throw inside the suspended body rolls the WHOLE unit back — the trigger drops included — so the
+    /// corpus is never left trigger-less.
+    @Test func suspendingTriggersRestoresTriggersOnThrow() throws {
+        let dir = TempDir()
+        defer { dir.cleanup() }
+        let db = try ftsSyncFixture(dir)
+        defer { db.close() }
+        try db.prepare(
+            "INSERT INTO documents(id, title, abstract, declaration, headings, key)"
+                + " VALUES(1, 'swift intro', 'body', '', '', 'k1')"
+        )
+        .run()
+        #expect(throws: DBError.self) {
+            try db.suspendingTriggers(on: "documents") { (txn) throws(DBError) in
+                _ = try txn.run("UPDATE documents SET abstract = 'gone' WHERE id = 1")
+                _ = try txn.run("UPDATE no_such_table SET x = 1")  // → DBError, rolls the unit back
+            }
+        }
+        #expect(try abstractOf(db, 1) == "body", "the suspended write rolled back with the failed txn")
+        #expect(try db.writeSync { (txn) throws(DBError) in try txn.schema().triggerTexts.count } == 3)
+        try db.prepare("UPDATE documents SET abstract = 'live' WHERE id = 1").run()  // triggers still sync
+        #expect(try matchIds(db, "live") == [1])
+    }
+
     @Test func fullSyncSurvivesReopen() throws {
         let dir = TempDir()
         defer { dir.cleanup() }
