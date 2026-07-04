@@ -52,6 +52,14 @@ extension Binder {
             case .countStar: return spec
             case .count(let expr): return AggregateSpec(kind: .count(bindColumnsNoWeights(expr, binding)))
             case .sum(let expr): return AggregateSpec(kind: .sum(bindColumnsNoWeights(expr, binding)))
+            case .max(let expr, _):
+                // Collation is taken from the un-bound argument (column refs still resolvable).
+                return AggregateSpec(
+                    kind: .max(bindColumnsNoWeights(expr, binding), collation(of: expr, binding: binding)))
+            case .min(let expr, _):
+                return AggregateSpec(
+                    kind: .min(bindColumnsNoWeights(expr, binding), collation(of: expr, binding: binding)))
+            case .avg(let expr): return AggregateSpec(kind: .avg(bindColumnsNoWeights(expr, binding)))
             case .custom(let name, let args):
                 return AggregateSpec(
                     kind: .custom(name: name, args: args.map { bindColumnsNoWeights($0, binding) }))
@@ -153,9 +161,9 @@ extension Binder {
         }
     }
 
-    /// Core-recognized aggregate names. COUNT/SUM are implemented; the rest are
-    /// recognized (so they bind as aggregates, not scalars) but rejected as
-    /// unsupported. Extension aggregates (e.g. json_group_*) are recognized via
+    /// Core-recognized aggregate names. COUNT/SUM/MIN/MAX/AVG are implemented; TOTAL /
+    /// GROUP_CONCAT are recognized (so they bind as aggregates, not scalars) but rejected
+    /// as unsupported. Extension aggregates (e.g. json_group_*) are recognized via
     /// ``SQLAggregateRegistry`` instead of this set.
     private static let aggregateNames: Set<String> = [
         "COUNT", "SUM", "AVG", "MIN", "MAX", "TOTAL", "GROUP_CONCAT"
@@ -189,8 +197,18 @@ extension Binder {
                         case "SUM":
                             guard !star, args.count == 1 else { throw DBError.sqlUnsupported("SUM(expr)") }
                             return slot(AggregateSpec(kind: .sum(args[0])))
+                        case "MAX":
+                            guard !star, args.count == 1 else { throw DBError.sqlUnsupported("MAX(expr)") }
+                            // Collation is a placeholder here; `bindAggregate` resolves the real one.
+                            return slot(AggregateSpec(kind: .max(args[0], .binary)))
+                        case "MIN":
+                            guard !star, args.count == 1 else { throw DBError.sqlUnsupported("MIN(expr)") }
+                            return slot(AggregateSpec(kind: .min(args[0], .binary)))
+                        case "AVG":
+                            guard !star, args.count == 1 else { throw DBError.sqlUnsupported("AVG(expr)") }
+                            return slot(AggregateSpec(kind: .avg(args[0])))
                         default:
-                            throw DBError.sqlUnsupported("aggregate \(upper) (only COUNT and SUM in this slice)")
+                            throw DBError.sqlUnsupported("aggregate \(upper)")
                     }
                 }
                 // An extension-registered aggregate (e.g. json_group_array): validate its

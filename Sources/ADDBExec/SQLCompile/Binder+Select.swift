@@ -77,6 +77,9 @@ extension Binder {
                 case .countStar: break
                 case .count(let e): collectTableRefs(e, into: &alwaysRefs, unknown: &unknownRefs)
                 case .sum(let e): collectTableRefs(e, into: &alwaysRefs, unknown: &unknownRefs)
+                case .max(let e, _): collectTableRefs(e, into: &alwaysRefs, unknown: &unknownRefs)
+                case .min(let e, _): collectTableRefs(e, into: &alwaysRefs, unknown: &unknownRefs)
+                case .avg(let e): collectTableRefs(e, into: &alwaysRefs, unknown: &unknownRefs)
                 case .custom(_, let args):
                     for arg in args { collectTableRefs(arg, into: &alwaysRefs, unknown: &unknownRefs) }
             }

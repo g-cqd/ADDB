@@ -362,8 +362,9 @@ struct SQLParserErrorTests {
         ("WITH x AS (SELECT 1) SELECT * FROM x", "WITH"),
         // `… MATCH 'q'` now parses; it binds/plans to an FTS access path.
         ("SELECT COUNT(DISTINCT a) FROM t", "DISTINCT"),
-        ("SELECT AVG(a) FROM t", "AVG"),
-        ("SELECT MAX(a) FROM t", "MAX"),
+        // AVG/MIN/MAX now parse and lower to accumulators; TOTAL/GROUP_CONCAT stay unimplemented.
+        ("SELECT TOTAL(a) FROM t", "TOTAL"),
+        ("SELECT GROUP_CONCAT(a) FROM t", "GROUP_CONCAT"),
         // bm25 now parses as a function call; the binder rewrites it to the
         // FTS `rank` score slot. (Was rejected at parse time before ranking landed.)
         ("SELECT a, ROW_NUMBER() OVER (ORDER BY a) FROM t", "window"),

@@ -18,6 +18,13 @@ enum SlotState {
     /// (promoted to floating accumulation), and the two running totals. Mirrors the
     /// former `sumNonNull`/`sumIsReal`/`sumInt`/`sumReal` lanes exactly.
     case sum(nonNull: Bool, isReal: Bool, int: Int64, real: Double)
+    /// MAX(expr)/MIN(expr): the running extremum (`nil` until a non-NULL value folds;
+    /// empty/all-NULL ⇒ NULL). The stored value is the actual winning value, so a text
+    /// MAX/MIN returns the exact stored string SQLite would.
+    case extremum(Value?)
+    /// AVG(expr): numeric-affinity running `sum` over the non-NULL `count`. Result is
+    /// `sum/count` as REAL, or NULL when `count == 0`.
+    case avg(sum: Double, count: Int)
     /// An extension-registered aggregate. The binder only emits `.custom` for a
     /// registered name, so the descriptor — and thus this accumulator — is always
     /// present when the slot is `.custom`.
@@ -39,6 +46,10 @@ final class GroupAccumulators {
                     return .count(0)
                 case .sum:
                     return .sum(nonNull: false, isReal: false, int: 0, real: 0)
+                case .max, .min:
+                    return .extremum(nil)
+                case .avg:
+                    return .avg(sum: 0, count: 0)
                 case .custom(let name, _):
                     // The descriptor is guaranteed present for a bound `.custom`; force it
                     // (matches the former `custom[slot]!` invariant).
@@ -62,6 +73,12 @@ final class GroupAccumulators {
                     }
                 case .sum(let expr):
                     try addToSum(slot, try SQLEval.evaluate(expr, env))
+                case .max(let expr, let collation):
+                    foldExtremum(slot, try SQLEval.evaluate(expr, env), collation: collation, keepLarger: true)
+                case .min(let expr, let collation):
+                    foldExtremum(slot, try SQLEval.evaluate(expr, env), collation: collation, keepLarger: false)
+                case .avg(let expr):
+                    addToAvg(slot, try SQLEval.evaluate(expr, env))
                 case .custom(_, let args):
                     var values: [Value] = []
                     values.reserveCapacity(args.count)
@@ -79,6 +96,10 @@ final class GroupAccumulators {
             case .sum(let nonNull, let isReal, let int, let real):
                 guard nonNull else { return .null }  // empty / all-NULL SUM is NULL
                 return isReal ? .real(real) : .integer(int)
+            case .extremum(let value):
+                return value ?? .null  // empty / all-NULL MIN/MAX is NULL
+            case .avg(let sum, let count):
+                return count == 0 ? .null : .real(sum / Double(count))  // AVG is always REAL
             case .custom(let accumulator):
                 return accumulator.result()
         }
@@ -113,5 +134,40 @@ final class GroupAccumulators {
                 break
         }
         slots[slot] = .sum(nonNull: true, isReal: isReal, int: int, real: real)
+    }
+
+    /// Folds one value into a MIN/MAX slot: skips NULLs; the first non-NULL seeds the
+    /// extremum; later values replace it when they compare strictly past it under the
+    /// argument collation (`keepLarger` → MAX, else MIN). `SQLCompare.compare` gives the
+    /// same cross-class ordering (numeric < TEXT < BLOB) SQLite ranks min/max by.
+    private func foldExtremum(_ slot: Int, _ value: Value, collation: Collation, keepLarger: Bool) {
+        if case .null = value { return }
+        guard case .extremum(let current) = slots[slot] else { return }
+        guard let current else {
+            slots[slot] = .extremum(value)
+            return
+        }
+        guard let order = SQLCompare.compare(value, current, collation: collation) else { return }
+        if keepLarger ? (order > 0) : (order < 0) { slots[slot] = .extremum(value) }
+    }
+
+    /// Folds one value into an AVG slot: skips NULLs, applies SUM's numeric affinity
+    /// (text → leading numeric, blob → 0), and counts every non-NULL row for the divisor.
+    private func addToAvg(_ slot: Int, _ value: Value) {
+        let numeric: Value
+        switch value {
+            case .null: return
+            case .integer, .real: numeric = value
+            case .text(let s): numeric = SQLFunctions.numericPrefix(s)
+            case .blob: numeric = .integer(0)
+        }
+        let d: Double
+        switch numeric {
+            case .integer(let n): d = Double(n)
+            case .real(let r): d = r
+            default: d = 0
+        }
+        guard case .avg(let sum, let count) = slots[slot] else { return }
+        slots[slot] = .avg(sum: sum + d, count: count + 1)
     }
 }

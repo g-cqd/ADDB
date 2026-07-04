@@ -73,7 +73,25 @@ struct SQLAggregateTests {
         "SELECT framework FROM docs GROUP BY framework ORDER BY framework",
         "SELECT framework, COUNT(*) AS c FROM docs GROUP BY framework ORDER BY c DESC, framework",
         "SELECT framework, COUNT(*) * 2 AS doubled FROM docs GROUP BY framework ORDER BY framework",
-        "SELECT COUNT(*) AS total FROM docs GROUP BY framework HAVING COUNT(score) > 0 ORDER BY framework"
+        "SELECT COUNT(*) AS total FROM docs GROUP BY framework HAVING COUNT(score) > 0 ORDER BY framework",
+        // MIN/MAX/AVG: numeric, real, and text (BINARY collation) arguments.
+        "SELECT MAX(score) FROM docs",
+        "SELECT MIN(score) FROM docs",
+        "SELECT AVG(score) FROM docs",
+        "SELECT MAX(weight), MIN(weight), AVG(weight) FROM docs",
+        "SELECT MIN(framework), MAX(framework) FROM docs",
+        "SELECT MAX(score), MIN(score), AVG(score), SUM(score), COUNT(score) FROM docs",
+        // Empty / all-NULL groups ⇒ NULL.
+        "SELECT MAX(score), MIN(score), AVG(score) FROM docs WHERE framework = 'Nonexistent'",
+        "SELECT AVG(score) FROM docs WHERE score IS NULL",
+        // Grouped, incl. a NULL group + HAVING on MIN/MAX/AVG.
+        "SELECT framework, MIN(score) AS lo, MAX(score) AS hi, AVG(score) AS av"
+            + " FROM docs GROUP BY framework ORDER BY framework",
+        "SELECT framework, MAX(weight), MIN(weight), AVG(weight) FROM docs GROUP BY framework ORDER BY framework",
+        "SELECT framework, MIN(framework), MAX(framework) FROM docs GROUP BY framework ORDER BY framework",
+        "SELECT score, AVG(weight) FROM docs GROUP BY score ORDER BY score",
+        "SELECT framework, AVG(score) AS a FROM docs GROUP BY framework HAVING AVG(score) > 1 ORDER BY framework",
+        "SELECT framework, MAX(score) AS m FROM docs GROUP BY framework HAVING MAX(score) >= 2 ORDER BY m, framework"
     ]
 
     @Test(arguments: queries)
@@ -124,13 +142,17 @@ struct SQLAggregateTests {
         defer { db.close() }
         try db.writeSync { (txn) throws(DBError) in try txn.createTable(AggFixture.definition) }
 
-        // No GROUP BY over an empty table still yields one row.
-        let counts = try db.prepare("SELECT COUNT(*), SUM(score) FROM docs").all()
+        // No GROUP BY over an empty table still yields one row: COUNT ⇒ 0, the rest NULL.
+        let counts =
+            try db.prepare(
+                "SELECT COUNT(*), SUM(score), MAX(score), MIN(score), AVG(score) FROM docs"
+            )
+            .all()
         #expect(counts.count == 1)
-        #expect(counts[0].values == [.integer(0), .null])
+        #expect(counts[0].values == [.integer(0), .null, .null, .null, .null])
 
         // GROUP BY over an empty table yields no rows.
-        let grouped = try db.prepare("SELECT framework, COUNT(*) FROM docs GROUP BY framework").all()
+        let grouped = try db.prepare("SELECT framework, COUNT(*), MAX(score) FROM docs GROUP BY framework").all()
         #expect(grouped.isEmpty)
     }
 
@@ -169,7 +191,11 @@ struct SQLAggregateResidualTests {
 
     private static func randomAggregate(_ rng: inout SplitMix64) -> String {
         func pick<T>(_ items: [T]) -> T { items[Int(rng.next() % UInt64(items.count))] }
-        let aggregates = ["COUNT(*)", "COUNT(score)", "SUM(score)", "SUM(weight)", "COUNT(framework)"]
+        let aggregates = [
+            "COUNT(*)", "COUNT(score)", "SUM(score)", "SUM(weight)", "COUNT(framework)",
+            "MAX(score)", "MIN(score)", "AVG(score)", "MAX(weight)", "MIN(weight)", "AVG(weight)",
+            "MAX(framework)", "MIN(framework)"
+        ]
         let agg = pick(aggregates)
         let groupCol = pick(["framework", "score"])
 
@@ -183,7 +209,8 @@ struct SQLAggregateResidualTests {
         var sql = "SELECT \(groupCol), \(agg) AS a FROM docs\(whereClause)"
         sql += " GROUP BY \(groupCol)"
         if rng.next() % 2 == 0 {
-            sql += " HAVING \(pick(["COUNT(*) > 1", "COUNT(*) >= 2", "SUM(score) > 3"]))"
+            sql +=
+                " HAVING \(pick(["COUNT(*) > 1", "COUNT(*) >= 2", "SUM(score) > 3", "AVG(score) > 1", "MAX(score) >= 2"]))"
         }
         sql += " ORDER BY \(groupCol)"
         return sql
