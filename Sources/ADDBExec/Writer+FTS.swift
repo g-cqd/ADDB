@@ -172,7 +172,17 @@ extension Writer {
     static func collectMatches(
         _ predicate: SQLExpr?, table: TableDefinition, txn: borrowing WriteTxn, params: SQLParameters
     ) throws(DBError) -> [(rowid: Int64, values: [Value])] {
-        try txn.withRowCursor(table: table.name) { (cursor) throws(DBError) in
+        // Fast path: a `<col> = <const>` / `<col> IN (<const>…)` predicate over a single-column UNIQUE
+        // index seeks the matching rowid(s) instead of scanning the whole table. Without it an UPDATE or
+        // DELETE keyed on a unique column is O(rows) — and O(rows·k) for a k-element IN list, since the
+        // list is re-scanned per row — which dominates a point/small-set mutation on a large table. Each
+        // seeked row is re-checked against the FULL predicate, so the result is identical to the scan.
+        if let predicate,
+            let seeked = try seekUniqueMatches(predicate, table: table, txn: txn, params: params)
+        {
+            return seeked
+        }
+        return try txn.withRowCursor(table: table.name) { (cursor) throws(DBError) in
             var matches: [(rowid: Int64, values: [Value])] = []
             while let row = try cursor.next() {
                 if let predicate {
@@ -182,6 +192,91 @@ extension Writer {
                 matches.append((row.rowid, row.values))
             }
             return matches
+        }
+    }
+
+    /// The unique-index seek behind `collectMatches`. Returns the matching rows when `predicate` is a
+    /// `<col> = <const>` (either operand order) or `<col> IN (<const>…)` over a single-column UNIQUE index
+    /// whose constants are all TEXT — the crawl/serve keys (crawl path, document key) are TEXT, so the
+    /// seek value's storage class matches the stored key's and no row the scan would find is missed. Any
+    /// other shape/type returns `nil` → the caller scans (always correct, just not accelerated).
+    private static func seekUniqueMatches(
+        _ predicate: SQLExpr, table: TableDefinition, txn: borrowing WriteTxn, params: SQLParameters
+    ) throws(DBError) -> [(rowid: Int64, values: [Value])]? {
+        guard let (column, values) = try pointPredicate(predicate, table: table, params: params) else {
+            return nil
+        }
+        // TEXT-only: a TEXT seek matches a TEXT-stored unique key exactly (no affinity coercion, so no
+        // missed row vs. the scan). Non-TEXT constants fall back to the scan.
+        guard values.allSatisfy({ if case .text = $0 { true } else { false } }) else { return nil }
+        guard
+            let index = try txn.schema().indexes(on: table.name)
+                .first(where: {
+                    $0.unique && $0.columns.count == 1
+                        && $0.columns[0].lowercased() == column.lowercased()
+                })
+        else { return nil }
+
+        var matches: [(rowid: Int64, values: [Value])] = []
+        var seen = Set<Int64>()
+        for value in values {
+            guard let rowid = try txn.firstRowid(index: index.name, equals: [value]) else { continue }
+            guard seen.insert(rowid).inserted else { continue }  // an IN list may repeat a value
+            guard let row = try txn.row(in: table.name, rowid: rowid) else { continue }
+            // Re-check the FULL predicate on the candidate — the seek only narrows the search space; the
+            // predicate stays the source of truth, so the result is byte-identical to the scan.
+            let env = rowEnv(table: table, values: row.values, params: params, triggerCtx: txn.ctx)
+            if SQLEval.truth(try SQLEval.evaluate(predicate, env)) != .yes { continue }
+            matches.append((rowid, row.values))
+        }
+        return matches
+    }
+
+    /// Destructures `<col> = <const>` (either operand order) or `<col> IN (<const>…)` (not negated) into
+    /// the column name + resolved constant values, or `nil` when `predicate` isn't one of those shapes.
+    /// Constants are literals or bound parameters; any other operand (a column, an expression) yields nil.
+    private static func pointPredicate(
+        _ predicate: SQLExpr, table: TableDefinition, params: SQLParameters
+    ) throws(DBError) -> (column: String, values: [Value])? {
+        switch predicate {
+            case .binary(.eq, let lhs, let rhs):
+                if let column = columnName(lhs, table: table), let value = try constant(rhs, params) {
+                    return (column, [value])
+                }
+                if let column = columnName(rhs, table: table), let value = try constant(lhs, params) {
+                    return (column, [value])
+                }
+                return nil
+            case .inList(let columnExpr, let items, let negated) where !negated:
+                guard let column = columnName(columnExpr, table: table), !items.isEmpty else { return nil }
+                var values: [Value] = []
+                values.reserveCapacity(items.count)
+                for item in items {
+                    guard let value = try constant(item, params) else { return nil }
+                    values.append(value)
+                }
+                return (column, values)
+            default:
+                return nil
+        }
+    }
+
+    /// The column name of a bare column reference (raw `.column` or bind-time `.boundColumn`), else nil.
+    private static func columnName(_ expr: SQLExpr, table: TableDefinition) -> String? {
+        switch expr {
+            case .column(_, let name, _): return name
+            case .boundColumn(_, let column):
+                return table.columns.indices.contains(column) ? table.columns[column].name : nil
+            default: return nil
+        }
+    }
+
+    /// The value of a constant operand (literal or bound parameter), else nil.
+    private static func constant(_ expr: SQLExpr, _ params: SQLParameters) throws(DBError) -> Value? {
+        switch expr {
+            case .literal(let value): return value
+            case .parameter(let param, _): return try params.lookup(param)
+            default: return nil
         }
     }
 }
