@@ -221,7 +221,7 @@ struct GroupCommitTests {
         }
         #expect(db.count == 40)
         let resolver = CommittedResolver(source: db.pager)
-        let meta = db.shared.withLock { $0.meta }
+        let meta = db.shards[0].lock.withLock { $0.meta }
         _ = try KernelOps.checkLiveness(resolver, meta)
     }
 }

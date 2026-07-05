@@ -20,18 +20,26 @@ extension SelectExecutor {
     static let maxJoinTables = 64
 
     /// The resolved per-row evaluation environments: the column-loading `context`,
-    /// the per-row evaluator `env`, and the parameters-only `paramsEnv` (invariant folds).
+    /// the per-row evaluator `env`, the parameters-only `paramsEnv` (invariant folds),
+    /// plus the raw `params` and selected `evaluator` — everything needed to lower a
+    /// `RowContext` expression to a per-row thunk (`makeRowThunk`) inside the join
+    /// drivers (nested-loop `descend`, hash/semi-join probe).
     struct ScanEnv {
         let context: RowContext
         let env: SQLEvalEnv
         let paramsEnv: SQLEvalEnv
+        let params: SQLParameters
+        let evaluator: ExecutionOptions.Evaluator
     }
 
-    /// The residual WHERE and per-join ON predicates with query-invariant subtrees
-    /// already hoisted to constants (see `runJoin`).
+    /// The residual WHERE and per-join ON predicates lowered to per-row thunks —
+    /// compiled (`CompiledEval`) under the compiled-closures evaluator, tree-walk
+    /// otherwise (see `makeRowThunk`). Query-invariant subtrees are already hoisted to
+    /// constants before lowering (see `runJoin`). `joinOnThunks[i]` is the ON for
+    /// `plan.joins[i]`; `whereThunk` nil ⇒ no residual WHERE (always passes).
     struct FoldedPredicates {
-        let whereClause: SQLExpr?
-        let joinOn: [SQLExpr]
+        let whereThunk: CompiledEval.Thunk?
+        let joinOnThunks: [CompiledEval.Thunk]
     }
 
     /// A hash/merge join's equi-key structure pulled from an ON clause: the inner
@@ -68,8 +76,8 @@ extension SelectExecutor {
         }
 
         func passesWhere() throws(DBError) -> Bool {
-            guard let predicate = folded.whereClause else { return true }
-            return SQLEval.truth(try SQLEval.evaluate(predicate, scanEnv.env)) == .yes
+            guard let whereThunk = folded.whereThunk else { return true }
+            return SQLEval.truth(try whereThunk()) == .yes
         }
 
         /// Right-recursive descent: one joined table per level. ON filters during
@@ -120,7 +128,7 @@ extension SelectExecutor {
                 if existence {
                     matched = true
                     try descend(depth + 1)
-                } else if SQLEval.truth(try SQLEval.evaluate(folded.joinOn[depth - 1], scanEnv.env)) == .yes {
+                } else if SQLEval.truth(try folded.joinOnThunks[depth - 1]()) == .yes {
                     matched = true
                     try descend(depth + 1)
                 }
@@ -309,7 +317,12 @@ extension SelectExecutor {
         _ plan: BoundSelect, catalog: QueryCatalog, resolver: R, params: SQLParameters,
         outer: (context: RowContext, binding: QueryBinding)?, subquery: @escaping SubqueryRunner,
         execution: ExecutionOptions = .default,
-        mergeIndexes: (outer: Catalog.IndexRecord, inner: Catalog.IndexRecord)? = nil
+        mergeIndexes: (outer: Catalog.IndexRecord, inner: Catalog.IndexRecord)? = nil,
+        // streaming: when set AND the shape is streamable (no ORDER BY, no LIMIT/OFFSET,
+        // no DISTINCT), each projected row is emitted to this sink as produced and `[]`
+        // is returned — no full `[[Value]]` buffer. Every other join shape ignores it
+        // and returns the materialized rows. `sink` returns false to stop emitting.
+        sink: (([Value]) throws(DBError) -> Bool)? = nil
     ) throws(DBError) -> [SQLRow] {
         let context = RowContext(definitions: catalog.tables.map(\.definition))
         context.mergeIndexes = mergeIndexes
@@ -341,6 +354,46 @@ extension SelectExecutor {
             try SQLEval.foldInvariant(t.expr, paramsEnv)
         }
 
+        // Lower the WHERE / each ON / the projection outputs / the ORDER BY keys to
+        // per-row thunks ONCE (compiled under the compiled-closures evaluator, tree-walk
+        // otherwise). All evaluate against the composite `RowContext` via `env`, so a
+        // compiled thunk reads slots directly and bakes affinity/collation — skipping the
+        // recursive tree-walk on every candidate pair. The equi-key structural analysis
+        // below still reads the UNFOLDED `plan.joins[].on`, so it is untouched.
+        let makeThunk: (SQLExpr) -> CompiledEval.Thunk = {
+            makeRowThunk($0, context: context, params: params, env: env, evaluator: execution.evaluator)
+        }
+        let folded = FoldedPredicates(
+            whereThunk: foldedWhere.map(makeThunk), joinOnThunks: foldedJoinOn.map(makeThunk))
+        let outputThunks = foldedOutputs.map(makeThunk)
+        let orderThunks = foldedOrderBy.map(makeThunk)
+
+        // Streamable join: no ORDER BY (scan order is final), no LIMIT/OFFSET, no
+        // DISTINCT — the exact shape the materialized path below just projects and
+        // returns unsorted/unsliced. Emit each projected row to the sink as it is
+        // produced (O(1) row memory instead of the whole `[[Value]]`). The join scan
+        // always runs to completion (the nested-loop / hash / merge drivers never stop
+        // early), so — like the materialized path — EVERY row is still projected,
+        // preserving throw-on-any-row behaviour; `stopped` only gates further emits
+        // once the caller returns false, mirroring `for row in rows where !body(row)`.
+        if let sink, !collectKeys, !plan.distinct, bounds == nil {
+            var stopped = false
+            try forEachFilteredRow(
+                plan, catalog: catalog, resolver: resolver,
+                scanEnv: ScanEnv(
+                    context: context, env: env, paramsEnv: paramsEnv, params: params,
+                    evaluator: execution.evaluator),
+                execution: execution, folded: folded
+            ) { () throws(DBError) in
+                var projected: [Value] = []
+                projected.reserveCapacity(outputThunks.count)
+                for thunk in outputThunks { projected.append(try thunk()) }
+                if stopped { return }
+                if try !sink(projected) { stopped = true }
+            }
+            return []
+        }
+
         // Bounded top-N: an ORDER BY + small positive LIMIT (no DISTINCT) keeps only
         // `offset+limit` rows in a sorted buffer during the scan instead of
         // materializing and sorting every matched row — and projects the full output
@@ -359,18 +412,19 @@ extension SelectExecutor {
                     capacity: bound, terms: plan.orderBy, collations: plan.orderCollations)
                 try forEachFilteredRow(
                     plan, catalog: catalog, resolver: resolver,
-                    scanEnv: ScanEnv(context: context, env: env, paramsEnv: paramsEnv),
-                    execution: execution,
-                    folded: FoldedPredicates(whereClause: foldedWhere, joinOn: foldedJoinOn)
+                    scanEnv: ScanEnv(
+                        context: context, env: env, paramsEnv: paramsEnv, params: params,
+                        evaluator: execution.evaluator),
+                    execution: execution, folded: folded
                 ) { () throws(DBError) in
                     var keys: [Value] = []
-                    keys.reserveCapacity(foldedOrderBy.count)
-                    for term in foldedOrderBy { keys.append(try SQLEval.evaluate(term, env)) }
+                    keys.reserveCapacity(orderThunks.count)
+                    for thunk in orderThunks { keys.append(try thunk()) }
                     // Only project the full tuple when the row qualifies for the buffer.
                     if buffer.wouldDrop(keys) { return }
                     var projected: [Value] = []
-                    projected.reserveCapacity(foldedOutputs.count)
-                    for output in foldedOutputs { projected.append(try SQLEval.evaluate(output, env)) }
+                    projected.reserveCapacity(outputThunks.count)
+                    for thunk in outputThunks { projected.append(try thunk()) }
                     buffer.insert(keys: keys, row: projected)
                 }
                 let kept = buffer.sortedRows()
@@ -383,18 +437,19 @@ extension SelectExecutor {
         var sortKeys: [[Value]] = []
         try forEachFilteredRow(
             plan, catalog: catalog, resolver: resolver,
-            scanEnv: ScanEnv(context: context, env: env, paramsEnv: paramsEnv),
-            execution: execution,
-            folded: FoldedPredicates(whereClause: foldedWhere, joinOn: foldedJoinOn)
+            scanEnv: ScanEnv(
+                context: context, env: env, paramsEnv: paramsEnv, params: params,
+                evaluator: execution.evaluator),
+            execution: execution, folded: folded
         ) { () throws(DBError) in
             var projected: [Value] = []
-            projected.reserveCapacity(foldedOutputs.count)
-            for output in foldedOutputs { projected.append(try SQLEval.evaluate(output, env)) }
+            projected.reserveCapacity(outputThunks.count)
+            for thunk in outputThunks { projected.append(try thunk()) }
             rows.append(projected)
             if collectKeys {
                 var keys: [Value] = []
-                keys.reserveCapacity(foldedOrderBy.count)
-                for term in foldedOrderBy { keys.append(try SQLEval.evaluate(term, env)) }
+                keys.reserveCapacity(orderThunks.count)
+                for thunk in orderThunks { keys.append(try thunk()) }
                 sortKeys.append(keys)
             }
         }

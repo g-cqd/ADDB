@@ -89,6 +89,8 @@ struct SQLStreamingTests {
             ("ordered + LIMIT (materialized)", "SELECT id FROM t WHERE grp = 1 LIMIT 3", []),
             ("scan + OFFSET/LIMIT (materialized)", "SELECT id FROM t ORDER BY id LIMIT 7 OFFSET 5", []),
             ("aggregate (materialized)", "SELECT grp, COUNT(*) FROM t GROUP BY grp ORDER BY grp", []),
+            ("join no-order (streamed)", "SELECT t.id, g.label FROM t JOIN g ON t.grp = g.grp_id", []),
+            ("join + LIMIT (materialized)", "SELECT t.id, g.label FROM t JOIN g ON t.grp = g.grp_id LIMIT 8", []),
             ("join (materialized)", "SELECT t.id, g.label FROM t JOIN g ON t.grp = g.grp_id ORDER BY t.id", []),
             ("compound (materialized)", "SELECT id FROM t WHERE grp = 1 UNION ALL SELECT id FROM t WHERE grp = 2", [])
         ]
@@ -129,6 +131,26 @@ struct SQLStreamingTests {
                 return false
             }
         #expect(count == 1)
+    }
+
+    /// Early-exit over a streamed no-ORDER-BY join stops emitting the moment `body`
+    /// returns false — `body` runs for exactly the prefix, never for a later row
+    /// (the join scan runs to completion internally, but the sink is gated). This
+    /// pins the streamed-join path's stop semantics to the materialized path's
+    /// `for row in rows where !body(row)`.
+    @Test func earlyExitOverJoinStopsEmitting() throws {
+        let dir = TempDir()
+        defer { dir.cleanup() }
+        let db = try Self.makeDB(dir)
+        defer { db.close() }
+
+        var count = 0
+        try db.prepare("SELECT t.id, g.label FROM t JOIN g ON t.grp = g.grp_id")
+            .forEach { _ in
+                count += 1
+                return count < 4
+            }
+        #expect(count == 4)
     }
 
     /// A body that always returns true visits every row exactly once (no early stop).

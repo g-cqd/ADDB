@@ -2,6 +2,15 @@
   "originHash" : "f1d3f8d742d3d34c5a73ee34ed878df91a173a1707b0b320dd366d29ac4daafe",
   "pins" : [
     {
+      "identity" : "adbuildtools",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/g-cqd/ADBuildTools.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "73b253326153508852fe55f0eb4b7af843efb381"
+      }
+    },
+    {
       "identity" : "benchmark",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/ordo-one/benchmark",

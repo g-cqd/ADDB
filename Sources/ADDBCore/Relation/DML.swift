@@ -361,17 +361,20 @@ extension Relation {
     /// Conflict resolution + record/index writes shared by every insert form.
     /// `row` is fully assembled (defaults, types, NaN→NULL already applied) and
     /// `explicitRowid` is set iff the caller supplied the rowid-alias column.
-    /// The table's owned secondary indexes in name order. Under the hoisted INSERT path the roster is
-    /// cached per (transaction, tableId) — the index-name set is invariant within an INSERT statement,
-    /// so the filter+sort is paid once; the reference path recomputes it per row.
-    private static func ownedIndexNames(
+    /// The table's owned secondary indexes in name order, cached per (transaction,
+    /// tableId): the index-name set is invariant within an INSERT statement (triggers
+    /// cannot run DDL), so the filter + sort + allocation is paid once per table and
+    /// reused across every inserted row instead of recomputed per row. Invalidated
+    /// only by index-set DDL (`createIndex`/`dropIndex`/`dropTable`) and request-scope
+    /// rollback, which clear `hoistedRoster`.
+    static func ownedIndexNames(
         _ ctx: TxnContext, state: RelationState, tableId: UInt32
     ) -> [String] {
-        if ctx.insertHoistEnabled, let cached = ctx.hoistedRoster[tableId] { return cached }
+        if let cached = ctx.hoistedRoster[tableId] { return cached }
         let names = state.indexRecords.keys
             .filter { state.indexRecords[$0]!.tableId == tableId }
             .sorted()
-        if ctx.insertHoistEnabled { ctx.hoistedRoster[tableId] = names }
+        ctx.hoistedRoster[tableId] = names
         return names
     }
 
@@ -411,10 +414,10 @@ extension Relation {
         }
         // Owned secondary indexes in name order — reused by both the unique-conflict
         // scan and the write loop below (the roster is stable across an OR REPLACE
-        // delete, which changes handles, not the set of indexes). Under the hoisted
-        // path the roster is cached per (transaction, tableId): the index-name set is
-        // invariant within an INSERT statement, so the filter+sort+allocation is paid
-        // once instead of every row. The reference path recomputes it per row.
+        // delete, which changes handles, not the set of indexes). The roster is cached
+        // per (transaction, tableId): the index-name set is invariant within an INSERT
+        // statement, so the filter+sort+allocation is paid once per table instead of
+        // every row (invalidated by index-set DDL and request-scope rollback).
         let ownIndexNames = ownedIndexNames(ctx, state: state, tableId: table.tableId)
         for indexName in ownIndexNames where state.indexRecords[indexName]!.definition.unique {
             let index = state.indexRecords[indexName]!

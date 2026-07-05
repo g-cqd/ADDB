@@ -93,19 +93,28 @@ extension SelectExecutor {
         if overBudget { return false }  // build emitted nothing → caller falls back to nested loop
 
         // PROBE: scan the outer (leading) source; look up each outer row's matches.
+        // Lower the outer equi-key expressions (once per outer row) and the non-equi ON
+        // residual (once per matched pair) to thunks — compiled under the compiled-
+        // closures evaluator, tree-walk otherwise (`makeRowThunk`).
+        let equiOuterThunks = equiOuter.map {
+            makeRowThunk($0, context: context, params: scanEnv.params, env: env, evaluator: scanEnv.evaluator)
+        }
+        let onResidualThunk = onResidual.map {
+            makeRowThunk($0, context: context, params: scanEnv.params, env: env, evaluator: scanEnv.evaluator)
+        }
         let outerSource = try resolveSource(
             plan, table: tables[0], index: index, ftsRecords: ftsRecords, env: paramsEnv)
         unsafe try forEachRow(outerSource, table: tables[0], resolver: resolver) {
             rowid, span, score throws(DBError) in
             unsafe context.load(0, rowid: rowid, span: span, score: score)
             var probeValues: [Value] = []
-            probeValues.reserveCapacity(equiOuter.count)
-            for expr in equiOuter { probeValues.append(try SQLEval.evaluate(expr, env)) }
+            probeValues.reserveCapacity(equiOuterThunks.count)
+            for thunk in equiOuterThunks { probeValues.append(try thunk()) }
             if probeValues.contains(where: { $0.isNull }) { return true }  // NULL never matches
             guard let matches = hash[GroupKey(probeValues, collations: equiCollations)] else { return true }
             for match in matches {
                 context.loadMaterialized(innerDepth, rowid: match.rowid, values: match.values)
-                if let onResidual, SQLEval.truth(try SQLEval.evaluate(onResidual, env)) != .yes { continue }
+                if let onResidualThunk, SQLEval.truth(try onResidualThunk()) != .yes { continue }
                 try emit()
             }
             return true
@@ -133,6 +142,12 @@ extension SelectExecutor {
             return true
         }
         let emptySpan = unsafe UnsafeRawBufferPointer(start: nil, count: 0)
+        // Lower the outer equi-key expressions once (compiled or tree-walk).
+        let equiOuterThunks = equiKeys.outer.map {
+            makeRowThunk(
+                $0, context: context, params: scanEnv.params, env: scanEnv.env,
+                evaluator: scanEnv.evaluator)
+        }
         let outerSource = try resolveSource(
             plan, table: catalog.tables[0], index: catalog.index, ftsRecords: catalog.ftsRecords,
             env: scanEnv.paramsEnv)
@@ -140,8 +155,8 @@ extension SelectExecutor {
             rowid, span, score throws(DBError) in
             unsafe context.load(0, rowid: rowid, span: span, score: score)
             var probeValues: [Value] = []
-            probeValues.reserveCapacity(equiKeys.outer.count)
-            for expr in equiKeys.outer { probeValues.append(try SQLEval.evaluate(expr, scanEnv.env)) }
+            probeValues.reserveCapacity(equiOuterThunks.count)
+            for thunk in equiOuterThunks { probeValues.append(try thunk()) }
             if probeValues.contains(where: { $0.isNull }) { return true }  // NULL never matches
             guard let count = counts[GroupKey(probeValues, collations: equiKeys.collations)] else {
                 return true

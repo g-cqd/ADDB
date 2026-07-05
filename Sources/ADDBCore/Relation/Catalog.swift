@@ -85,11 +85,24 @@ public import ADSQLModel
         @_spi(ADDBEngine) public var tableId: UInt32
         @_spi(ADDBEngine) public var handle: TreeHandle
         @_spi(ADDBEngine) public var definition: TableDefinition
+        /// Column names in schema order, materialized once at construction. `Row`
+        /// building (`RowCursor.next`, `Relation.readRow`, and thus `row(in:)`) hands
+        /// this ONE shared array to every `Row` instead of rebuilding an identical
+        /// `[String]` per row in a scan/lookup loop. Derived purely from `definition`
+        /// (which is only ever set at init — DML mutates `handle`, ALTER builds a fresh
+        /// record), so it is excluded from `==`: equality stays byte-identical to the
+        /// pre-cache synthesized conformance (tableId + handle + definition).
+        @_spi(ADDBEngine) public let columnNames: [String]
 
         @_spi(ADDBEngine) public init(tableId: UInt32, handle: TreeHandle, definition: TableDefinition) {
             self.tableId = tableId
             self.handle = handle
             self.definition = definition
+            self.columnNames = definition.columns.map(\.name)
+        }
+
+        @_spi(ADDBEngine) public static func == (lhs: TableRecord, rhs: TableRecord) -> Bool {
+            lhs.tableId == rhs.tableId && lhs.handle == rhs.handle && lhs.definition == rhs.definition
         }
     }
 

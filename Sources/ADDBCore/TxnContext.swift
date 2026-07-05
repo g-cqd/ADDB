@@ -121,16 +121,18 @@ extension PageSource {
     var appendCursorEnabled = false
 
     /// Per-transaction cache of a table's owned secondary-index names, sorted,
-    /// keyed by tableId — used by the opt-in `hoisted` insert path so the per-row
-    /// filter+sort+allocation of the index roster is paid once. The index-name set
-    /// is invariant within a single INSERT statement (triggers cannot run DDL), so
-    /// this is filled lazily on first insert and invalidated only by index-set DDL
-    /// (`createIndex`/`dropIndex`/`dropTable`) and request-scope rollback (a
-    /// rolled-back CREATE/DROP INDEX would otherwise leave a stale roster).
+    /// keyed by tableId — so the INSERT path pays the per-row filter+sort+allocation
+    /// of the index roster once per table (every insert form; not gated). The
+    /// index-name set is invariant within a single INSERT statement (triggers cannot
+    /// run DDL), so this is filled lazily on first insert and invalidated only by
+    /// index-set DDL (`createIndex`/`dropIndex`/`dropTable`) and request-scope
+    /// rollback (a rolled-back CREATE/DROP INDEX would otherwise leave a stale roster).
     var hoistedRoster: [UInt32: [String]] = [:]
     /// Whether the opt-in `hoisted` insert fast path is active for this transaction
     /// (`DatabaseOptions.execution.insert ==.hoisted`); set once at ctx creation.
-    /// Default off → the per-row reference path.
+    /// Gates the COW write-back elision (dropping `ctx.relation`'s alias so the
+    /// write loop mutates in place). Default off → the proven per-row write-back.
+    /// (The index-roster cache above is unconditional, independent of this flag.)
     var insertHoistEnabled = false
 
     /// The relational layer's per-transaction state, held OPAQUELY behind the

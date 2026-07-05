@@ -55,6 +55,21 @@ extension SelectExecutor {
             try SQLEval.foldInvariant(t.expr, paramsEnv)
         }
 
+        // Lower the WHERE / each ON / the GROUP BY keys to per-row thunks ONCE (compiled
+        // under the compiled-closures evaluator, tree-walk otherwise): all three evaluate
+        // against the composite `RowContext` via `scanEnv`. The HAVING, the projection
+        // outputs, and the ORDER BY keys evaluate against the aggregate finalization env
+        // (`aggregateEnv` — representative columns + accumulator slots), which
+        // `CompiledEval` does not target, so they stay tree-walk below; the per-row
+        // aggregate ARGUMENTS likewise stay tree-walk (folded inside `GroupAccumulators`).
+        let makeThunk: (SQLExpr) -> CompiledEval.Thunk = {
+            makeRowThunk(
+                $0, context: context, params: params, env: scanEnv, evaluator: execution.evaluator)
+        }
+        let folded = FoldedPredicates(
+            whereThunk: foldedWhere.map(makeThunk), joinOnThunks: foldedJoinOn.map(makeThunk))
+        let groupKeyThunks = foldedGroupBy.map(makeThunk)
+
         // `OrderedDictionary` keeps the GROUP BY output order (first-insertion of each
         // key) intrinsically, so the finalization walk iterates it directly — no manual
         // `order: [GroupKey]` to keep in sync. Subscript-insert of a new key appends it;
@@ -71,16 +86,17 @@ extension SelectExecutor {
 
         try forEachFilteredRow(
             plan, catalog: catalog, resolver: resolver,
-            scanEnv: ScanEnv(context: context, env: scanEnv, paramsEnv: paramsEnv),
-            execution: execution,
-            folded: FoldedPredicates(whereClause: foldedWhere, joinOn: foldedJoinOn)
+            scanEnv: ScanEnv(
+                context: context, env: scanEnv, paramsEnv: paramsEnv, params: params,
+                evaluator: execution.evaluator),
+            execution: execution, folded: folded
         ) { () throws(DBError) in
             let key: GroupKey
             if noGroupBy {
                 key = implicitKey
             } else {
                 var parts: [Value] = []
-                for expr in foldedGroupBy { parts.append(try SQLEval.evaluate(expr, scanEnv)) }
+                for thunk in groupKeyThunks { parts.append(try thunk()) }
                 key = GroupKey(parts, collations: plan.groupCollations)
             }
             if groups[key] == nil {

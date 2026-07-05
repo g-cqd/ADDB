@@ -374,7 +374,7 @@ public struct Row: Equatable, Sendable {
         let values = try Relation.materializeRow(
             table: table, rowid: rowid, recordBytes: recordBytes)
         return Row(
-            rowid: rowid, names: table.definition.columns.map(\.name), values: values)
+            rowid: rowid, names: table.columnNames, values: values)
     }
 }
 
@@ -419,7 +419,7 @@ extension Relation {
             return nil
         }
         let values = try materializeRow(table: table, rowid: rowid, recordBytes: bytes)
-        return Row(rowid: rowid, names: table.definition.columns.map(\.name), values: values)
+        return Row(rowid: rowid, names: table.columnNames, values: values)
     }
 
     static func firstRowid(

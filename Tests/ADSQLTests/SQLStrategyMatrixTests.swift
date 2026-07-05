@@ -44,14 +44,54 @@ private enum MatrixFixture {
             }
     }
 
+    // A second table for the join scenarios. `ref` mostly points at a real `t.id`
+    // (INNER matches + LEFT null-extensions on the `t` rows nobody references) with a
+    // couple of dangling refs (28, 26) that match nothing. `label` is NOCASE so a
+    // `u.label = t.tag` ON conjunct exercises collation resolution across tables.
+    static let uColumns = ["uid", "ref", "label", "amount"]
+
+    static let uDefinition = TableDefinition(
+        "u",
+        columns: [
+            ColumnDefinition("uid", .integer, notNull: true),
+            ColumnDefinition("ref", .integer),  // → t.id (some dangling)
+            ColumnDefinition("label", .text, collation: .nocase),  // NOCASE, matches tags
+            ColumnDefinition("amount", .integer)  // NULLs
+        ],
+        primaryKey: .rowidAlias(column: "uid", autoincrement: true))
+
+    static let uSqliteDDL = """
+        CREATE TABLE u(
+          uid INTEGER PRIMARY KEY, ref INTEGER, label TEXT COLLATE NOCASE, amount INTEGER)
+        """
+
+    static let labels = ["x", "Y", "z"]  // NOCASE-equal to the `t.tags`
+
+    static func uRows() -> [[Value]] {
+        (1 ... 15)
+            .map { j in
+                let ref = Value.integer(Int64((j * 7) % 30))  // 1..28; 28 and 26 dangle
+                let label = Value.text(labels[j % labels.count])
+                let amount: Value = j % 5 == 0 ? .null : .integer(Int64((j * 3) % 20))
+                return [.integer(Int64(j)), ref, label, amount]
+            }
+    }
+
     static func make(_ dir: TempDir, evaluator: ExecutionOptions.Evaluator) throws -> Database {
         let db = try Database.open(
             at: dir.file("matrix-\(evaluator).adsql"),
             options: DatabaseOptions(execution: ExecutionOptions(evaluator: evaluator)))
-        try db.writeSync { (txn) throws(DBError) in try txn.createTable(definition) }
+        try db.writeSync { (txn) throws(DBError) in
+            try txn.createTable(definition)
+            try txn.createTable(uDefinition)
+        }
         for row in rows() {
             let dict = Dictionary(uniqueKeysWithValues: zip(columns, row))
             try db.writeSync { (txn) throws(DBError) in try txn.insert(into: "t", dict) }
+        }
+        for row in uRows() {
+            let dict = Dictionary(uniqueKeysWithValues: zip(uColumns, row))
+            try db.writeSync { (txn) throws(DBError) in try txn.insert(into: "u", dict) }
         }
         return db
     }
@@ -59,7 +99,9 @@ private enum MatrixFixture {
     static func mirror() throws -> SQLiteMirror {
         let m = SQLiteMirror()
         try m.exec(sqliteDDL)
+        try m.exec(uSqliteDDL)
         for row in rows() { try m.insertRow("t", columns, row) }
+        for row in uRows() { try m.insertRow("u", uColumns, row) }
         return m
     }
 }
@@ -94,7 +136,28 @@ struct SQLStrategyMatrixTests {
         "SELECT id, upper(name) AS u FROM t WHERE id <= 4 ORDER BY id",  // scalar function projection
         "SELECT id FROM t WHERE length(name) > 4 ORDER BY id",  // function in WHERE
         "SELECT id FROM t WHERE upper(name) = 'ALPHA' ORDER BY id",  // function inside a compiled comparison
-        "SELECT id, coalesce(score, -99) AS s FROM t ORDER BY id"  // coalesce over NULLs
+        "SELECT id, coalesce(score, -99) AS s FROM t ORDER BY id",  // coalesce over NULLs
+        // Newly compiled cases (FIX #2): JOIN + GROUP BY / HAVING. The ON / WHERE /
+        // group-key / join-output / join-order-by expressions evaluate against a
+        // RowContext, so `CompiledEval` targets them; the aggregate HAVING / output /
+        // order-by evaluate against the aggregate env and stay tree-walk. Each must
+        // remain compiled ≡ tree-walk ≡ SQLite, including LEFT null-extension, NOCASE
+        // cross-table compares, and NULL 3VL in the ON/WHERE.
+        "SELECT t.id, u.label FROM t JOIN u ON u.ref = t.id ORDER BY t.id, u.uid",  // INNER, single-conjunct ON
+        "SELECT t.id, u.amount FROM t LEFT JOIN u ON u.ref = t.id ORDER BY t.id, u.uid",  // LEFT null-extension
+        "SELECT t.id, u.uid FROM t JOIN u ON u.ref = t.id AND u.amount > 5 ORDER BY t.id, u.uid",  // multi-conjunct ON
+        "SELECT t.id, u.label FROM t JOIN u ON u.ref = t.id WHERE t.score > 0 ORDER BY t.id, u.uid",  // ON + residual WHERE
+        "SELECT t.id, u.amount + t.score AS s FROM t JOIN u ON u.ref = t.id ORDER BY t.id, u.uid",  // join output expr
+        "SELECT t.id, u.uid FROM t JOIN u ON u.ref = t.id AND u.label = t.tag ORDER BY t.id, u.uid",  // NOCASE cross-table ON
+        "SELECT t.name, u.label FROM t JOIN u ON u.ref = t.id WHERE u.amount IS NOT NULL ORDER BY t.id, u.uid",  // WHERE on inner col
+        "SELECT tag, count(*), sum(score) FROM t GROUP BY tag ORDER BY tag",  // grouped aggregate over NULL group
+        "SELECT tag, count(*) AS c FROM t GROUP BY tag HAVING count(*) >= 3 ORDER BY tag",  // HAVING on aggregate
+        "SELECT name, count(*), avg(weight) FROM t GROUP BY name ORDER BY name",  // avg REAL + text group key
+        "SELECT tag, sum(score) AS ss FROM t GROUP BY tag HAVING sum(score) > 0 OR tag = 'X' ORDER BY tag",  // HAVING agg + key
+        "SELECT count(*), sum(score), avg(weight), max(score), min(score) FROM t WHERE score IS NOT NULL",  // ungrouped multi-agg + WHERE
+        "SELECT score, count(*) FROM t WHERE score IS NOT NULL GROUP BY score ORDER BY score",  // integer group key + WHERE
+        "SELECT t.tag, count(*), sum(u.amount) FROM t JOIN u ON u.ref = t.id GROUP BY t.tag ORDER BY t.tag",  // aggregate over join
+        "SELECT t.tag, count(*) AS c FROM t JOIN u ON u.ref = t.id GROUP BY t.tag HAVING count(*) > 1 ORDER BY t.tag"  // join + GROUP BY + HAVING
     ]
 
     @Test(arguments: queries)

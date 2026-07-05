@@ -70,7 +70,7 @@ extension Database {
             }
             if batch.isEmpty { return }
 
-            guard let (meta, reclaimLimit, fts) = reclaimSnapshot() else {
+            guard let (meta, reclaimLimit, fts) = writeReclaimSnapshot() else {
                 for item in batch { item.fail(.databaseClosed) }
                 continue
             }
@@ -99,21 +99,6 @@ extension Database {
             }
             if completions.isEmpty { continue }
             commitBatch(ctx, completions, mainUnchanged: ctx.meta.mainTree == baselineMain)
-        }
-    }
-
-    /// Sweeps stale reader slots and snapshots the committed meta + the page-reclaim limit (the oldest
-    /// generation any live reader — local or cross-process — still needs); nil when the database closed.
-    private func reclaimSnapshot() -> (Meta, UInt64, (any FTSEvaluation)?)? {
-        readerTable.sweepStaleSlots()
-        let foreignMin = readerTable.minimumGeneration() ?? UInt64.max
-        return shared.withLock { state in
-            guard !state.closed else { return nil }
-            let localMin = state.readers.keys.min() ?? UInt64.max
-            return (
-                state.meta, state.meta.reclaimLimit(minReader: min(localMin, foreignMin)),
-                state.ftsEvaluator
-            )
         }
     }
 
@@ -151,7 +136,7 @@ extension Database {
             }
             let newMeta = try Committer.commit(
                 ctx: ctx, channel: channel, durability: options.durability)
-            shared.withLock { $0.meta = newMeta }
+            publishCommittedMeta(newMeta)
             if let state = ctx.relation { relationSchemaCache.publish(state.schema) }
             for completion in completions { completion(nil) }
         } catch {

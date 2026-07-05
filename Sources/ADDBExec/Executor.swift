@@ -42,7 +42,7 @@ enum SelectExecutor {
                 catalog: QueryCatalog(
                     tables: tables, index: index, joinIndexes: joinIndexes, ftsRecords: ftsRecords),
                 resolver: resolver, params: params, outer: outer, subquery: subquery, execution: execution,
-                mergeIndexes: mergeIndexes)
+                mergeIndexes: mergeIndexes, sink: sink)
         }
         // Index-ordered DISTINCT: emit one row per distinct index-key prefix, decoded
         // straight from the key (no table descent, no dedup set).
@@ -91,20 +91,41 @@ enum SelectExecutor {
         // Per-row evaluation: compile each expression once (compiled-closures path)
         // or wrap the tree-walk evaluator; an unsupported sub-expression falls back to
         // tree-walk so results are identical regardless of strategy.
-        let makeThunk: (SQLExpr) -> CompiledEval.Thunk = { expr in
-            if evaluator == .compiledClosures,
-                let compiled = CompiledEval.compile(expr, context: context, params: params, env: env)
-            {
-                return compiled
-            }
-            return { () throws(DBError) -> Value in try SQLEval.evaluate(expr, env) }
+        let makeThunk: (SQLExpr) -> CompiledEval.Thunk = {
+            makeRowThunk($0, context: context, params: params, env: env, evaluator: evaluator)
         }
-        // stream row-by-row only when nothing downstream needs the full set first —
-        // no LIMIT/OFFSET slice (`bounds`), no post-scan sort (`collectKeys`), no bounded
-        // top-N. (A LIMIT query is already memory-bounded, so it materializes-then-iterates.)
-        let canStream = sink != nil && bounds == nil && !collectKeys && topN == nil
+        // stream row-by-row when nothing downstream needs the full set first. Two
+        // streamable shapes, both requiring no post-scan sort (`collectKeys`) and no
+        // bounded top-N:
+        //  • unbounded: no LIMIT/OFFSET slice — every surviving row is a final result.
+        //  • LIMIT-only: a LIMIT with NO OFFSET, NO ORDER BY, NO DISTINCT — stream and
+        //    stop after exactly `limit` emissions (never materialize up to offset+limit).
+        //    With no ORDER BY the scan order is final, so the first `limit` scanned rows
+        //    are byte-identical to the materialize-then-slice path's `rows[0 ..< limit]`.
+        let sortFree = !collectKeys && topN == nil
+        let streamLimit: Int? = {
+            guard sink != nil, sortFree, !plan.distinct, plan.orderBy.isEmpty,
+                let bounds, bounds.offset == 0, let limit = bounds.limit
+            else { return nil }
+            return limit
+        }()
+        let canStream = sink != nil && sortFree && (bounds == nil || streamLimit != nil)
         // Pass the sink to `consume` (non-escaping) only when streamable; nil otherwise.
-        let streamSink = canStream ? sink : nil
+        // Under a LIMIT, wrap it so the scan halts after exactly `streamLimit` emissions
+        // (LIMIT 0 emits none). The guard is exact: the wrapper stops the moment the
+        // count reaches the limit, so `body` sees precisely `limit` rows, in order.
+        var streamedCount = 0
+        let streamSink: (([Value]) throws(DBError) -> Bool)?
+        if canStream, let streamLimit, let realSink = sink {
+            streamSink = { (values) throws(DBError) -> Bool in
+                if streamedCount >= streamLimit { return false }
+                let proceed = try realSink(values)
+                streamedCount += 1
+                return proceed && streamedCount < streamLimit
+            }
+        } else {
+            streamSink = canStream ? sink : nil
+        }
         let accumulator = Accumulator(
             context: context,
             residualThunk: foldedResidual.map(makeThunk),

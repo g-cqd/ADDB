@@ -43,6 +43,14 @@ import ADSQLModel
     private var score: Double = 0
     private var span = unsafe UnsafeRawBufferPointer(start: nil, count: 0)
     private var cache: [Value?]
+    /// Per-column validity stamp for `cache`: entry `i` is live only when
+    /// `stamps[i] == generation`. `load` bumps `generation` (O(1)) instead of
+    /// nil-ing the whole cache every row, so a scan touching 1–2 columns of a wide
+    /// table no longer pays an O(columns) reset per re-point. `generation` is
+    /// monotonic (bumped once per row), so a stale stamp can never alias the
+    /// current one, and an entry from a prior row is simply ignored (not read).
+    private var stamps: [Int]
+    private var generation = 0
     // Incremental cell location: `offsets[i]` is the byte start of stored cell i,
     // filled lazily up to the highest column read. Reused across rows (storage
     // kept), so a sort-key-only scan pays no per-row [Int] allocation and walks
@@ -58,6 +66,7 @@ import ADSQLModel
         self.aliasIndex = table.rowidAliasIndex
         self.scoreIndex = table.ftsScoreIndex
         self.cache = Array(repeating: nil, count: table.columns.count)
+        self.stamps = Array(repeating: 0, count: table.columns.count)
         self.offsets = []
         self.offsets.reserveCapacity(table.columns.count)
     }
@@ -79,7 +88,9 @@ import ADSQLModel
         self.headerParsed = false
         self.locatedCount = 0
         self.offsets.removeAll(keepingCapacity: true)
-        for index in cache.indices { cache[index] = nil }
+        // O(1) cache reset: a new generation invalidates every entry at once
+        // (stamps no longer match), instead of writing nil across all columns.
+        self.generation &+= 1
     }
 
     /// Loads a fully materialized row (no span). The hash-join build side decodes
@@ -90,13 +101,20 @@ import ADSQLModel
         self.rowid = rowid
         self.score = 0
         self.coveringIncludes = nil  // fully pre-cached; no span/covering read
-        for index in cache.indices { cache[index] = index < values.count ? values[index] : nil }
+        self.generation &+= 1
+        // Stamp each supplied column live for this generation; columns past
+        // `values.count` stay unstamped (⇒ absent from the cache, as before).
+        for index in cache.indices where index < values.count {
+            cache[index] = values[index]
+            stamps[index] = generation
+        }
     }
 
     func value(at index: Int) throws(DBError) -> Value {
-        if let cached = cache[index] { return cached }
+        if stamps[index] == generation, let cached = cache[index] { return cached }
         let value = try compute(at: index)
         cache[index] = value
+        stamps[index] = generation
         return value
     }
 

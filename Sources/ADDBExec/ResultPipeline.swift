@@ -147,6 +147,31 @@ extension SelectExecutor {
             scalarSubquery: { sub throws(DBError) in try subquery(sub, context, binding) })
     }
 
+    /// Builds the per-row evaluation thunk for a `RowContext` expression: under the
+    /// compiled-closures evaluator it lowers `expr` ONCE via `CompiledEval` (falling
+    /// back to tree-walk for any unsupported sub-expression, exactly as the
+    /// single-table path does), otherwise it wraps the tree-walk evaluator. Shared by
+    /// the join and aggregate paths for the ON / WHERE / group-key / join-output /
+    /// join-order-by expressions — the per-row / per-candidate-pair work that
+    /// previously always tree-walked. Semantics are identical either way (the
+    /// strategy-matrix differential gate locks compiled ≡ tree-walk ≡ SQLite); only
+    /// the resolution timing changes.
+    ///
+    /// Not used for the aggregate HAVING / output / ORDER BY, which evaluate against
+    /// the aggregate finalization env (`representative[table][column]` + accumulator
+    /// slots) that `CompiledEval` does not target — those stay tree-walk.
+    static func makeRowThunk(
+        _ expr: SQLExpr, context: RowContext, params: SQLParameters, env: SQLEvalEnv,
+        evaluator: ExecutionOptions.Evaluator
+    ) -> CompiledEval.Thunk {
+        if evaluator == .compiledClosures,
+            let compiled = CompiledEval.compile(expr, context: context, params: params, env: env)
+        {
+            return compiled
+        }
+        return { () throws(DBError) -> Value in try SQLEval.evaluate(expr, env) }
+    }
+
     // MARK: - DISTINCT
 
     /// First-occurrence dedup under `=` semantics (numeric classes unify, the

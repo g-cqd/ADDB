@@ -276,6 +276,166 @@ struct DatabaseConcurrencyTests {
         let current = try db.read { (txn) throws(DBError) in try txn.get(Array("k".utf8)) }
         #expect(current == Array("new-29".utf8))
     }
+
+    /// FIX #8 (striped reader registration) stress: many concurrent striped readers
+    /// hammer SQL snapshots while one writer runs a heavy insert/update/delete loop
+    /// with a periodic integrity checkpoint. Each committed generation `s` leaves the
+    /// table in a state that is a PURE FUNCTION `f(s)` — the live ids are exactly
+    /// `{ id : id % 8 != s % 8 }`, every row stamped `s` — so ANY atomic snapshot a
+    /// reader observes must equal `f(s)` for the single stamp `s` it sees. That `f(s)`
+    /// is the serial oracle (a serial, reader-free execution reaches the same pure
+    /// state). A torn snapshot (mixed stamps, a wrong id set, or a page the writer
+    /// reclaimed out from under the reader) makes the snapshot ≠ `f(s)` or throws — so
+    /// this asserts the reclamation lower-bound invariant holds under the striped
+    /// registration path. `verifyIntegrity` is the checkpoint: it re-reads as a fresh
+    /// snapshot and validates page liveness, the direct signal of an over-eager reclaim.
+    @Test func stripedReadersStayConsistentUnderChurnAndMatchSerialOracle() throws {
+        let dir = TempDir()
+        defer { dir.cleanup() }
+        // `.none` durability: reader registration and page reclamation are independent
+        // of fsync, so skip it to fit far more generations (more race exposure) per second.
+        let db = try Database.open(
+            at: dir.file("striped-stress.adsql"), options: DatabaseOptions(durability: .none))
+        defer { db.close() }
+        try db.writeSync { (txn) throws(DBError) in
+            try txn.createTable(
+                TableDefinition(
+                    "t",
+                    columns: [
+                        ColumnDefinition("id", .integer, notNull: true),
+                        ColumnDefinition("stamp", .integer, notNull: true),
+                        ColumnDefinition("payload", .text, notNull: true)
+                    ],
+                    primaryKey: .rowidAlias(column: "id", autoincrement: true)))
+        }
+
+        let idCount = 64
+        let generations = 300
+        let filler = String(repeating: "x", count: 220)  // ~240-byte rows → real page churn
+        func residue(_ s: Int) -> Int { ((s % 8) + 8) % 8 }
+        func liveIDs(_ s: Int) -> [Int] { (0 ..< idCount).filter { $0 % 8 != residue(s) } }
+        func payload(_ id: Int) -> String { "row-\(id)-\(filler)" }  // constant per id
+
+        // Precompute the serial oracle f(s) (id → payload) for every stamp, so the
+        // @Sendable reader closures capture only a plain Sendable value, never a local
+        // function.
+        let oracles: [[Int: String]] = (0 ... generations)
+            .map { s in
+                Dictionary(uniqueKeysWithValues: liveIDs(s).map { ($0, payload($0)) })
+            }
+
+        // Seed f(0).
+        try db.transaction { (txn) throws(DBError) in
+            for id in liveIDs(0) {
+                try txn.run("INSERT INTO t(id, stamp, payload) VALUES(\(id), 0, '\(payload(id))')")
+            }
+        }
+
+        let stopped = Mutex(false)
+        let failures = Mutex<[String]>([])
+        let snapshotCount = Atomic<UInt64>(0)
+        let group = DispatchGroup()
+
+        let readerCount = 16
+        for _ in 0 ..< readerCount {
+            DispatchQueue.global()
+                .async(group: group) {
+                    guard let select = try? db.prepare("SELECT id, stamp, payload FROM t") else {
+                        failures.withLock { $0.append("prepare failed") }
+                        return
+                    }
+                    while !stopped.withLock({ $0 }) {
+                        do {
+                            let rows = try select.all().map(\.values)
+                            snapshotCount.wrappingAdd(1, ordering: .relaxed)
+                            var stamp: Int64?
+                            var content: [Int: String] = [:]
+                            for row in rows {
+                                guard case .integer(let id) = row[0], case .integer(let st) = row[1],
+                                    case .text(let pay) = row[2]
+                                else {
+                                    failures.withLock { $0.append("bad row shape \(row)") }
+                                    return
+                                }
+                                if let stamp, stamp != st {
+                                    failures.withLock { $0.append("torn snapshot: mixed stamps") }
+                                    return
+                                }
+                                stamp = st
+                                content[Int(id)] = pay
+                            }
+                            let s = Int(stamp ?? 0)
+                            guard s >= 0, s <= generations else {
+                                failures.withLock { $0.append("stamp \(s) out of range") }
+                                return
+                            }
+                            // The snapshot must EXACTLY equal the serial oracle f(s):
+                            // same id set (no reclaimed/duplicated row) and same payloads.
+                            if content != oracles[s] {
+                                failures.withLock {
+                                    $0.append("snapshot at stamp \(s) != oracle (\(rows.count) rows)")
+                                }
+                                return
+                            }
+                        } catch {
+                            failures.withLock { $0.append("read threw: \(error)") }
+                            return
+                        }
+                    }
+                }
+        }
+
+        // Writer: `generations` atomic insert/update/delete transactions, each leaving
+        // the table at exactly f(s); a periodic integrity checkpoint runs as a reader.
+        var writerError: (any Error)?
+        do {
+            for s in 1 ... generations {
+                let dead = Array(stride(from: residue(s), to: idCount, by: 8))  // id % 8 == s % 8
+                let born = Array(stride(from: residue(s - 1), to: idCount, by: 8))  // id % 8 == (s-1) % 8
+                try db.transaction { (txn) throws(DBError) in
+                    if !dead.isEmpty {
+                        try txn.run(
+                            "DELETE FROM t WHERE id IN (\(dead.map(String.init).joined(separator: ",")))")
+                    }
+                    for id in born {
+                        try txn.run("INSERT INTO t(id, stamp, payload) VALUES(\(id), \(s), '\(payload(id))')")
+                    }
+                    try txn.run("UPDATE t SET stamp = \(s)")
+                }
+                if s % 25 == 0 { _ = try db.verifyIntegrity() }  // checkpoint
+            }
+        } catch {
+            writerError = error
+        }
+        stopped.withLock { $0 = true }
+        group.wait()
+
+        #expect(writerError == nil, "writer failed: \(String(describing: writerError))")
+        let seen = failures.withLock { $0 }
+        #expect(seen.isEmpty, "\(seen.prefix(3))")
+
+        // Serial oracle for the FINAL state: exactly f(generations).
+        let finalRows = try db.prepare("SELECT id, stamp, payload FROM t").all().map(\.values)
+        var finalContent: [Int: String] = [:]
+        var finalStampsUniform = true
+        for row in finalRows {
+            guard case .integer(let id) = row[0], case .integer(let st) = row[1], case .text(let pay) = row[2]
+            else {
+                Issue.record("bad final row shape")
+                continue
+            }
+            if st != Int64(generations) { finalStampsUniform = false }
+            finalContent[Int(id)] = pay
+        }
+        #expect(finalStampsUniform, "final rows not all stamped \(generations)")
+        #expect(finalContent == oracles[generations], "final state != serial oracle f(\(generations))")
+
+        // The readers actually ran many concurrent snapshots (race exposure sanity).
+        let total = snapshotCount.load(ordering: .relaxed)
+        #expect(total > UInt64(generations), "readers barely ran (\(total) snapshots)")
+
+        _ = try db.verifyIntegrity()
+    }
 }
 
 private func stampValue(_ stamp: UInt64) -> [UInt8] {

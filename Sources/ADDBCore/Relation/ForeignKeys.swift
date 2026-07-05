@@ -10,11 +10,16 @@ import ADSQLModel
 /// at delete time. Worklist-driven, so chains (documents → sections →
 /// chunks) and self-references terminate (rows physically disappear).
 extension Relation {
-    /// Child FK edges pointing at `parentName`, with the index that serves them.
+    /// Child FK edges pointing at `parentName`: the child table, the FK, and the NAME
+    /// of the index that serves the cascade probe. Only the (schema-invariant) index
+    /// name is returned — not the `IndexRecord` — because a cascade mutates index tree
+    /// handles as it deletes, so the caller re-resolves the live record from the
+    /// current state per use. This structure is invariant across a DELETE (rows, not
+    /// schema, change), so `processDeleteActions` memoizes it per parent.
     static func childEdges(
         state: RelationState, parent parentName: String
-    ) throws(DBError) -> [(table: String, fk: ForeignKey, index: Catalog.IndexRecord)] {
-        var edges: [(table: String, fk: ForeignKey, index: Catalog.IndexRecord)] = []
+    ) throws(DBError) -> [(table: String, fk: ForeignKey, indexName: String)] {
+        var edges: [(table: String, fk: ForeignKey, indexName: String)] = []
         for childName in state.tableRecords.keys.sorted() {
             let child = state.tableRecords[childName]!
             for fk in child.definition.foreignKeys where fk.parentTable == parentName {
@@ -32,7 +37,7 @@ extension Relation {
                         "ON DELETE on \(parentName) requires an index leading with "
                             + "\(childName).\(column)")
                 }
-                edges.append((table: childName, fk: fk, index: index))
+                edges.append((table: childName, fk: fk, indexName: index.definition.name))
             }
         }
         return edges
@@ -73,12 +78,33 @@ extension Relation {
         _ ctx: TxnContext, deleted: [(table: String, rowid: Int64)]
     ) throws(DBError) {
         var worklist = deleted
+        // Memo of each parent's structural child edges (child table + FK + serving index
+        // name), computed lazily as parents are first encountered. The schema is fixed
+        // across a cascade — only rows and index tree handles change — so the
+        // O(all-tables × all-indexes) edge scan is paid once per distinct parent instead
+        // of once per deleted row (the win on a bulk delete, whose worklist repeats one
+        // parent, and on a wide chain). The live index/table RECORDS, whose handles the
+        // cascade updates, are re-resolved from the current state each iteration; only
+        // the invariant structure is cached. Lazy per-parent keying preserves the
+        // original error timing (a parent never reached is never scanned/validated).
+        var edgeCache: [String: [(table: String, fk: ForeignKey, indexName: String)]] = [:]
         while let (parentName, parentRowid) = worklist.popLast() {
             let state = try ensureState(ctx)
-            for edge in try childEdges(state: state, parent: parentName) {
-                guard let childTable = state.tableRecords[edge.table] else { continue }
+            let edges: [(table: String, fk: ForeignKey, indexName: String)]
+            if let cached = edgeCache[parentName] {
+                edges = cached
+            } else {
+                edges = try childEdges(state: state, parent: parentName)
+                edgeCache[parentName] = edges
+            }
+            for edge in edges {
+                // Re-resolve the live child table + serving index (fresh handles) from the
+                // current state; the cascade updated them as it deleted earlier victims.
+                guard let childTable = state.tableRecords[edge.table],
+                    let index = state.indexRecords[edge.indexName]
+                else { continue }
                 let victims = try referencingRowids(
-                    ctx, index: edge.index, table: childTable, parentRowid: parentRowid)
+                    ctx, index: index, table: childTable, parentRowid: parentRowid)
                 guard !victims.isEmpty else { continue }
                 switch edge.fk.onDelete {
                     case .restrict:

@@ -84,6 +84,11 @@ extension Relation {
         let oldRow = try materializeRow(table: table, rowid: rowid, recordBytes: recordBytes)
 
         var newRow = oldRow
+        // Schema indices this UPDATE actually assigns, collected as the SET is applied.
+        // An index none of whose key/INCLUDE columns lie in this set reads only cells
+        // that oldRow and newRow share, so its entry is byte-identical — re-keying it
+        // is skipped below (see the roster loop).
+        var changedColumns = Set<Int>()
         for (name, provided) in set {
             guard let columnIndex = definition.columnIndex(of: name) else {
                 throw DBError.noSuchColumn(table: tableName, column: name)
@@ -103,18 +108,30 @@ extension Relation {
                 throw DBError.notNullViolation(table: tableName, column: name)
             }
             newRow[columnIndex] = value
+            changedColumns.insert(columnIndex)
         }
 
-        // Index maintenance for changed keys only, with unique pre-checks.
-        let ownIndexNames = state.indexRecords.keys.sorted()
-            .filter {
-                state.indexRecords[$0]!.tableId == table.tableId
-            }
+        // Index maintenance for changed keys only, with unique pre-checks. The roster
+        // is hoisted (cached per (txn, tableId)) rather than filtered + sorted per row.
+        let ownIndexNames = ownedIndexNames(ctx, state: state, tableId: table.tableId)
         // An entry is rewritten when its key changes, or — for a covering index —
         // when only its stored INCLUDE value changes (key-stable, value-only update).
         var changedIndexes: [ChangedIndex] = []
         for indexName in ownIndexNames {
             let index = state.indexRecords[indexName]!
+            // Skip an index whose key + INCLUDE columns the SET does not touch: its
+            // entry is a pure function of unchanged cells and the fixed rowid, so old
+            // and new keys/values are identical — encoding them would be dead work (the
+            // `keyChanged || valueChanged` guard below would drop it anyway). Columns are
+            // resolved through `columnIndex(of:)`, exactly as `indexEntryKey` reads them.
+            let touched =
+                index.definition.columns.contains {
+                    changedColumns.contains(definition.columnIndex(of: $0)!)
+                }
+                || index.definition.includes.contains {
+                    changedColumns.contains(definition.columnIndex(of: $0)!)
+                }
+            guard touched else { continue }
             let oldKey = try indexEntryKey(index: index, table: table, row: oldRow, rowid: rowid)
             let newKey = try indexEntryKey(index: index, table: table, row: newRow, rowid: rowid)
             let keyChanged = oldKey != newKey
