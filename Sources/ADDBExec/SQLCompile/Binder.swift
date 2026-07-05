@@ -1,19 +1,18 @@
 import ADSQL
 @_spi(ADDBEngine) import ADSQLModel
 
-/// Public validation entry: binds `select` against `schema` purely to surface the
-/// binder's semantic checks (table/column resolution, aggregate rules, collations)
-/// as a typed `DBError`, discarding the bound plan. Lets the builder DSL's
-/// `validate(against:)` fail early without exposing `Binder`/`BoundQuery`.
-func validateQuery(_ select: SQLSelect, schema: Schema) throws(DBError) {
-    _ = try Binder.bindQuery(select, schema: schema)
-}
-
 /// The binder: turns a parsed `SQLSelect` into a `BoundSelect`/`BoundQuery`
 /// (the abstract syntax resolved against a concrete schema version), including
 /// access selection, join-equality analysis, aggregate rewriting, and column
 /// binding. The bound-plan data types it produces live in `Plan.swift`.
 enum Binder {
+    /// Public validation entry: binds `select` against `schema` purely to surface the binder's semantic
+    /// checks (table/column resolution, aggregate rules, collations) as a typed `DBError`, discarding the
+    /// bound plan. Lets the builder DSL's `validate(against:)` fail early without exposing `BoundQuery`.
+    static func validate(_ select: SQLSelect, schema: Schema) throws(DBError) {
+        _ = try bindQuery(select, schema: schema)
+    }
+
     /// Maximum number of arms in one compound SELECT (`A UNION B UNION …`), mirroring SQLite's
     /// `SQLITE_LIMIT_COMPOUND_SELECT` (default 500). Without it a pathological compound chain would
     /// bind every arm unbounded; the cap surfaces a typed `DBError` instead. Same bounded-idiom as
@@ -105,7 +104,7 @@ enum Binder {
             }
             if schema.ftsTables[reference.name] != nil {
                 return TableBinding(
-                    reference: reference, definition: syntheticFTSDefinition(reference.name), isFTS: true)
+                    reference: reference, definition: TableDefinition.syntheticFTS(reference.name), isFTS: true)
             }
             throw DBError.noSuchTable(reference.name)
         }

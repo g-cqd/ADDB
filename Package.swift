@@ -65,6 +65,8 @@ let libraryBuildPlugins: [Target.PluginUsage] =
 let adsqlModel: Target.Dependency = .product(name: "ADSQLModel", package: "ADSQL")
 let adsql: Target.Dependency = .product(name: "ADSQL", package: "ADSQL")
 let adfCore: Target.Dependency = .product(name: "ADFCore", package: "ADFoundation")
+// Runtime-dispatched SIMD byte kernels (shared NOCASE ASCII fold).
+let adfKernels: Target.Dependency = .product(name: "ADFKernels", package: "ADFoundation")
 let adfIO: Target.Dependency = .product(name: "ADFIO", package: "ADFoundation")
 let adfUnicode: Target.Dependency = .product(name: "ADFUnicode", package: "ADFoundation")
 let adjsonCore: Target.Dependency = .product(name: "ADJSONCore", package: "ADJSON")
@@ -219,7 +221,7 @@ let package = Package(
             ],
             swiftSettings: strictSettings),
         .target(
-            name: "ADDBCore", dependencies: [adfCore, adfIO, adfUnicode, adsqlModel],
+            name: "ADDBCore", dependencies: [adfCore, adfKernels, adfIO, adfUnicode, adsqlModel],
             swiftSettings: kernelSettings, plugins: libraryBuildPlugins),
         .target(
             name: "ADDBExec", dependencies: ["ADDBCore", adsql, adsqlModel, orderedCollections],

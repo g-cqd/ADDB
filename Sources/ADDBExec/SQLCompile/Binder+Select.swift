@@ -40,7 +40,7 @@ extension Binder {
         for raw in rawJoins {
             let inner = tables[raw.depth]
             let innerDefinition =
-                inner.isFTS ? syntheticFTSDefinition(inner.table) : schema.tables[inner.table]!
+                inner.isFTS ? TableDefinition.syntheticFTS(inner.table) : schema.tables[inner.table]!
             let innerIndexes = inner.isFTS ? [] : schema.indexes(on: inner.table)
             let equalities = joinEqualities(raw.on, binding: binding, innerDepth: raw.depth)
             let (access, covered) = Planner.planJoin(
@@ -246,7 +246,7 @@ extension Binder {
         // strip it from the residual WHERE on every path.
         let source = tables[0]
         let sourceDefinition =
-            source.isFTS ? syntheticFTSDefinition(source.table) : schema.tables[source.table]!
+            source.isFTS ? TableDefinition.syntheticFTS(source.table) : schema.tables[source.table]!
         let sourceIndexes = source.isFTS ? [] : schema.indexes(on: source.table)
         let planning = Planner.plan(
             where: select.whereExpr, orderBy: select.orderBy, source: source,

@@ -47,7 +47,7 @@ extension Statement {
                 tables.append(
                     Catalog.TableRecord(
                         tableId: record.ftsId, handle: .empty,
-                        definition: syntheticFTSDefinition(binding.table)))
+                        definition: TableDefinition.syntheticFTS(binding.table)))
             } else {
                 tables.append(try txn.tableRecord(binding.table))
             }
@@ -138,7 +138,7 @@ extension Statement {
                 tables.append(
                     Catalog.TableRecord(
                         tableId: record.ftsId, handle: .empty,
-                        definition: syntheticFTSDefinition(binding.table)))
+                        definition: TableDefinition.syntheticFTS(binding.table)))
             } else {
                 tables.append(
                     try resolveTable(binding.table, resolver: resolver, meta: meta, cache: schemaCache))

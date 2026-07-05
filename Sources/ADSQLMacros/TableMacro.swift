@@ -53,7 +53,7 @@ struct TableMacro: ExtensionMacro {
                 }
                 let slot = decodeLines.count
                 columnDefs.append(
-                    "ColumnDefinition(\(swiftStringLiteral(name)), .\(column.affinity), notNull: \(column.notNull))")
+                    "ColumnDefinition(\(SwiftSource.stringLiteral(name)), .\(column.affinity), notNull: \(column.notNull))")
                 decodeLines.append(decodeLine(name: name, table: tableName, slot: slot, column: column))
             }
         }
@@ -69,7 +69,7 @@ struct TableMacro: ExtensionMacro {
             extension \(type.trimmed): TableRow {
               public static var tableDefinition: TableDefinition {
                 TableDefinition(
-                  \(raw: swiftStringLiteral(tableName)),
+                  \(raw: SwiftSource.stringLiteral(tableName)),
                   columns: [
                     \(raw: columns)
                   ])
@@ -139,13 +139,13 @@ struct TableMacro: ExtensionMacro {
     private static func decodeLine(name: String, table: String, slot: Int, column: Column) -> String {
         let bound = "value\(slot)"
         let expected = column.valueCase.uppercased()
-        let target = "self.\(escapedIdentifier(name))"
+        let target = "self.\(SwiftSource.escapedIdentifier(name))"
         if column.notNull {
-            let message = swiftStringLiteral("\(table).\(name): expected \(expected)")
+            let message = SwiftSource.stringLiteral("\(table).\(name): expected \(expected)")
             return "guard case .\(column.valueCase)(let \(bound)) = row[\(slot)] else "
                 + "{ throw DBError.sqlRuntime(\(message)) }\n\(target) = \(column.convert(bound))"
         }
-        let nullMessage = swiftStringLiteral("\(table).\(name): expected \(expected) or NULL")
+        let nullMessage = SwiftSource.stringLiteral("\(table).\(name): expected \(expected) or NULL")
         return "if case .null = row[\(slot)] { \(target) = nil } "
             + "else if case .\(column.valueCase)(let \(bound)) = row[\(slot)] { \(target) = \(column.convert(bound)) } "
             + "else { throw DBError.sqlRuntime(\(nullMessage)) }"

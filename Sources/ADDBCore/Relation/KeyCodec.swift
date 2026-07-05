@@ -1,4 +1,5 @@
 import ADFCore
+import ADFKernels
 public import ADSQLModel
 
 /// Order-preserving key encoding: memcmp order over encoded bytes equals
@@ -262,9 +263,17 @@ public import ADSQLModel
         return (bits & 0x8000_0000_0000_0000) != 0 ? ~bits : bits | 0x8000_0000_0000_0000
     }
 
-    /// SQLite NOCASE: ASCII A–Z only.
+    /// Minimum length for the SIMD fold to beat the inline scalar loop (below it the C-call/allocation
+    /// overhead dominates). Conservative; tune from the ADDBSuite crossover like `simdMinBytes`.
+    @usableFromInline static let kernelFoldMinBytes = 32
+
+    /// SQLite NOCASE: ASCII A–Z only. Long values fold via the shared runtime-dispatched SIMD kernel
+    /// (NEON/SSE2/AVX2); short keys — the common case — keep the branch-predictable inline loop.
     @inline(__always)
     @_spi(ADDBEngine) public static func asciiFolded(_ bytes: [UInt8]) -> [UInt8] {
+        if bytes.count >= kernelFoldMinBytes {
+            return ADFKernels.foldedASCII(bytes)
+        }
         var out = bytes
         for i in out.indices where out[i] >= 0x41 && out[i] <= 0x5A {
             out[i] |= 0x20

@@ -33,7 +33,7 @@ extension Query {
     /// opening a write or materializing rows.
     public func validate(against schema: Schema) throws(SQLBuildError) {
         do throws(DBError) {
-            try validateQuery(makeSelect(), schema: schema)
+            try Binder.validate(makeSelect(), schema: schema)
         } catch {
             throw SQLBuildError(error)
         }

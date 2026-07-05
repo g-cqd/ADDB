@@ -59,15 +59,17 @@ struct TableBinding: Sendable {
 /// The `bm25` index of the rank slot.
 let ftsRankSlot = 1
 
-func syntheticFTSDefinition(_ name: String) -> TableDefinition {
-    TableDefinition(
-        name, columns: [ColumnDefinition("rowid", .integer), ColumnDefinition("rank", .real)],
-        primaryKey: .rowidAlias(column: "rowid", autoincrement: false))
-}
-
 extension TableDefinition {
+    /// A synthetic FTS table definition — the `[rowid, rank]` shape the binder/executor use for a
+    /// full-text index. A static factory (was the free `syntheticFTSDefinition`).
+    static func syntheticFTS(_ name: String) -> TableDefinition {
+        TableDefinition(
+            name, columns: [ColumnDefinition("rowid", .integer), ColumnDefinition("rank", .real)],
+            primaryKey: .rowidAlias(column: "rowid", autoincrement: false))
+    }
+
     /// The `rank` score-column index for a synthetic FTS definition (the
-    /// `[rowid, rank]` shape `syntheticFTSDefinition` builds), else nil. Lets the
+    /// `[rowid, rank]` shape `syntheticFTS` builds), else nil. Lets the
     /// executor's `RowSlot` recognize the score slot without a separate flag.
     var ftsScoreIndex: Int? {
         guard columns.count == 2, rowidAliasIndex == 0,
