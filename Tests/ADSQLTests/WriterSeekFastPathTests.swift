@@ -127,4 +127,54 @@ struct WriterSeekFastPathTests {
         #expect(rowsMatch(ours, theirs, ordered: true), "\(ours)")
         #expect(ours.filter { $0[2] == .text("SwiftUI") }.count == 3)
     }
+
+    @Test("DELETE … WHERE the LEADING column of a COMPOSITE index = param seeks the prefix, not a scan")
+    func compositeLeadingColumnDeleteMatchesSQLite() throws {
+        let dir = TempDir()
+        _ = dir
+        let db = try Database.openJSON(at: dir.file("composite.adsql"))
+        let mirror = SQLiteMirror()
+        // The document_relationships shape: a COMPOSITE UNIQUE(from_key, to_key, relation_type) with NO
+        // single-column from_key index. The crawl's replace path issues `DELETE … WHERE from_key = ?`; the
+        // seek fast path must use the composite index's LEADING column (from_key) rather than a full scan —
+        // the O(N²) that otherwise collapses a re-crawl of a large corpus. Diffed against SQLite, which
+        // likewise seeks the leading column of its composite index.
+        let statements = [
+            "CREATE TABLE document_relationships (id INTEGER PRIMARY KEY, from_key TEXT NOT NULL, "
+                + "to_key TEXT NOT NULL, relation_type TEXT NOT NULL, "
+                + "UNIQUE(from_key, to_key, relation_type))",
+            "INSERT INTO document_relationships (from_key, to_key, relation_type) "
+                + "VALUES ('swiftui/view', 'swiftui/text', 'child')",
+            "INSERT INTO document_relationships (from_key, to_key, relation_type) "
+                + "VALUES ('swiftui/view', 'swiftui/image', 'child')",
+            "INSERT INTO document_relationships (from_key, to_key, relation_type) "
+                + "VALUES ('swiftui/view', 'swiftui/view', 'conformsTo')",
+            "INSERT INTO document_relationships (from_key, to_key, relation_type) "
+                + "VALUES ('uikit/uiview', 'uikit/uilabel', 'child')",
+            "INSERT INTO document_relationships (from_key, to_key, relation_type) "
+                + "VALUES ('foundation/url', 'foundation/data', 'related')"
+        ]
+        for sql in statements {
+            try db.prepare(sql).run()
+            try mirror.exec(sql)
+        }
+        // The replace-path DELETE: drop every relationship of the re-crawled page (the three 'swiftui/view'
+        // rows), leaving the other pages' rows untouched.
+        try db.prepare("DELETE FROM document_relationships WHERE from_key = $k")
+            .run(["k": .text("swiftui/view")])
+        try mirror.exec("DELETE FROM document_relationships WHERE from_key = 'swiftui/view'")
+
+        let ours =
+            try db.prepare(
+                "SELECT from_key, to_key, relation_type FROM document_relationships "
+                    + "ORDER BY from_key, to_key, relation_type"
+            )
+            .all().map(\.values)
+        let theirs = try mirror.query(
+            "SELECT from_key, to_key, relation_type FROM document_relationships "
+                + "ORDER BY from_key, to_key, relation_type")
+        #expect(rowsMatch(ours, theirs, ordered: true), "\(ours)")
+        #expect(ours.count == 2)  // the three swiftui/view rows gone; uikit + foundation remain
+        #expect(!ours.contains { $0[0] == .text("swiftui/view") })
+    }
 }

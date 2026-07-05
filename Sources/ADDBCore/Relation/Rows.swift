@@ -463,11 +463,16 @@ extension Relation {
         equals values: [Value]
     ) throws(DBError) -> [Int64] {
         let collations = indexCollations(index.definition, table: table.definition)
-        guard values.count == collations.count else {
+        // `values` may be a LEADING-COLUMN PREFIX (1 ≤ count ≤ column count), not only the full key: the
+        // forward-walk below returns every entry whose key STARTS WITH the encoded prefix, which for a
+        // composite index is exactly all rows sharing those leading-column value(s) (e.g. one `from_key`
+        // over a `(from_key, to_key, …)` index). Encoding uses only the leading `values.count` collations,
+        // matching `scanBounds`'s `.prefix` case; a full-key call (count == column count) is unchanged.
+        guard !values.isEmpty, values.count <= collations.count else {
             throw DBError.invalidDefinition(
-                "matchingRowids needs all \(collations.count) columns of \(index.definition.name)")
+                "matchingRowids needs 1...\(collations.count) leading columns of \(index.definition.name)")
         }
-        let prefix = try KeyCodec.encode(values, collations: collations)
+        let prefix = try KeyCodec.encode(values, collations: Array(collations.prefix(values.count)))
         var rowids: [Int64] = []
         var cursor = Cursor(resolver: resolver, tree: index.handle)
         var positioned = unsafe try prefix.withUnsafeBytesThrowing { raw throws(DBError) in

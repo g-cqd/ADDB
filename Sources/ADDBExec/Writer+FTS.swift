@@ -207,12 +207,27 @@ extension Writer {
         guard let (column, values) = try pointPredicate(predicate, table: table, params: params) else {
             return nil
         }
-        guard values.allSatisfy({ if case .text = $0 { true } else { false } }) else { return nil }
+        // The seek is exact only when the predicate value's storage class matches how the column stores its
+        // keys — otherwise affinity coercion could hide a matching row from the seek (which the scan finds).
+        // TEXT-on-TEXT and INTEGER-on-INTEGER are both coercion-free; anything else falls back to the scan.
+        // Integer keys are the FK-style `WHERE document_id = ?` replace-path DELETEs (document_sections/…),
+        // which otherwise full-scan a table that grows into the hundreds of thousands.
+        guard let seekColumn = table.columns.first(where: { $0.name.lowercased() == column.lowercased() })
+        else { return nil }
+        let allText = values.allSatisfy { if case .text = $0 { true } else { false } }
+        let allInt = values.allSatisfy { if case .integer = $0 { true } else { false } }
+        guard (allText && seekColumn.type == .text) || (allInt && seekColumn.type == .integer) else {
+            return nil
+        }
+        // Any index whose LEADING column is the predicate column — a single-column index OR the leading
+        // column of a composite one (e.g. UNIQUE(from_key, to_key, …) serves `WHERE from_key = ?`).
+        // matchingRowids seeks the leading-column prefix; every hit is re-checked against the full predicate
+        // below, so trailing composite columns can't admit a wrong row. Prefer the fewest-column match — a
+        // dedicated single-column index seeks the tightest key range.
         guard
             let index = try txn.schema().indexes(on: table.name)
-                .first(where: {
-                    $0.columns.count == 1 && $0.columns[0].lowercased() == column.lowercased()
-                })
+                .filter({ $0.columns.first?.lowercased() == column.lowercased() })
+                .min(by: { $0.columns.count < $1.columns.count })
         else { return nil }
 
         var matches: [(rowid: Int64, values: [Value])] = []
