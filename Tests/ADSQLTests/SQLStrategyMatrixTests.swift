@@ -113,29 +113,37 @@ struct SQLStrategyMatrixTests {
         "SELECT id, name FROM t WHERE score > 2 ORDER BY id",  // comparison + numeric affinity
         "SELECT id FROM t WHERE name = 'Bravo' ORDER BY id",  // TEXT BINARY compare
         "SELECT id, tag FROM t WHERE tag = 'x' ORDER BY id",  // TEXT NOCASE compare
-        "SELECT id, score * 2 AS d FROM t WHERE score IS NOT NULL ORDER BY id",  // arithmetic + IS NULL
-        "SELECT id FROM t WHERE score >= 0 AND weight < 0 ORDER BY id",  // AND + mixed types + NULLs
+        // arithmetic + IS NULL
+        "SELECT id, score * 2 AS d FROM t WHERE score IS NOT NULL ORDER BY id",
+        // AND + mixed types + NULLs
+        "SELECT id FROM t WHERE score >= 0 AND weight < 0 ORDER BY id",
         "SELECT id FROM t WHERE score > 3 OR name = 'alpha' ORDER BY id",  // OR
         "SELECT id, CASE WHEN score > 2 THEN 'hi' WHEN score < 0 THEN 'lo' ELSE 'mid' END AS c FROM t ORDER BY id",
         "SELECT id FROM t WHERE -score > 0 ORDER BY id",  // unary negate
         "SELECT id FROM t WHERE CAST(score AS TEXT) = '4' ORDER BY id",  // cast
-        "SELECT id, name FROM t WHERE name >= 'a' ORDER BY name, id LIMIT 4",  // bounded top-N (total order)
+        // bounded top-N (total order)
+        "SELECT id, name FROM t WHERE name >= 'a' ORDER BY name, id LIMIT 4",
         "SELECT DISTINCT tag FROM t",  // distinct projection (NOCASE)
         "SELECT id FROM t WHERE name = 'Bravo' COLLATE NOCASE ORDER BY id",  // explicit COLLATE
         "SELECT id, name || '!' AS n FROM t WHERE id <= 3 ORDER BY id",  // concat
         // Newly compiled cases (R3): LIKE, IN-list, scalar functions — each must stay
         // compiled ≡ tree-walk ≡ SQLite, including NULL 3VL and collation.
-        "SELECT id, name FROM t WHERE name LIKE 'a%' ORDER BY id",  // LIKE prefix (ASCII case-insensitive)
+        // LIKE prefix (ASCII case-insensitive)
+        "SELECT id, name FROM t WHERE name LIKE 'a%' ORDER BY id",
         "SELECT id FROM t WHERE name NOT LIKE 'B%' ORDER BY id",  // NOT LIKE
-        "SELECT id, tag FROM t WHERE tag LIKE '%' ORDER BY id",  // LIKE over NULLs (NULL ⇒ no match)
+        // LIKE over NULLs (NULL ⇒ no match)
+        "SELECT id, tag FROM t WHERE tag LIKE '%' ORDER BY id",
         "SELECT id FROM t WHERE score IN (1, 2, 3) ORDER BY id",  // IN integer list
         "SELECT id FROM t WHERE name IN ('alpha', 'Delta') ORDER BY id",  // IN TEXT list (BINARY)
-        "SELECT id, tag FROM t WHERE tag IN ('x', 'z') ORDER BY id",  // IN under the column's NOCASE collation
+        // IN under the column's NOCASE collation
+        "SELECT id, tag FROM t WHERE tag IN ('x', 'z') ORDER BY id",
         "SELECT id FROM t WHERE score NOT IN (0, 1) ORDER BY id",  // NOT IN (NULL lhs ⇒ unknown)
         "SELECT id FROM t WHERE score IN (NULL, 2) ORDER BY id",  // NULL in the list (3VL)
-        "SELECT id, upper(name) AS u FROM t WHERE id <= 4 ORDER BY id",  // scalar function projection
+        // scalar function projection
+        "SELECT id, upper(name) AS u FROM t WHERE id <= 4 ORDER BY id",
         "SELECT id FROM t WHERE length(name) > 4 ORDER BY id",  // function in WHERE
-        "SELECT id FROM t WHERE upper(name) = 'ALPHA' ORDER BY id",  // function inside a compiled comparison
+        // function inside a compiled comparison
+        "SELECT id FROM t WHERE upper(name) = 'ALPHA' ORDER BY id",
         "SELECT id, coalesce(score, -99) AS s FROM t ORDER BY id",  // coalesce over NULLs
         // Newly compiled cases (FIX #2): JOIN + GROUP BY / HAVING. The ON / WHERE /
         // group-key / join-output / join-order-by expressions evaluate against a
@@ -143,21 +151,36 @@ struct SQLStrategyMatrixTests {
         // order-by evaluate against the aggregate env and stay tree-walk. Each must
         // remain compiled ≡ tree-walk ≡ SQLite, including LEFT null-extension, NOCASE
         // cross-table compares, and NULL 3VL in the ON/WHERE.
-        "SELECT t.id, u.label FROM t JOIN u ON u.ref = t.id ORDER BY t.id, u.uid",  // INNER, single-conjunct ON
-        "SELECT t.id, u.amount FROM t LEFT JOIN u ON u.ref = t.id ORDER BY t.id, u.uid",  // LEFT null-extension
-        "SELECT t.id, u.uid FROM t JOIN u ON u.ref = t.id AND u.amount > 5 ORDER BY t.id, u.uid",  // multi-conjunct ON
-        "SELECT t.id, u.label FROM t JOIN u ON u.ref = t.id WHERE t.score > 0 ORDER BY t.id, u.uid",  // ON + residual WHERE
-        "SELECT t.id, u.amount + t.score AS s FROM t JOIN u ON u.ref = t.id ORDER BY t.id, u.uid",  // join output expr
-        "SELECT t.id, u.uid FROM t JOIN u ON u.ref = t.id AND u.label = t.tag ORDER BY t.id, u.uid",  // NOCASE cross-table ON
-        "SELECT t.name, u.label FROM t JOIN u ON u.ref = t.id WHERE u.amount IS NOT NULL ORDER BY t.id, u.uid",  // WHERE on inner col
-        "SELECT tag, count(*), sum(score) FROM t GROUP BY tag ORDER BY tag",  // grouped aggregate over NULL group
-        "SELECT tag, count(*) AS c FROM t GROUP BY tag HAVING count(*) >= 3 ORDER BY tag",  // HAVING on aggregate
-        "SELECT name, count(*), avg(weight) FROM t GROUP BY name ORDER BY name",  // avg REAL + text group key
-        "SELECT tag, sum(score) AS ss FROM t GROUP BY tag HAVING sum(score) > 0 OR tag = 'X' ORDER BY tag",  // HAVING agg + key
-        "SELECT count(*), sum(score), avg(weight), max(score), min(score) FROM t WHERE score IS NOT NULL",  // ungrouped multi-agg + WHERE
-        "SELECT score, count(*) FROM t WHERE score IS NOT NULL GROUP BY score ORDER BY score",  // integer group key + WHERE
-        "SELECT t.tag, count(*), sum(u.amount) FROM t JOIN u ON u.ref = t.id GROUP BY t.tag ORDER BY t.tag",  // aggregate over join
-        "SELECT t.tag, count(*) AS c FROM t JOIN u ON u.ref = t.id GROUP BY t.tag HAVING count(*) > 1 ORDER BY t.tag"  // join + GROUP BY + HAVING
+        // INNER, single-conjunct ON
+        "SELECT t.id, u.label FROM t JOIN u ON u.ref = t.id ORDER BY t.id, u.uid",
+        // LEFT null-extension
+        "SELECT t.id, u.amount FROM t LEFT JOIN u ON u.ref = t.id ORDER BY t.id, u.uid",
+        // multi-conjunct ON
+        "SELECT t.id, u.uid FROM t JOIN u ON u.ref = t.id AND u.amount > 5 ORDER BY t.id, u.uid",
+        // ON + residual WHERE
+        "SELECT t.id, u.label FROM t JOIN u ON u.ref = t.id WHERE t.score > 0 ORDER BY t.id, u.uid",
+        // join output expr
+        "SELECT t.id, u.amount + t.score AS s FROM t JOIN u ON u.ref = t.id ORDER BY t.id, u.uid",
+        // NOCASE cross-table ON
+        "SELECT t.id, u.uid FROM t JOIN u ON u.ref = t.id AND u.label = t.tag ORDER BY t.id, u.uid",
+        // WHERE on inner col
+        "SELECT t.name, u.label FROM t JOIN u ON u.ref = t.id WHERE u.amount IS NOT NULL ORDER BY t.id, u.uid",
+        // grouped aggregate over NULL group
+        "SELECT tag, count(*), sum(score) FROM t GROUP BY tag ORDER BY tag",
+        // HAVING on aggregate
+        "SELECT tag, count(*) AS c FROM t GROUP BY tag HAVING count(*) >= 3 ORDER BY tag",
+        // avg REAL + text group key
+        "SELECT name, count(*), avg(weight) FROM t GROUP BY name ORDER BY name",
+        // HAVING agg + key
+        "SELECT tag, sum(score) AS ss FROM t GROUP BY tag HAVING sum(score) > 0 OR tag = 'X' ORDER BY tag",
+        // ungrouped multi-agg + WHERE
+        "SELECT count(*), sum(score), avg(weight), max(score), min(score) FROM t WHERE score IS NOT NULL",
+        // integer group key + WHERE
+        "SELECT score, count(*) FROM t WHERE score IS NOT NULL GROUP BY score ORDER BY score",
+        // aggregate over join
+        "SELECT t.tag, count(*), sum(u.amount) FROM t JOIN u ON u.ref = t.id GROUP BY t.tag ORDER BY t.tag",
+        // join + GROUP BY + HAVING
+        "SELECT t.tag, count(*) AS c FROM t JOIN u ON u.ref = t.id GROUP BY t.tag HAVING count(*) > 1 ORDER BY t.tag"
     ]
 
     @Test(arguments: queries)

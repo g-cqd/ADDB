@@ -53,7 +53,8 @@ struct TableMacro: ExtensionMacro {
                 }
                 let slot = decodeLines.count
                 columnDefs.append(
-                    "ColumnDefinition(\(SwiftSource.stringLiteral(name)), .\(column.affinity), notNull: \(column.notNull))")
+                    "ColumnDefinition(\(SwiftSource.stringLiteral(name)), .\(column.affinity), notNull: \(column.notNull))"
+                )
                 decodeLines.append(decodeLine(name: name, table: tableName, slot: slot, column: column))
             }
         }
