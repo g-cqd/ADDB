@@ -143,9 +143,8 @@ ADDB_DEV=1 swift test                # full suite (tests are dev-gated)
 ADDB_DEV=1 swift test --sanitize=thread   # concurrency lane
 ```
 
-Local sibling checkouts resolve via `ADSQL_PATH` / `ADFOUNDATION_PATH` /
-`ADJSON_PATH` / `ADBUILDTOOLS_PATH`; unset, siblings resolve from GitHub
-`main`.
+Siblings always resolve from GitHub `main`; there is no local-checkout
+override. To test a sibling change, push it and re-resolve.
 
 See [`ROADMAP.md`](ROADMAP.md) for status and the backlog, and `docs/rfcs/`
 for the active design programs (apple-docs integration, table-valued

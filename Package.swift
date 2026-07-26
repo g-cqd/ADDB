@@ -35,20 +35,19 @@ let kernelSettings: [SwiftSetting] =
 
 let isDev = Context.environment["ADDB_DEV"] != nil
 
-func localOrMain(_ env: String, _ repo: String) -> Package.Dependency {
-    if let path = Context.environment[env], !path.isEmpty { return .package(path: path) }
-    return .package(url: "https://github.com/g-cqd/\(repo).git", branch: "main")
+func sibling(_ repo: String) -> Package.Dependency {
+    .package(url: "https://github.com/g-cqd/\(repo).git", branch: "main")
 }
 
 var packageDependencies: [Package.Dependency] = [
-    localOrMain("ADSQL_PATH", "ADSQL"),
-    localOrMain("ADFOUNDATION_PATH", "ADFoundation"),
-    localOrMain("ADJSON_PATH", "ADJSON"),
+    sibling("ADSQL"),
+    sibling("ADFoundation"),
+    sibling("ADJSON"),
     .package(url: "https://github.com/apple/swift-collections.git", from: "1.1.0"),
     .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "603.0.0")
 ]
 if isDev {
-    packageDependencies.append(localOrMain("ADBUILDTOOLS_PATH", "ADBuildTools"))
+    packageDependencies.append(sibling("ADBuildTools"))
     // (ADTestKit is folded into ADFoundation; resolved via the ADFOUNDATION dependency above.)
     packageDependencies.append(
         .package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.0.0"))
@@ -86,8 +85,12 @@ let swiftSyntaxRuntime: [Target.Dependency] = [
 // re-homed suites carry broad `@testable` imports and the strict upcoming-feature gates only add
 // import-bookkeeping noise with no safety value in test code.
 let testSettings: [SwiftSetting] = [.swiftLanguageMode(.v6)]
+// The test suites are UNCONDITIONAL. They were previously inside the `isDev` block, which made a
+// plain `swift test` on a fresh clone compile nothing, run zero cases and exit 0 — a green build
+// that had verified nothing. Only the ordo-one benchmark below stays dev-gated (it is the one thing
+// here that pulls a dependency consumers should not resolve).
 var testTargets: [Target] = []
-if isDev {
+do {
     testTargets.append(
         .testTarget(
             name: "ADDBCoreTests",
@@ -168,10 +171,12 @@ if isDev {
                 "ADDBTestSupport", "ADDBCore", "ADDBExec", "ADDBMigrate", adsql, adsqlModel, adTestKit
             ],
             swiftSettings: testSettings))
-    // ordo-one benchmark suite (ADDB_DEV-gated): tracks `.mallocCountTotal` on the storage codec path
-    // (put/get/scan/index backfill) so a reintroduced copy-on-write copy or per-append reallocation
-    // trips the threshold instead of rotting silently. Runs via `ADDB_DEV=1 swift package benchmark`.
-    // Mirrors ADFoundation's `Benchmarks/ADFoundationSuite` wiring.
+}
+// ordo-one benchmark suite (ADDB_DEV-gated): tracks `.mallocCountTotal` on the storage codec path
+// (put/get/scan/index backfill) so a reintroduced copy-on-write copy or per-append reallocation
+// trips the threshold instead of rotting silently. Runs via `ADDB_DEV=1 swift package benchmark`.
+// Mirrors ADFoundation's `Benchmarks/ADFoundationSuite` wiring.
+if isDev {
     testTargets.append(
         .executableTarget(
             name: "ADDBSuite",
