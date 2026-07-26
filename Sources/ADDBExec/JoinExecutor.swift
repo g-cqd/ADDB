@@ -313,6 +313,56 @@ extension SelectExecutor {
         }
     }
 
+    /// The WHERE / join-ON / projection / ORDER BY predicates, hoisted and lowered once per
+    /// execution.
+    struct LoweredPredicates {
+        var folded: FoldedPredicates
+        var outputThunks: [CompiledEval.Thunk]
+        var orderThunks: [CompiledEval.Thunk]
+    }
+
+    /// Query-invariant hoisting + thunk lowering, done once per execution.
+    ///
+    /// Hoisting pre-evaluates every param/literal-only subtree of the WHERE, each ON, the
+    /// projection outputs and the ORDER BY keys, so the per-row tree-walk sees a `.literal`
+    /// instead of recomputing it. This is the join path's dominant win on the apple-docs
+    /// `/search` query — the tier CASE's `$raw_lc || '%'` LIKE prefix was rebuilt (malloc +
+    /// scalar map) for every matched row even though it is the same for all rows. Folding never
+    /// collapses a subtree that reads a column/aggregate/subquery (those stay intact, children
+    /// folded), so results are identical.
+    ///
+    /// Lowering then compiles each surviving expression to a per-row thunk (compiled-closures
+    /// evaluator, tree-walk otherwise). All evaluate against the composite `RowContext` via
+    /// `env`, so a compiled thunk reads slots directly and bakes affinity/collation.
+    ///
+    /// **The equi-key structural analysis in the caller reads the UNFOLDED `plan.joins[].on`,
+    /// so its structure is deliberately left untouched here.**
+    static func loweredPredicates(
+        _ plan: BoundSelect, paramsEnv: SQLEvalEnv, context: RowContext,
+        params: SQLParameters, env: SQLEvalEnv, evaluator: ExecutionOptions.Evaluator
+    ) throws(DBError) -> LoweredPredicates {
+        let foldedWhere = try plan.whereExpr.map { e throws(DBError) in
+            try SQLEval.foldInvariant(e, paramsEnv)
+        }
+        let foldedJoinOn = try plan.joins.map { j throws(DBError) in
+            try SQLEval.foldInvariant(j.on, paramsEnv)
+        }
+        let foldedOutputs = try plan.outputs.map { o throws(DBError) in
+            try SQLEval.foldInvariant(o.expr, paramsEnv)
+        }
+        let foldedOrderBy = try plan.orderBy.map { t throws(DBError) in
+            try SQLEval.foldInvariant(t.expr, paramsEnv)
+        }
+        let makeThunk: (SQLExpr) -> CompiledEval.Thunk = {
+            makeRowThunk($0, context: context, params: params, env: env, evaluator: evaluator)
+        }
+        return LoweredPredicates(
+            folded: FoldedPredicates(
+                whereThunk: foldedWhere.map(makeThunk), joinOnThunks: foldedJoinOn.map(makeThunk)),
+            outputThunks: foldedOutputs.map(makeThunk),
+            orderThunks: foldedOrderBy.map(makeThunk))
+    }
+
     static func runJoin<R: PageResolver>(
         _ plan: BoundSelect, catalog: QueryCatalog, resolver: R, params: SQLParameters,
         outer: (context: RowContext, binding: QueryBinding)?, subquery: @escaping SubqueryRunner,
@@ -331,42 +381,13 @@ extension SelectExecutor {
         let collectKeys = !plan.orderBy.isEmpty
         let bounds = try sliceBounds(plan, params: params)
 
-        // Query-invariant hoisting (once per execution, params bound in `paramsEnv`):
-        // pre-evaluate every param/literal-only subtree of the WHERE / each ON / the
-        // projection outputs / the ORDER BY keys, so the per-row tree-walk sees a
-        // `.literal` instead of recomputing it. This is the join path's dominant
-        // win on the apple-docs `/search` query — the tier CASE's `$raw_lc || '%'`
-        // LIKE prefix was rebuilt (malloc + scalar map) for every matched row even
-        // though it is the same for all rows. Folding never collapses a subtree that
-        // reads a column/aggregate/subquery (those stay intact, children folded), so
-        // results are identical. The hash/merge equi-key analysis below reads the
-        // UNFOLDED `plan.joins[].on`, so its structure is untouched.
-        let foldedWhere = try plan.whereExpr.map { e throws(DBError) in
-            try SQLEval.foldInvariant(e, paramsEnv)
-        }
-        let foldedJoinOn = try plan.joins.map { j throws(DBError) in
-            try SQLEval.foldInvariant(j.on, paramsEnv)
-        }
-        let foldedOutputs = try plan.outputs.map { o throws(DBError) in
-            try SQLEval.foldInvariant(o.expr, paramsEnv)
-        }
-        let foldedOrderBy = try plan.orderBy.map { t throws(DBError) in
-            try SQLEval.foldInvariant(t.expr, paramsEnv)
-        }
-
-        // Lower the WHERE / each ON / the projection outputs / the ORDER BY keys to
-        // per-row thunks ONCE (compiled under the compiled-closures evaluator, tree-walk
-        // otherwise). All evaluate against the composite `RowContext` via `env`, so a
-        // compiled thunk reads slots directly and bakes affinity/collation — skipping the
-        // recursive tree-walk on every candidate pair. The equi-key structural analysis
-        // below still reads the UNFOLDED `plan.joins[].on`, so it is untouched.
-        let makeThunk: (SQLExpr) -> CompiledEval.Thunk = {
-            makeRowThunk($0, context: context, params: params, env: env, evaluator: execution.evaluator)
-        }
-        let folded = FoldedPredicates(
-            whereThunk: foldedWhere.map(makeThunk), joinOnThunks: foldedJoinOn.map(makeThunk))
-        let outputThunks = foldedOutputs.map(makeThunk)
-        let orderThunks = foldedOrderBy.map(makeThunk)
+        // Hoist query-invariant subtrees and lower them to per-row thunks (see the helper).
+        let lowered = try loweredPredicates(
+            plan, paramsEnv: paramsEnv, context: context, params: params, env: env,
+            evaluator: execution.evaluator)
+        let folded = lowered.folded
+        let outputThunks = lowered.outputThunks
+        let orderThunks = lowered.orderThunks
 
         // Streamable join: no ORDER BY (scan order is final), no LIMIT/OFFSET, no
         // DISTINCT — the exact shape the materialized path below just projects and
