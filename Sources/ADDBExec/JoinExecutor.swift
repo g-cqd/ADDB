@@ -341,21 +341,13 @@ extension SelectExecutor {
         _ plan: BoundSelect, paramsEnv: SQLEvalEnv, context: RowContext,
         params: SQLParameters, env: SQLEvalEnv, evaluator: ExecutionOptions.Evaluator
     ) throws(DBError) -> LoweredPredicates {
-        let foldedWhere = try plan.whereExpr.map { e throws(DBError) in
-            try SQLEval.foldInvariant(e, paramsEnv)
-        }
-        let foldedJoinOn = try plan.joins.map { j throws(DBError) in
-            try SQLEval.foldInvariant(j.on, paramsEnv)
-        }
-        let foldedOutputs = try plan.outputs.map { o throws(DBError) in
-            try SQLEval.foldInvariant(o.expr, paramsEnv)
-        }
-        let foldedOrderBy = try plan.orderBy.map { t throws(DBError) in
-            try SQLEval.foldInvariant(t.expr, paramsEnv)
-        }
-        let makeThunk: (SQLExpr) -> CompiledEval.Thunk = {
-            makeRowThunk($0, context: context, params: params, env: env, evaluator: evaluator)
-        }
+        let lowerer = PredicateLowerer(
+            paramsEnv: paramsEnv, context: context, params: params, evaluator: evaluator)
+        let foldedWhere = try plan.whereExpr.map { e throws(DBError) in try lowerer.fold(e) }
+        let foldedJoinOn = try plan.joins.map { j throws(DBError) in try lowerer.fold(j.on) }
+        let foldedOutputs = try plan.outputs.map { o throws(DBError) in try lowerer.fold(o.expr) }
+        let foldedOrderBy = try plan.orderBy.map { t throws(DBError) in try lowerer.fold(t.expr) }
+        let makeThunk: (SQLExpr) -> CompiledEval.Thunk = { lowerer.thunk($0, in: env) }
         return LoweredPredicates(
             folded: FoldedPredicates(
                 whereThunk: foldedWhere.map(makeThunk), joinOnThunks: foldedJoinOn.map(makeThunk)),

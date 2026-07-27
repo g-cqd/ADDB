@@ -36,24 +36,15 @@ extension SelectExecutor {
         // / outputs / ORDER BY so the per-row + per-group walks see constants. Folding
         // never collapses a subtree that reads a column or an aggregate slot (those
         // stay intact with their invariant children folded), so results are identical.
-        let foldedWhere = try plan.whereExpr.map { e throws(DBError) in
-            try SQLEval.foldInvariant(e, paramsEnv)
-        }
-        let foldedJoinOn = try plan.joins.map { j throws(DBError) in
-            try SQLEval.foldInvariant(j.on, paramsEnv)
-        }
-        let foldedGroupBy = try plan.groupBy.map { e throws(DBError) in
-            try SQLEval.foldInvariant(e, paramsEnv)
-        }
-        let foldedHaving = try plan.having.map { e throws(DBError) in
-            try SQLEval.foldInvariant(e, paramsEnv)
-        }
-        let foldedOutputs = try plan.outputs.map { o throws(DBError) in
-            try SQLEval.foldInvariant(o.expr, paramsEnv)
-        }
-        let foldedOrderBy = try plan.orderBy.map { t throws(DBError) in
-            try SQLEval.foldInvariant(t.expr, paramsEnv)
-        }
+        let lowerer = PredicateLowerer(
+            paramsEnv: paramsEnv, context: context, params: params,
+            evaluator: execution.evaluator)
+        let foldedWhere = try plan.whereExpr.map { e throws(DBError) in try lowerer.fold(e) }
+        let foldedJoinOn = try plan.joins.map { j throws(DBError) in try lowerer.fold(j.on) }
+        let foldedGroupBy = try plan.groupBy.map { e throws(DBError) in try lowerer.fold(e) }
+        let foldedHaving = try plan.having.map { e throws(DBError) in try lowerer.fold(e) }
+        let foldedOutputs = try plan.outputs.map { o throws(DBError) in try lowerer.fold(o.expr) }
+        let foldedOrderBy = try plan.orderBy.map { t throws(DBError) in try lowerer.fold(t.expr) }
 
         // Lower the WHERE / each ON / the GROUP BY keys to per-row thunks ONCE (compiled
         // under the compiled-closures evaluator, tree-walk otherwise): all three evaluate
@@ -62,10 +53,7 @@ extension SelectExecutor {
         // (`aggregateEnv` — representative columns + accumulator slots), which
         // `CompiledEval` does not target, so they stay tree-walk below; the per-row
         // aggregate ARGUMENTS likewise stay tree-walk (folded inside `GroupAccumulators`).
-        let makeThunk: (SQLExpr) -> CompiledEval.Thunk = {
-            makeRowThunk(
-                $0, context: context, params: params, env: scanEnv, evaluator: execution.evaluator)
-        }
+        let makeThunk: (SQLExpr) -> CompiledEval.Thunk = { lowerer.thunk($0, in: scanEnv) }
         let folded = FoldedPredicates(
             whereThunk: foldedWhere.map(makeThunk), joinOnThunks: foldedJoinOn.map(makeThunk))
         let groupKeyThunks = foldedGroupBy.map(makeThunk)

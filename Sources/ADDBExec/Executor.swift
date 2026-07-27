@@ -79,21 +79,15 @@ enum SelectExecutor {
         // (and would throw rather than misfold if one ever slipped through). The
         // compiled path already bakes literals, but still rebuilds e.g. `? || '%'`
         // per row — folding collapses that to a constant here too.
-        let foldedResidual = try residual.map { e throws(DBError) in
-            try SQLEval.foldInvariant(e, paramsEnv)
-        }
-        let foldedOutputs = try plan.outputs.map { o throws(DBError) in
-            try SQLEval.foldInvariant(o.expr, paramsEnv)
-        }
-        let foldedOrderBy = try plan.orderBy.map { t throws(DBError) in
-            try SQLEval.foldInvariant(t.expr, paramsEnv)
-        }
+        let lowerer = PredicateLowerer(
+            paramsEnv: paramsEnv, context: context, params: params, evaluator: evaluator)
+        let foldedResidual = try residual.map { e throws(DBError) in try lowerer.fold(e) }
+        let foldedOutputs = try plan.outputs.map { o throws(DBError) in try lowerer.fold(o.expr) }
+        let foldedOrderBy = try plan.orderBy.map { t throws(DBError) in try lowerer.fold(t.expr) }
         // Per-row evaluation: compile each expression once (compiled-closures path)
         // or wrap the tree-walk evaluator; an unsupported sub-expression falls back to
         // tree-walk so results are identical regardless of strategy.
-        let makeThunk: (SQLExpr) -> CompiledEval.Thunk = {
-            makeRowThunk($0, context: context, params: params, env: env, evaluator: evaluator)
-        }
+        let makeThunk: (SQLExpr) -> CompiledEval.Thunk = { lowerer.thunk($0, in: env) }
         // stream row-by-row when nothing downstream needs the full set first. Two
         // streamable shapes, both requiring no post-scan sort (`collectKeys`) and no
         // bounded top-N:

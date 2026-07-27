@@ -52,9 +52,10 @@ extension SelectExecutor {
             ? nil : residualConjuncts.dropFirst().reduce(residualConjuncts[0]) { .binary(.and, $0, $1) }
         // Hoist query-invariant subtrees of the non-equi ON residual once (params
         // bound in `paramsEnv`); evaluated per matched inner row below.
-        let onResidual = try onResidualRaw.map { e throws(DBError) in
-            try SQLEval.foldInvariant(e, paramsEnv)
-        }
+        let lowerer = PredicateLowerer(
+            paramsEnv: paramsEnv, context: context, params: scanEnv.params,
+            evaluator: scanEnv.evaluator)
+        let onResidual = try onResidualRaw.map { e throws(DBError) in try lowerer.fold(e) }
 
         // SEMI-JOIN: when the inner is existence-only (no inner column is read by the
         // query) and the ON is pure equi (no residual), the inner row *values* are never
