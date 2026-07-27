@@ -10,6 +10,44 @@ import ADSQLModel
 /// Results are fully materialized before the transaction closure returns.
 
 enum SelectExecutor {
+    /// Whether this scan may emit rows as produced, and the sink to emit through.
+    ///
+    /// Two streamable shapes, both requiring no post-scan sort (`sortFree`):
+    ///   • unbounded — no LIMIT/OFFSET slice, so every surviving row is a final result;
+    ///   • LIMIT-only — a LIMIT with NO OFFSET, NO ORDER BY, NO DISTINCT: stream and stop after
+    ///     exactly `limit` emissions rather than materializing up to offset+limit. With no ORDER BY
+    ///     the scan order is final, so the first `limit` scanned rows are byte-identical to the
+    ///     materialize-then-slice path's `rows[0 ..< limit]`.
+    ///
+    /// Under a LIMIT the caller's sink is wrapped so the scan halts after exactly `limit` emissions
+    /// (LIMIT 0 emits none). The guard is exact — the wrapper stops the moment the count reaches the
+    /// limit, so the caller sees precisely `limit` rows, in order.
+    private static func streamingPlan(
+        _ plan: BoundSelect, sink: (([Value]) throws(DBError) -> Bool)?,
+        sortFree: Bool, bounds: (offset: Int, limit: Int?)?
+    ) -> (canStream: Bool, sink: (([Value]) throws(DBError) -> Bool)?) {
+        let streamLimit: Int? = {
+            guard sink != nil, sortFree, !plan.distinct, plan.orderBy.isEmpty,
+                let bounds, bounds.offset == 0, let limit = bounds.limit
+            else { return nil }
+            return limit
+        }()
+        let canStream = sink != nil && sortFree && (bounds == nil || streamLimit != nil)
+        guard canStream, let streamLimit, let realSink = sink else {
+            return (canStream, canStream ? sink : nil)
+        }
+        var streamedCount = 0
+        return (
+            true,
+            { (values) throws(DBError) -> Bool in
+                if streamedCount >= streamLimit { return false }
+                let proceed = try realSink(values)
+                streamedCount += 1
+                return proceed && streamedCount < streamLimit
+            }
+        )
+    }
+
     static func run<R: PageResolver>(
         _ plan: BoundSelect, tables: [Catalog.TableRecord], index: Catalog.IndexRecord?,
         joinIndexes: [Catalog.IndexRecord?] = [],
@@ -97,29 +135,9 @@ enum SelectExecutor {
         //    With no ORDER BY the scan order is final, so the first `limit` scanned rows
         //    are byte-identical to the materialize-then-slice path's `rows[0 ..< limit]`.
         let sortFree = !collectKeys && topN == nil
-        let streamLimit: Int? = {
-            guard sink != nil, sortFree, !plan.distinct, plan.orderBy.isEmpty,
-                let bounds, bounds.offset == 0, let limit = bounds.limit
-            else { return nil }
-            return limit
-        }()
-        let canStream = sink != nil && sortFree && (bounds == nil || streamLimit != nil)
-        // Pass the sink to `consume` (non-escaping) only when streamable; nil otherwise.
-        // Under a LIMIT, wrap it so the scan halts after exactly `streamLimit` emissions
-        // (LIMIT 0 emits none). The guard is exact: the wrapper stops the moment the
-        // count reaches the limit, so `body` sees precisely `limit` rows, in order.
-        var streamedCount = 0
-        let streamSink: (([Value]) throws(DBError) -> Bool)?
-        if canStream, let streamLimit, let realSink = sink {
-            streamSink = { (values) throws(DBError) -> Bool in
-                if streamedCount >= streamLimit { return false }
-                let proceed = try realSink(values)
-                streamedCount += 1
-                return proceed && streamedCount < streamLimit
-            }
-        } else {
-            streamSink = canStream ? sink : nil
-        }
+        let streaming = streamingPlan(plan, sink: sink, sortFree: sortFree, bounds: bounds)
+        let canStream = streaming.canStream
+        let streamSink = streaming.sink
         let accumulator = Accumulator(
             context: context,
             residualThunk: foldedResidual.map(makeThunk),

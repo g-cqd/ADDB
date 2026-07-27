@@ -355,6 +355,17 @@ extension SelectExecutor {
             orderThunks: foldedOrderBy.map(makeThunk))
     }
 
+    /// Evaluate every thunk in order into a fresh row, sized up front.
+    ///
+    /// The projection/key-evaluation step the streamed, bounded top-N and materialized drivers each
+    /// perform — identical in all three, so it lives here rather than three times inline.
+    private static func evaluate(_ thunks: [CompiledEval.Thunk]) throws(DBError) -> [Value] {
+        var values: [Value] = []
+        values.reserveCapacity(thunks.count)
+        for thunk in thunks { values.append(try thunk()) }
+        return values
+    }
+
     static func runJoin<R: PageResolver>(
         _ plan: BoundSelect, catalog: QueryCatalog, resolver: R, params: SQLParameters,
         outer: (context: RowContext, binding: QueryBinding)?, subquery: @escaping SubqueryRunner,
@@ -372,6 +383,11 @@ extension SelectExecutor {
         let paramsEnv = SQLEvalEnv.parametersOnly(now: params.now) { p throws(DBError) in try params.lookup(p) }
         let collectKeys = !plan.orderBy.isEmpty
         let bounds = try sliceBounds(plan, params: params)
+        // Built once: all three scan drivers below (streamed, bounded top-N, materialized)
+        // take the identical environment.
+        let scanEnv = ScanEnv(
+            context: context, env: env, paramsEnv: paramsEnv, params: params,
+            evaluator: execution.evaluator)
 
         // Hoist query-invariant subtrees and lower them to per-row thunks (see the helper).
         let lowered = try loweredPredicates(
@@ -393,14 +409,10 @@ extension SelectExecutor {
             var stopped = false
             try forEachFilteredRow(
                 plan, catalog: catalog, resolver: resolver,
-                scanEnv: ScanEnv(
-                    context: context, env: env, paramsEnv: paramsEnv, params: params,
-                    evaluator: execution.evaluator),
+                scanEnv: scanEnv,
                 execution: execution, folded: folded
             ) { () throws(DBError) in
-                var projected: [Value] = []
-                projected.reserveCapacity(outputThunks.count)
-                for thunk in outputThunks { projected.append(try thunk()) }
+                let projected = try evaluate(outputThunks)
                 if stopped { return }
                 if try !sink(projected) { stopped = true }
             }
@@ -425,19 +437,13 @@ extension SelectExecutor {
                     capacity: bound, terms: plan.orderBy, collations: plan.orderCollations)
                 try forEachFilteredRow(
                     plan, catalog: catalog, resolver: resolver,
-                    scanEnv: ScanEnv(
-                        context: context, env: env, paramsEnv: paramsEnv, params: params,
-                        evaluator: execution.evaluator),
+                    scanEnv: scanEnv,
                     execution: execution, folded: folded
                 ) { () throws(DBError) in
-                    var keys: [Value] = []
-                    keys.reserveCapacity(orderThunks.count)
-                    for thunk in orderThunks { keys.append(try thunk()) }
+                    let keys = try evaluate(orderThunks)
                     // Only project the full tuple when the row qualifies for the buffer.
                     if buffer.wouldDrop(keys) { return }
-                    var projected: [Value] = []
-                    projected.reserveCapacity(outputThunks.count)
-                    for thunk in outputThunks { projected.append(try thunk()) }
+                    let projected = try evaluate(outputThunks)
                     buffer.insert(keys: keys, row: projected)
                 }
                 let kept = buffer.sortedRows()
@@ -450,19 +456,13 @@ extension SelectExecutor {
         var sortKeys: [[Value]] = []
         try forEachFilteredRow(
             plan, catalog: catalog, resolver: resolver,
-            scanEnv: ScanEnv(
-                context: context, env: env, paramsEnv: paramsEnv, params: params,
-                evaluator: execution.evaluator),
+            scanEnv: scanEnv,
             execution: execution, folded: folded
         ) { () throws(DBError) in
-            var projected: [Value] = []
-            projected.reserveCapacity(outputThunks.count)
-            for thunk in outputThunks { projected.append(try thunk()) }
+            let projected = try evaluate(outputThunks)
             rows.append(projected)
             if collectKeys {
-                var keys: [Value] = []
-                keys.reserveCapacity(orderThunks.count)
-                for thunk in orderThunks { keys.append(try thunk()) }
+                let keys = try evaluate(orderThunks)
                 sortKeys.append(keys)
             }
         }

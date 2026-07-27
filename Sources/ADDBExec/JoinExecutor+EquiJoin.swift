@@ -18,6 +18,34 @@ extension SelectExecutor {
     /// whose equality matches SQL `=` for same-class/collation columns (no false
     /// negatives). Non-equi ON conjuncts are re-checked per match. A NULL probe key
     /// matches nothing (SQL `=` is unknown with NULL).
+    /// Split a join's ON conjuncts into hash equi-keys and the non-equi residual.
+    ///
+    /// A conjunct that `hashEquiKey` recognises contributes one (inner column, outer expression,
+    /// collation) triple; everything else stays in the residual, evaluated per matched inner row.
+    /// The result of splitting a join's ON: the hash equi-keys plus the non-equi residual.
+    private struct EquiSplit {
+        var inner: [Int] = []
+        var outer: [SQLExpr] = []
+        var collations: [Collation] = []
+        var residual: [SQLExpr] = []
+    }
+
+    private static func splitEquiKeys(
+        _ on: SQLExpr, innerDepth: Int, binding: QueryBinding
+    ) -> EquiSplit {
+        var split = EquiSplit()
+        for conjunct in andConjuncts(on) {
+            if let key = hashEquiKey(conjunct, innerDepth: innerDepth, binding: binding) {
+                split.inner.append(key.innerColumn)
+                split.outer.append(key.outerColumn)
+                split.collations.append(key.collation)
+            } else {
+                split.residual.append(conjunct)
+            }
+        }
+        return split
+    }
+
     static func runInnerHashJoin<R: PageResolver>(
         _ plan: BoundSelect, catalog: QueryCatalog, resolver: R, scanEnv: ScanEnv,
         budgetBytes: Int, emit: () throws(DBError) -> Void
@@ -33,19 +61,9 @@ extension SelectExecutor {
         let innerDepth = join.table
         let binding = plan.binding
 
-        var equiInner: [Int] = []
-        var equiOuter: [SQLExpr] = []
-        var equiCollations: [Collation] = []
-        var residualConjuncts: [SQLExpr] = []
-        for conjunct in andConjuncts(join.on) {
-            if let key = hashEquiKey(conjunct, innerDepth: innerDepth, binding: binding) {
-                equiInner.append(key.innerColumn)
-                equiOuter.append(key.outerColumn)
-                equiCollations.append(key.collation)
-            } else {
-                residualConjuncts.append(conjunct)
-            }
-        }
+        let equi = splitEquiKeys(join.on, innerDepth: innerDepth, binding: binding)
+        let (equiInner, equiOuter, equiCollations) = (equi.inner, equi.outer, equi.collations)
+        let residualConjuncts = equi.residual
         guard !equiInner.isEmpty else { return false }
         let onResidualRaw: SQLExpr? =
             residualConjuncts.isEmpty

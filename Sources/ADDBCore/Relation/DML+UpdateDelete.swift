@@ -70,24 +70,16 @@ extension Relation {
     // MARK: - Update
 
     @discardableResult
-    static func update(
-        _ ctx: TxnContext, table tableName: String, rowid: Int64, set: [String: Value]
-    ) throws(DBError) -> Bool {
-        var state = try ensureState(ctx)
-        guard var table = state.tableRecords[tableName] else {
-            throw DBError.noSuchTable(tableName)
-        }
-        let definition = table.definition
-        guard let recordBytes = try getBytes(ctx, table.handle, key: KeyCodec.rowKey(rowid)) else {
-            return false
-        }
-        let oldRow = try materializeRow(table: table, rowid: rowid, recordBytes: recordBytes)
-
-        var newRow = oldRow
-        // Schema indices this UPDATE actually assigns, collected as the SET is applied.
-        // An index none of whose key/INCLUDE columns lie in this set reads only cells
-        // that oldRow and newRow share, so its entry is byte-identical — re-keying it
-        // is skipped below (see the roster loop).
+    /// Validate the SET assignments and apply them into `newRow`, returning the columns touched.
+    ///
+    /// Rejects unknown columns, rowid-alias assignment, declared-type mismatches and NOT NULL
+    /// violations. NaN normalises to NULL, matching the INSERT path. The returned set is what the
+    /// index roster below consults: an index whose key/INCLUDE columns are all absent from it reads
+    /// only cells old and new rows share, so its entry is byte-identical and re-keying is skipped.
+    private static func applyAssignments(
+        _ set: [String: Value], to newRow: inout [Value],
+        definition: TableDefinition, tableName: String
+    ) throws(DBError) -> Set<Int> {
         var changedColumns = Set<Int>()
         for (name, provided) in set {
             guard let columnIndex = definition.columnIndex(of: name) else {
@@ -110,6 +102,29 @@ extension Relation {
             newRow[columnIndex] = value
             changedColumns.insert(columnIndex)
         }
+        return changedColumns
+    }
+
+    static func update(
+        _ ctx: TxnContext, table tableName: String, rowid: Int64, set: [String: Value]
+    ) throws(DBError) -> Bool {
+        var state = try ensureState(ctx)
+        guard var table = state.tableRecords[tableName] else {
+            throw DBError.noSuchTable(tableName)
+        }
+        let definition = table.definition
+        guard let recordBytes = try getBytes(ctx, table.handle, key: KeyCodec.rowKey(rowid)) else {
+            return false
+        }
+        let oldRow = try materializeRow(table: table, rowid: rowid, recordBytes: recordBytes)
+
+        var newRow = oldRow
+        // Schema indices this UPDATE actually assigns, collected as the SET is applied.
+        // An index none of whose key/INCLUDE columns lie in this set reads only cells
+        // that oldRow and newRow share, so its entry is byte-identical — re-keying it
+        // is skipped below (see the roster loop).
+        let changedColumns = try applyAssignments(
+            set, to: &newRow, definition: definition, tableName: tableName)
 
         // Index maintenance for changed keys only, with unique pre-checks. The roster
         // is hoisted (cached per (txn, tableId)) rather than filtered + sorted per row.
